@@ -18,12 +18,14 @@ import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatIconModule } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { interval } from 'rxjs';
 import { RemoteAudioTrack, RemoteVideoTrack } from 'livekit-client';
 import { LiveRoomService } from './live-room.service';
 import { OperatorApiService } from './operator-api.service';
 import { RecordingResponse, SessionResponse } from './operator.models';
+import { ThemeService } from '../../theme.service';
 
 @Component({
   selector: 'app-dashboard-page',
@@ -34,7 +36,8 @@ import { RecordingResponse, SessionResponse } from './operator.models';
     MatCardModule,
     MatDividerModule,
     MatProgressBarModule,
-    MatToolbarModule
+    MatToolbarModule,
+    MatIconModule
   ],
   template: `
     <main class="workspace-shell">
@@ -44,6 +47,9 @@ import { RecordingResponse, SessionResponse } from './operator.models';
           <span>{{ api.operatorLabel() }}</span>
         </div>
         <div class="toolbar-actions">
+          <button mat-icon-button type="button" (click)="theme.toggleTheme()" aria-label="Toggle theme">
+            <mat-icon>{{ theme.theme() === 'dark' ? 'light_mode' : 'dark_mode' }}</mat-icon>
+          </button>
           <button mat-button type="button" (click)="refreshAll()" [disabled]="isRefreshing()">
             Refresh
           </button>
@@ -188,6 +194,7 @@ export class DashboardPageComponent implements AfterViewInit, OnDestroy {
 
   readonly api = inject(OperatorApiService);
   readonly liveRoom = inject(LiveRoomService);
+  readonly theme = inject(ThemeService);
 
   readonly sessions = signal<SessionResponse[]>([]);
   readonly recordings = signal<RecordingResponse[]>([]);

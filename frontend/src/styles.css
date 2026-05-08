@@ -20,18 +20,33 @@
   --shadow: 0 24px 60px rgba(26, 31, 35, 0.08);
 }
 
+:root.dark-theme {
+  color-scheme: dark;
+  background: linear-gradient(180deg, #1A1F23 0%, #15181A 100%);
+  color: #ffffff;
+  --surface: rgba(39, 80, 70, 0.4);
+  --surface-strong: #275046;
+  --surface-border: rgba(255, 255, 255, 0.12);
+  --ink-soft: #9AA3AD;
+  --ink: #ffffff;
+  --offwhite: #1A1F23;
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
 * {
   box-sizing: border-box;
 }
 
 html {
-  background: #f5f5f0;
+  background: var(--offwhite);
+  transition: background-color 0.3s ease;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
   color: var(--ink);
+  transition: color 0.3s ease, background 0.3s ease;
 }
 
 .shell {
@@ -295,6 +310,24 @@ body {
 .auth-card .mat-mdc-form-field.mat-focused .mdc-notched-outline__notch,
 .auth-card .mat-mdc-form-field.mat-focused .mdc-notched-outline__trailing {
   border-color: var(--brand-dark) !important;
+}
+
+:root.dark-theme .notice {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--ink);
+}
+
+:root.dark-theme .session-card,
+:root.dark-theme .recording-card,
+:root.dark-theme .recording-player {
+  background: rgba(39, 80, 70, 0.6);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+:root.dark-theme .empty-state {
+  background: rgba(39, 80, 70, 0.3);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .inline-actions {
