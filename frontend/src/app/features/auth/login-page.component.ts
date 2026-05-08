@@ -7,7 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { Router } from '@angular/router';
-import { OperatorApiService } from '../dashboard/operator-api.service';
+import { OperatorApiService } from '@features/operations/operator-api.service';
 
 @Component({
   selector: 'app-login-page',
