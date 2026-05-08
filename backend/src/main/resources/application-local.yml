@@ -1,0 +1,16 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:bodycam}?options=-c%20TimeZone=UTC
+    username: ${DB_USER:bodycam}
+    password: ${DB_PASSWORD:bodycam}
+
+app:
+  livekit:
+    url: ${LIVEKIT_URL:ws://localhost:7880}
+    public-url: ${LIVEKIT_PUBLIC_URL:ws://localhost:7880}
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    public-url: ${MINIO_PUBLIC_URL:http://localhost:9000}

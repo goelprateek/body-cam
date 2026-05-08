@@ -15,6 +15,16 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - `./gradlew test`
 - `./gradlew bootJar`
 
+## Database Migrations
+
+- Flyway versioned migrations live in `src/main/resources/db/migration`.
+- The app starts with `spring.jpa.hibernate.ddl-auto=validate`, so Flyway must create the schema before Hibernate initializes.
+- On Spring Boot 4, the backend needs `org.springframework.boot:spring-boot-starter-flyway` so Boot actually auto-configures and runs Flyway at startup.
+- `baseline-on-migrate` is intentionally not enabled for this project. On a partially populated local database, baselining can skip `V1__init.sql` and leave tables like `app_user` missing.
+- If your local database was already started with the old baseline behavior, reset the local schema before retrying:
+  - drop and recreate the `bodycam` database, or
+  - remove the stale `flyway_schema_history` table and rerun the app only if you are sure the database is disposable.
+
 ## Seed Users
 
 - `worker1 / worker123`
