@@ -1,0 +1,163 @@
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '@env/environment';
+import {
+  CurrentUserResponse,
+  LiveKitTokenResponse,
+  LoginResponse,
+  RecordingResponse,
+  SessionResponse
+} from './operator.models';
+
+const ACCESS_TOKEN_KEY = 'bodycam.operator.access-token';
+
+@Injectable({ providedIn: 'root' })
+export class OperatorApiService {
+  private readonly http = inject(HttpClient);
+
+  readonly apiBase = signal(environment.apiBaseUrl);
+  readonly accessToken = signal<string | null>(localStorage.getItem(ACCESS_TOKEN_KEY));
+  readonly currentUser = signal<CurrentUserResponse | null>(null);
+  readonly operatorLabel = computed(() => {
+    const user = this.currentUser();
+    if (!user) {
+      return 'Backoffice Operator';
+    }
+
+    return user.displayName || user.username;
+  });
+
+  async restoreSession(): Promise<boolean> {
+    if (!this.accessToken()) {
+      return false;
+    }
+
+    try {
+      const currentUser = await this.getCurrentUser();
+      this.currentUser.set(currentUser);
+      return true;
+    } catch {
+      this.clearSession();
+      return false;
+    }
+  }
+
+  async login(username: string, password: string): Promise<CurrentUserResponse> {
+    const response = await firstValueFrom(
+      this.http.post<LoginResponse>(this.url('/auth/login'), {
+        username,
+        password
+      })
+    );
+
+    localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
+    this.accessToken.set(response.accessToken);
+
+    const currentUser: CurrentUserResponse = {
+      userId: response.userId,
+      username: response.username,
+      displayName: response.displayName,
+      role: response.role
+    };
+
+    this.currentUser.set(currentUser);
+    return currentUser;
+  }
+
+  logout(): void {
+    this.clearSession();
+  }
+
+  async listSessions(): Promise<SessionResponse[]> {
+    return firstValueFrom(
+      this.http.get<SessionResponse[]>(this.url('/sessions'), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async listRecordings(): Promise<RecordingResponse[]> {
+    return firstValueFrom(
+      this.http.get<RecordingResponse[]>(this.url('/recordings'), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async createJoinToken(
+    sessionId: string,
+    participantName: string
+  ): Promise<LiveKitTokenResponse> {
+    return firstValueFrom(
+      this.http.post<LiveKitTokenResponse>(
+        this.url(`/sessions/${sessionId}/join-token`),
+        {
+          participantName,
+          participantRole: 'OPERATOR'
+        },
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async endSession(sessionId: string): Promise<SessionResponse> {
+    return firstValueFrom(
+      this.http.post<SessionResponse>(
+        this.url(`/sessions/${sessionId}/end`),
+        {},
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  explainError(error: unknown): string {
+    if (error instanceof HttpErrorResponse) {
+      const message =
+        typeof error.error === 'string'
+          ? error.error
+          : (error.error?.message as string | undefined);
+
+      return message || error.message || `HTTP ${error.status}`;
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return 'Unexpected request failure';
+  }
+
+  private async getCurrentUser(): Promise<CurrentUserResponse> {
+    return firstValueFrom(
+      this.http.get<CurrentUserResponse>(this.url('/auth/me'), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  private authHeaders(): HttpHeaders {
+    const token = this.accessToken();
+    if (!token) {
+      return new HttpHeaders();
+    }
+
+    return new HttpHeaders({
+      Authorization: `Bearer ${token}`
+    });
+  }
+
+  private clearSession(): void {
+    this.accessToken.set(null);
+    this.currentUser.set(null);
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+  }
+
+  private url(path: string): string {
+    return `${this.apiBase()}${path}`;
+  }
+}
