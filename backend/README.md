@@ -15,6 +15,12 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - `./gradlew test`
 - `./gradlew bootJar`
 
+## JWT Secret
+
+- `APP_JWT_SECRET` must be at least 32 characters for `HS256`.
+- The `local` Spring profile now provides a dev-only fallback secret for convenience.
+- Non-local environments should set `APP_JWT_SECRET` explicitly instead of relying on defaults.
+
 ## Database Migrations
 
 - Flyway versioned migrations live in `src/main/resources/db/migration`.

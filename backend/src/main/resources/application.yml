@@ -28,7 +28,7 @@ management:
 app:
   jwt:
     issuer: bodycam-backend
-    secret: ${APP_JWT_SECRET:change-me}
+    secret: ${APP_JWT_SECRET:}
     access-token-minutes: 480
   livekit:
     url: ${LIVEKIT_URL:ws://livekit:7880}
