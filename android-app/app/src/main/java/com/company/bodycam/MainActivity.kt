@@ -54,8 +54,6 @@ class MainActivity : ComponentActivity() {
     private fun bindActions() {
         binding.loginButton.setOnClickListener {
             viewModel.login(
-                backendUrl = binding.backendUrlInput.text?.toString().orEmpty(),
-                liveKitUrl = binding.liveKitUrlInput.text?.toString().orEmpty(),
                 username = binding.usernameInput.text?.toString().orEmpty(),
                 password = binding.passwordInput.text?.toString().orEmpty()
             )
@@ -89,12 +87,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun render(state: MainUiState) {
-        if (binding.backendUrlInput.text?.toString() != state.backendUrl) {
-            binding.backendUrlInput.setText(state.backendUrl)
-        }
-        if (binding.liveKitUrlInput.text?.toString() != state.liveKitUrl) {
-            binding.liveKitUrlInput.setText(state.liveKitUrl)
-        }
         if (binding.usernameInput.text?.toString() != state.username) {
             binding.usernameInput.setText(state.username)
         }
@@ -102,13 +94,19 @@ class MainActivity : ComponentActivity() {
             binding.passwordInput.setText(state.password)
         }
 
+        binding.environmentValue.text = if (state.backendUrl.isBlank()) {
+            "Backend configuration missing"
+        } else {
+            "Managed by deployed environment"
+        }
         binding.userSummary.text = state.user?.let {
             "${it.displayName} (${it.role})"
         } ?: "Not logged in"
         binding.sessionSummary.text = state.sessionSummary.ifBlank { "No active session" }
         binding.streamStatus.text = state.streamStatus
         binding.syncStatus.text = state.syncStatus
-        binding.previewContainer.visibility = if (state.isStreaming) View.VISIBLE else View.GONE
+        binding.previewContainer.visibility = View.VISIBLE
+        binding.previewPlaceholder.visibility = if (state.isStreaming) View.GONE else View.VISIBLE
         binding.loginButton.isEnabled = !state.loginInFlight
         binding.startSessionButton.isEnabled = state.user != null && !state.isStreaming && !state.actionInFlight
         binding.stopSessionButton.isEnabled = state.isStreaming && !state.actionInFlight
@@ -116,6 +114,8 @@ class MainActivity : ComponentActivity() {
         binding.progressBar.visibility = if (state.loginInFlight || state.actionInFlight) View.VISIBLE else View.GONE
         binding.messageBanner.visibility = if (state.message.isNullOrBlank()) View.GONE else View.VISIBLE
         binding.messageBanner.text = state.message
+        binding.loginStatusChip.text = if (state.user != null) "Authenticated" else "Sign in required"
+        binding.streamStatusChip.text = if (state.isStreaming) "Live" else "Offline"
     }
 
     private fun hasAllPermissions(): Boolean {

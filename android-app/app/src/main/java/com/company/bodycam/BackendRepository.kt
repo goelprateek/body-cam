@@ -16,7 +16,6 @@ class BackendRepository(
 
     suspend fun login(
         backendUrl: String,
-        liveKitUrl: String,
         username: String,
         password: String
     ): StoredUser {
@@ -29,7 +28,6 @@ class BackendRepository(
         )
         authStore.saveAuthenticatedSession(
             backendUrl = backendUrl,
-            liveKitUrl = liveKitUrl,
             token = response.accessToken,
             user = user
         )
