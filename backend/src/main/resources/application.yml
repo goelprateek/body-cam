@@ -11,11 +11,10 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          time_zone: UTC
   flyway:
     enabled: true
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
 
 server:
   port: 8080
@@ -29,7 +28,7 @@ management:
 app:
   jwt:
     issuer: bodycam-backend
-    secret: ${APP_JWT_SECRET:change-me}
+    secret: ${APP_JWT_SECRET:}
     access-token-minutes: 480
   livekit:
     url: ${LIVEKIT_URL:ws://livekit:7880}
