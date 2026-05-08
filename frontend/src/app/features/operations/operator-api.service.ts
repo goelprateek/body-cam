@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { environment } from '../../../environments/environment';
+import { environment } from '@env/environment';
 import {
   CurrentUserResponse,
   LiveKitTokenResponse,
