@@ -1,0 +1,43 @@
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.xml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.java text eol=lf
+*.kt text eol=lf
+*.kts text eol=lf
+*.gradle text eol=lf
+*.properties text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.jar binary
+*.aar binary
+*.keystore binary
+*.jks binary
+*.so binary
+
+.codex export-ignore
+.vscode export-ignore
+.gradle-user-home export-ignore
+.idea export-ignore
+.fleet export-ignore
+body-cam.code-workspace export-ignore
+AGENTS.md export-ignore
+PLANS.md export-ignore
+docs/ARCHITECTURE_GENERATION_PROMPT.md export-ignore

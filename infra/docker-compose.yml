@@ -1,0 +1,12 @@
+include:
+  - compose/local/db.yml
+  - compose/local/app.yml
+
+networks:
+  default:
+    name: bodycam_local
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

@@ -1,0 +1,43 @@
+{
+  "folders": [
+    {
+      "name": "_workspace",
+      "path": "."
+    },
+    {
+      "name": "backend",
+      "path": "backend"
+    },
+    {
+      "name": "frontend",
+      "path": "frontend"
+    },
+    {
+      "name": "android-app",
+      "path": "android-app"
+    },
+    {
+      "name": "infra",
+      "path": "infra"
+    },
+    {
+      "name": "docs",
+      "path": "docs"
+    },
+    {
+      "name": "scripts",
+      "path": "scripts"
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "files.autoSave": "afterDelay",
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.compile.nullAnalysis.mode": "automatic",
+    "ts.updateImportsOnFileMove.enabled": "always",
+    "docker.showStartPage": false,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  }
+}

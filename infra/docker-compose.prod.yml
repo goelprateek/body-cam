@@ -1,0 +1,14 @@
+include:
+  - compose/prod/db.yml
+  - compose/prod/app.yml
+
+networks:
+  private:
+    name: bodycam_private
+  proxy:
+    external: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

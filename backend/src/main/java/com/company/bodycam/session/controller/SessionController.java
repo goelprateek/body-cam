@@ -1,0 +1,57 @@
+package com.company.bodycam.session.controller;
+
+import com.company.bodycam.session.dto.CreateSessionRequest;
+import com.company.bodycam.session.dto.JoinSessionTokenRequest;
+import com.company.bodycam.session.dto.LiveKitTokenResponse;
+import com.company.bodycam.session.dto.SessionResponse;
+import com.company.bodycam.session.service.SessionService;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/sessions")
+public class SessionController {
+
+    private final SessionService sessionService;
+
+    public SessionController(SessionService sessionService) {
+        this.sessionService = sessionService;
+    }
+
+    @GetMapping
+    public ResponseEntity<List<SessionResponse>> listSessions() {
+        return ResponseEntity.ok(sessionService.listSessions());
+    }
+
+    @GetMapping("/{sessionId}")
+    public ResponseEntity<SessionResponse> getSession(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(sessionService.getSession(sessionId));
+    }
+
+    @PostMapping
+    public ResponseEntity<SessionResponse> createSession(@Valid @RequestBody CreateSessionRequest request) {
+        return ResponseEntity.ok(sessionService.createSession(request));
+    }
+
+    @PostMapping("/{sessionId}/join-token")
+    public ResponseEntity<LiveKitTokenResponse> joinToken(
+            @PathVariable UUID sessionId,
+            @Valid @RequestBody JoinSessionTokenRequest request
+    ) {
+        return ResponseEntity.ok(sessionService.joinToken(sessionId, request));
+    }
+
+    @PostMapping("/{sessionId}/end")
+    public ResponseEntity<SessionResponse> endSession(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(sessionService.endSession(sessionId));
+    }
+}

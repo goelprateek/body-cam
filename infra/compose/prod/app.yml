@@ -1,0 +1,52 @@
+services:
+  backend:
+    image: ${BACKEND_IMAGE_REF:-${CONTAINER_REGISTRY:-registry.digitalocean.com/fleet-ops}/body-cam-backend:${BACKEND_IMAGE_TAG:-latest}}
+    env_file:
+      - ../../../backend/.env.prod
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      livekit:
+        condition: service_started
+    networks:
+      - private
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.bodycam-api.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.bodycam-api.entrypoints=websecure
+      - traefik.http.routers.bodycam-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}
+      - traefik.http.services.bodycam-api.loadbalancer.server.port=8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  frontend:
+    image: ${FRONTEND_IMAGE_REF:-${CONTAINER_REGISTRY:-registry.digitalocean.com/fleet-ops}/body-cam-frontend:${FRONTEND_IMAGE_TAG:-latest}}
+    expose:
+      - "8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - private
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.bodycam-frontend.rule=Host(`${FRONTEND_DOMAIN}`)
+      - traefik.http.routers.bodycam-frontend.entrypoints=websecure
+      - traefik.http.routers.bodycam-frontend.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}
+      - traefik.http.services.bodycam-frontend.loadbalancer.server.port=8080
+    restart: unless-stopped
