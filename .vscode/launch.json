@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Spring Boot Backend",
+            "request": "launch",
+            "mainClass": "com.company.bodycam.BodyCamApplication",
+            "projectName": "bodycam-backend",
+            "cwd": "${workspaceFolder:backend}",
+            "args": "--spring.profiles.active=local",
+            "envFile": "${workspaceFolder:backend}/.env.local"
+        }
+    ]
+}
