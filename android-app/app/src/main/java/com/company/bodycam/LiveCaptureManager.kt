@@ -25,9 +25,10 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
+import io.livekit.android.events.collect
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.LocalVideoTrack
-import io.livekit.android.room.track.video.VideoFrameCapturer
+import io.livekit.android.room.track.video.BitmapFrameCapturer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,7 +37,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.webrtc.VideoFrame
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -58,7 +58,7 @@ class LiveCaptureManager(
     private var videoCapture: VideoCapture<Recorder>? = null
     private var activeRecording: Recording? = null
     private var localVideoTrack: LocalVideoTrack? = null
-    private var videoCapturer: VideoFrameCapturer? = null
+    private var videoCapturer: BitmapFrameCapturer? = null
     private var activeConfig: ActiveSessionConfig? = null
 
     val state: StateFlow<CaptureRuntimeState> = _state.asStateFlow()
@@ -85,6 +85,7 @@ class LiveCaptureManager(
         localVideoTrack?.stop()
         localVideoTrack = null
         room?.disconnect()
+        room?.release()
         room = null
         videoCapturer = null
         cameraProvider?.unbindAll()
@@ -110,7 +111,7 @@ class LiveCaptureManager(
                 currentRoom.connect(config.liveKitUrl, config.token)
 
                 val localParticipant = currentRoom.localParticipant
-                val frameCapturer = VideoFrameCapturer()
+                val frameCapturer = BitmapFrameCapturer()
                 videoCapturer = frameCapturer
                 val track = localParticipant.createVideoTrack(
                     name = "bodycam-camera",
@@ -155,9 +156,9 @@ class LiveCaptureManager(
             .build()
         analysis.setAnalyzer(cameraExecutor) { imageProxy ->
             try {
-                val frame: VideoFrame = YuvFrameConverter.toVideoFrame(imageProxy) ?: return@setAnalyzer
-                videoCapturer?.pushVideoFrame(frame)
-                frame.release()
+                val bitmap = YuvFrameConverter.toBitmap(imageProxy) ?: return@setAnalyzer
+                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                videoCapturer?.pushBitmap(bitmap, rotationDegrees)
             } finally {
                 imageProxy.close()
             }

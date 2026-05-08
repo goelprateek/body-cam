@@ -1,65 +1,83 @@
 package com.company.bodycam
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import androidx.camera.core.ImageProxy
-import org.webrtc.JavaI420Buffer
-import org.webrtc.VideoFrame
-import java.nio.ByteBuffer
+import java.io.ByteArrayOutputStream
 
 object YuvFrameConverter {
 
-    fun toVideoFrame(imageProxy: ImageProxy): VideoFrame? {
-        val image = imageProxy.image ?: return null
-        val width = image.width
-        val height = image.height
-        val buffer = JavaI420Buffer.allocate(width, height)
+    fun toBitmap(imageProxy: ImageProxy): Bitmap? {
+        if (imageProxy.format != ImageFormat.YUV_420_888) {
+            return null
+        }
+        val width = imageProxy.width
+        val height = imageProxy.height
+        val nv21 = yuv420888ToNv21(imageProxy)
+        val yuvImage = YuvImage(nv21, ImageFormat.NV21, width, height, null)
+        val jpegBuffer = ByteArrayOutputStream()
+        val compressed = yuvImage.compressToJpeg(Rect(0, 0, width, height), JPEG_QUALITY, jpegBuffer)
+        if (!compressed) {
+            return null
+        }
+        val jpegBytes = jpegBuffer.toByteArray()
+        return BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+    }
 
+    private fun yuv420888ToNv21(imageProxy: ImageProxy): ByteArray {
+        val width = imageProxy.width
+        val height = imageProxy.height
+        val ySize = width * height
+        val output = ByteArray(ySize + (width * height / 2))
         copyPlane(
-            source = image.planes[0].buffer,
-            rowStride = image.planes[0].rowStride,
-            pixelStride = image.planes[0].pixelStride,
+            plane = imageProxy.planes[0],
             width = width,
             height = height,
-            target = buffer.dataY,
-            targetStride = buffer.strideY
+            output = output,
+            offset = 0,
+            outputPixelStride = 1
         )
         copyPlane(
-            source = image.planes[1].buffer,
-            rowStride = image.planes[1].rowStride,
-            pixelStride = image.planes[1].pixelStride,
+            plane = imageProxy.planes[2],
             width = width / 2,
             height = height / 2,
-            target = buffer.dataU,
-            targetStride = buffer.strideU
+            output = output,
+            offset = ySize,
+            outputPixelStride = 2
         )
         copyPlane(
-            source = image.planes[2].buffer,
-            rowStride = image.planes[2].rowStride,
-            pixelStride = image.planes[2].pixelStride,
+            plane = imageProxy.planes[1],
             width = width / 2,
             height = height / 2,
-            target = buffer.dataV,
-            targetStride = buffer.strideV
+            output = output,
+            offset = ySize + 1,
+            outputPixelStride = 2
         )
-
-        return VideoFrame(buffer, imageProxy.imageInfo.rotationDegrees, System.nanoTime())
+        return output
     }
 
     private fun copyPlane(
-        source: ByteBuffer,
-        rowStride: Int,
-        pixelStride: Int,
+        plane: ImageProxy.PlaneProxy,
         width: Int,
         height: Int,
-        target: ByteBuffer,
-        targetStride: Int
+        output: ByteArray,
+        offset: Int,
+        outputPixelStride: Int
     ) {
-        val sourceBuffer = source.duplicate()
+        val sourceBuffer = plane.buffer.duplicate()
+        val rowStride = plane.rowStride
+        val pixelStride = plane.pixelStride
         for (row in 0 until height) {
             for (column in 0 until width) {
                 val sourceIndex = row * rowStride + column * pixelStride
-                val targetIndex = row * targetStride + column
-                target.put(targetIndex, sourceBuffer.get(sourceIndex))
+                val targetIndex = offset + (row * width + column) * outputPixelStride
+                output[targetIndex] = sourceBuffer.get(sourceIndex)
             }
         }
     }
+
+    private const val JPEG_QUALITY = 75
 }

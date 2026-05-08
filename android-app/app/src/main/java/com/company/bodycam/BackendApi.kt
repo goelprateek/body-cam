@@ -74,7 +74,7 @@ object BackendApiFactory {
         return Retrofit.Builder()
             .baseUrl(normalizedBaseUrl)
             .client(client)
-            .addConverterFactory(MoshiConverterFactory.create(moshi.asLenient()))
+            .addConverterFactory(MoshiConverterFactory.create(moshi).asLenient())
             .build()
             .create(BackendApi::class.java)
     }
