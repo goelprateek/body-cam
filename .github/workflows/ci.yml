@@ -72,7 +72,6 @@ jobs:
       - name: Prepare backend env files for compose render
         shell: bash
         run: |
-          cp backend/.env.local backend/.env.docker.local
           cp backend/.env.prod.example backend/.env.prod
 
       - name: Render local compose
