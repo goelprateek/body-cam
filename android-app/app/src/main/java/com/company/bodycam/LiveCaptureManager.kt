@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -41,7 +42,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -83,12 +83,20 @@ class LiveCaptureManager(
     private var pendingCameraFacing: CameraFacing? = null
     private var isSwitchingCamera = false
     private var stopRequested = false
+    private var activeSegmentStartedAtMs = 0L
+    private var activeSegmentHasData = false
+    private var delayedStopPending = false
 
     var onStopSafeToRelease: (() -> Unit)? = null
 
     val state: StateFlow<CaptureRuntimeState> = _state.asStateFlow()
 
     private val segmentStopper = Runnable {
+        activeRecording?.stop()
+    }
+
+    private val delayedRecordingStopper = Runnable {
+        delayedStopPending = false
         activeRecording?.stop()
     }
 
@@ -120,7 +128,7 @@ class LiveCaptureManager(
 
         val recording = activeRecording
         if (recording != null) {
-            recording.stop()
+            stopActiveRecordingSafely()
         } else {
             teardownCapturePipeline()
             notifyStopSafeToReleaseIfIdle()
@@ -131,6 +139,7 @@ class LiveCaptureManager(
         stopRequested = false
         isTrackStarted = false
         mainHandler.removeCallbacks(segmentStopper)
+        mainHandler.removeCallbacks(delayedRecordingStopper)
         activeRecording?.stop()
         activeRecording = null
         pendingUploadIds.clear()
@@ -157,6 +166,9 @@ class LiveCaptureManager(
         currentCameraFacing = CameraFacing.BACK
         pendingCameraFacing = null
         isSwitchingCamera = false
+        activeSegmentStartedAtMs = 0L
+        activeSegmentHasData = false
+        delayedStopPending = false
     }
 
     fun start(config: ActiveSessionConfig, highQuality: Boolean = false) {
@@ -172,7 +184,8 @@ class LiveCaptureManager(
                 _state.value = CaptureRuntimeState(
                     isStreaming = false,
                     streamStatus = "Connecting to LiveKit",
-                    syncStatus = "Preparing capture pipeline"
+                    syncStatus = "Preparing capture pipeline",
+                    sessionId = config.sessionId
                 )
                 val currentRoom = LiveKit.create(appContext)
                 room = currentRoom
@@ -207,7 +220,8 @@ class LiveCaptureManager(
                     syncStatus = "Recording local 30s clips and syncing after finalize",
                     usingFrontCamera = currentCameraFacing == CameraFacing.FRONT,
                     canFlipCamera = hasAlternateCamera(),
-                    cameraSwitchInFlight = false
+                    cameraSwitchInFlight = false,
+                    sessionId = config.sessionId
                 )
             } catch (exception: Exception) {
                 stopImmediate()
@@ -236,7 +250,7 @@ class LiveCaptureManager(
         )
         val recording = activeRecording
         if (recording != null) {
-            recording.stop()
+            stopActiveRecordingSafely()
         } else {
             switchCameraAndResume(targetFacing)
         }
@@ -459,6 +473,9 @@ class LiveCaptureManager(
         activeRecording = pendingRecording.start(ContextCompat.getMainExecutor(appContext)) { event ->
             handleRecordingEvent(config, outputFile, event)
         }
+        activeSegmentStartedAtMs = SystemClock.elapsedRealtime()
+        activeSegmentHasData = false
+        delayedStopPending = false
         mainHandler.postDelayed(segmentStopper, SEGMENT_DURATION_MS)
     }
 
@@ -472,27 +489,46 @@ class LiveCaptureManager(
                 _state.value = _state.value.copy(syncStatus = "Recording segment ${file.name}")
             }
 
+            is VideoRecordEvent.Status -> {
+                if (!activeSegmentHasData) {
+                    activeSegmentHasData = event.recordingStats.numBytesRecorded > 0L ||
+                            event.recordingStats.recordedDurationNanos > 0L
+                }
+            }
+
             is VideoRecordEvent.Finalize -> {
                 mainHandler.removeCallbacks(segmentStopper)
+                mainHandler.removeCallbacks(delayedRecordingStopper)
+                delayedStopPending = false
                 activeRecording = null
                 
                 val duration = nanosToSeconds(event.recordingStats.recordedDurationNanos)
                 val size = file.length()
+                val noValidDataOnExpectedStop = event.error == VideoRecordEvent.Finalize.ERROR_NO_VALID_DATA &&
+                        (stopRequested || pendingCameraFacing != null || isSwitchingCamera)
                 
                 if (!event.hasError() && file.exists() && duration >= MIN_UPLOAD_DURATION_SEC && size > 1024) {
                     android.util.Log.d("LiveCaptureManager", "Segment finalized: ${file.name}, duration: $duration s, size: $size bytes")
                     enqueueUpload(config, file, duration)
                 } else {
-                    if (event.hasError()) {
+                    if (event.hasError() && !noValidDataOnExpectedStop) {
                         android.util.Log.e("LiveCaptureManager", "Segment finalize error: ${event.error}, cause: ${event.cause?.message}")
                         _state.value = _state.value.copy(
                             syncStatus = "Segment finalize error: ${event.cause?.message ?: event.error}"
+                        )
+                    } else if (noValidDataOnExpectedStop) {
+                        android.util.Log.w(
+                            "LiveCaptureManager",
+                            "Discarding segment ${file.name} because stop/switch happened before first data frame was produced"
                         )
                     } else {
                         android.util.Log.d("LiveCaptureManager", "Discarding short or empty segment: ${file.name}, duration: ${duration}s, size: $size")
                     }
                     file.delete()
                 }
+
+                activeSegmentStartedAtMs = 0L
+                activeSegmentHasData = false
 
                 if (pendingCameraFacing != null) {
                     switchCameraAndResume(pendingCameraFacing!!)
@@ -583,6 +619,27 @@ class LiveCaptureManager(
     private fun notifyStopSafeToReleaseIfIdle() {
         if (stopRequested && activeRecording == null && pendingUploadIds.isEmpty()) {
             onStopSafeToRelease?.invoke()
+        }
+    }
+
+    private fun stopActiveRecordingSafely() {
+        val recording = activeRecording ?: return
+        if (activeSegmentHasData) {
+            recording.stop()
+            return
+        }
+
+        val elapsedMs = SystemClock.elapsedRealtime() - activeSegmentStartedAtMs
+        val remainingDelayMs = MIN_SEGMENT_STOP_DELAY_MS - elapsedMs
+        if (remainingDelayMs <= 0L) {
+            recording.stop()
+            return
+        }
+
+        if (!delayedStopPending) {
+            delayedStopPending = true
+            _state.value = _state.value.copy(syncStatus = "Waiting for camera warm-up before finalizing segment")
+            mainHandler.postDelayed(delayedRecordingStopper, remainingDelayMs)
         }
     }
 
@@ -681,5 +738,6 @@ class LiveCaptureManager(
     companion object {
         private const val SEGMENT_DURATION_MS = 30_000L
         private const val MIN_UPLOAD_DURATION_SEC = 2
+        private const val MIN_SEGMENT_STOP_DELAY_MS = 1200L
     }
 }

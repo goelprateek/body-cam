@@ -23,6 +23,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val authStore = AuthStore(application)
     private val repository = BackendRepository(authStore)
     private var captureService: CaptureService? = null
+    private var previewView: PreviewView? = null
+    private var previewLifecycleOwner: LifecycleOwner? = null
     private var isBound = false
     private var stateCollectionJob: Job? = null
 
@@ -45,6 +47,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val boundService = binder.getService()
             captureService = boundService
             isBound = true
+            previewView?.let { preview ->
+                previewLifecycleOwner?.let { owner ->
+                    boundService.captureManager?.bindPreview(preview, owner)
+                }
+            }
 
             stateCollectionJob?.cancel()
             stateCollectionJob = viewModelScope.launch {
@@ -57,7 +64,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         usingFrontCamera = runtime.usingFrontCamera,
                         canFlipCamera = runtime.canFlipCamera,
                         cameraSwitchInFlight = runtime.cameraSwitchInFlight,
-                        thermalThrottling = runtime.thermalThrottling
+                        thermalThrottling = runtime.thermalThrottling,
+                        sessionSummary = runtime.sessionId?.let { "Session: $it" } ?: "",
+                        activeSessionId = runtime.sessionId
                     )
                 }
             }
@@ -77,6 +86,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun bindPreview(previewView: PreviewView, lifecycleOwner: LifecycleOwner) {
+        this.previewView = previewView
+        this.previewLifecycleOwner = lifecycleOwner
         viewModelScope.launch {
             // Wait for service to be bound if it's not yet
             while (captureService == null) {
@@ -145,6 +156,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     kotlinx.coroutines.delay(50)
                 }
 
+                previewView?.let { preview ->
+                    previewLifecycleOwner?.let { owner ->
+                        captureService?.captureManager?.bindPreview(preview, owner)
+                    }
+                }
+
                 captureService?.captureManager?.start(config, _uiState.value.highQualityMode)
                 _uiState.value = _uiState.value.copy(
                     actionInFlight = false,
@@ -160,27 +177,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopSession() {
+        stopCaptureAndEndSession(clearAuthAfter = false)
+    }
+
+    fun logout() {
+        stopCaptureAndEndSession(clearAuthAfter = true)
+    }
+
+    private fun stopCaptureAndEndSession(clearAuthAfter: Boolean) {
+        val sessionId = _uiState.value.activeSessionId
+        val token = authToken
+        val backendUrl = _uiState.value.backendUrl
+
         _uiState.value = _uiState.value.copy(
             actionInFlight = true,
             streamStatus = "Stopping",
             syncStatus = "Finalizing recording"
         )
         captureService?.stopCaptureGracefully()
-        _uiState.value = _uiState.value.copy(
-            actionInFlight = false,
-            activeSessionId = null
-        )
-    }
 
-    fun logout() {
-        stopSession()
-        authStore.clear()
-        authToken = null
-        _uiState.value = _uiState.value.copy(
-            user = null,
-            syncStatus = "Waiting for login",
-            message = null
-        )
+        viewModelScope.launch {
+            var stopMessage: String? = null
+            var sessionEnded = false
+
+            if (!sessionId.isNullOrBlank() && !token.isNullOrBlank()) {
+                try {
+                    repository.endSession(backendUrl, token, sessionId)
+                    sessionEnded = true
+                    stopMessage = "Session ended"
+                } catch (e: Exception) {
+                    stopMessage = "Capture stopped, but failed to end backend session: ${e.message}"
+                }
+            } else {
+                sessionEnded = sessionId.isNullOrBlank()
+                stopMessage = if (sessionEnded) "Capture stopped" else "Capture stopped, but no auth token was available to end the backend session"
+            }
+
+            if (clearAuthAfter) {
+                authStore.clear()
+                authToken = null
+            }
+
+            _uiState.value = _uiState.value.copy(
+                actionInFlight = false,
+                user = if (clearAuthAfter) null else _uiState.value.user,
+                activeSessionId = if (sessionEnded) null else sessionId,
+                sessionSummary = if (sessionEnded) "" else _uiState.value.sessionSummary,
+                syncStatus = if (clearAuthAfter) "Waiting for login" else stopMessage,
+                message = if (clearAuthAfter) null else stopMessage
+            )
+        }
     }
 
     override fun onCleared() {
