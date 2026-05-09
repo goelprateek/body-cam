@@ -7,6 +7,10 @@ COPY settings.gradle .
 COPY gradle.properties .
 COPY gradlew .
 COPY gradle ./gradle
+
+# Fix permission issue on Linux container
+RUN chmod +x gradlew
+
 COPY src ./src
 
 RUN ./gradlew bootJar --no-daemon
@@ -22,12 +26,12 @@ RUN mkdir extracted \
     && jar xf ../app.jar \
     && modules="$($JAVA_HOME/bin/jdeps --ignore-missing-deps --multi-release 25 --recursive --print-module-deps BOOT-INF/lib/*.jar BOOT-INF/classes)" \
     && $JAVA_HOME/bin/jlink \
-      --add-modules "$modules" \
-      --strip-debug \
-      --no-header-files \
-      --no-man-pages \
-      --compress=2 \
-      --output /work/custom-jre
+    --add-modules "$modules" \
+    --strip-debug \
+    --no-header-files \
+    --no-man-pages \
+    --compress=2 \
+    --output /work/custom-jre
 
 FROM debian:bookworm-slim
 
