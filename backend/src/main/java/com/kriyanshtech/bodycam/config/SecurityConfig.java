@@ -48,7 +48,13 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:4200", "http://localhost:8081", "http://frontend"));
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:4200",
+                "http://localhost:8081",
+                "http://frontend",
+                "https://bodycam.idti.dev",
+                "https://api-bodycam.idti.dev"
+        ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

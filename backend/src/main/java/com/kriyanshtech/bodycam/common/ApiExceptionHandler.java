@@ -7,6 +7,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.multipart.MultipartException;
 
 import java.time.Instant;
@@ -33,6 +34,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<Map<String, Object>> handleForbidden(AccessDeniedException exception) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage());
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<Map<String, Object>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException exception) {
+        return build(HttpStatus.METHOD_NOT_ALLOWED, exception.getMessage());
     }
 
     @ExceptionHandler(MultipartException.class)
