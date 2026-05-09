@@ -80,15 +80,18 @@ class BackendRepository(
         metadata: RecordingMetadataRequest?,
         file: File
     ): RecordingResponse {
+        val sessionIdPart = sessionId.toRequestBody(textPlainMediaType)
+        val durationSecondsPart = durationSeconds
+            ?.toString()
+            ?.toRequestBody(textPlainMediaType)
         val metadataPart = metadata
             ?.let(recordingMetadataAdapter::toJson)
-            ?.toRequestBody("application/json".toMediaType())
-            ?.let { MultipartBody.Part.createFormData("metadata", null, it) }
+            ?.toRequestBody(textPlainMediaType)
         val fileBody = file.asRequestBody("video/mp4".toMediaType())
         val filePart = MultipartBody.Part.createFormData("file", file.name, fileBody)
         return api(backendUrl, token).uploadRecording(
-            sessionId = sessionId,
-            durationSeconds = durationSeconds,
+            sessionId = sessionIdPart,
+            durationSeconds = durationSecondsPart,
             metadata = metadataPart,
             file = filePart
         )

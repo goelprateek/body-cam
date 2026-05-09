@@ -19,6 +19,7 @@ import com.kriyanshtech.bodycam.recording.repository.RecordingMetadataRepository
 import com.kriyanshtech.bodycam.session.entity.LiveSession;
 import com.kriyanshtech.bodycam.session.repository.LiveSessionRepository;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -121,8 +122,8 @@ public class RecordingService {
                     file.getSize(),
                     file.getContentType() == null ? "application/octet-stream" : file.getContentType()
             );
-        } catch (Exception exception) {
-            log.error("Failed to persist uploaded recording stream for sessionId={} objectKey={}", sessionId, objectKey, exception);
+        } catch (IOException exception) {
+            log.error("Failed to read uploaded recording stream for sessionId={} objectKey={}", sessionId, objectKey, exception);
             throw new IllegalStateException("Failed to read recording segment", exception);
         }
 

@@ -3,6 +3,9 @@ package com.company.bodycam
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import okhttp3.ResponseBody
+import org.json.JSONObject
+import retrofit2.HttpException
 import java.io.File
 import java.time.Instant
 
@@ -62,10 +65,26 @@ class UploadRecordingWorker(
             
             file.delete()
             Result.success()
+        } catch (e: HttpException) {
+            val errorMessage = parseBackendErrorMessage(e.response()?.errorBody())
+            val retryable = e.code() >= 500 || e.code() == 429
+            android.util.Log.e(
+                "UploadRecordingWorker",
+                "Upload failed for ${file.name}: HTTP ${e.code()}${errorMessage?.let { " - $it" } ?: ""}. ${if (retryable) "Will retry if possible." else "Not retrying because the request is invalid or unauthorized."}",
+                e
+            )
+            if (retryable) Result.retry() else Result.failure()
         } catch (e: Exception) {
             android.util.Log.e("UploadRecordingWorker", "Upload failed for ${file.name}: ${e.message}. Will retry if possible.", e)
             Result.retry()
         }
+    }
+
+    private fun parseBackendErrorMessage(errorBody: ResponseBody?): String? {
+        val rawBody = errorBody?.string()?.takeIf(String::isNotBlank) ?: return null
+        return runCatching {
+            JSONObject(rawBody).optString("message").takeIf { it.isNotBlank() } ?: rawBody
+        }.getOrDefault(rawBody)
     }
 
     companion object {

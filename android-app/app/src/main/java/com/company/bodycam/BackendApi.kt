@@ -35,9 +35,9 @@ interface BackendApi {
     @Multipart
     @POST("api/recordings/upload")
     suspend fun uploadRecording(
-        @Part("sessionId") sessionId: String,
-        @Part("durationSeconds") durationSeconds: Int?,
-        @Part metadata: MultipartBody.Part?,
+        @Part("sessionId") sessionId: RequestBody,
+        @Part("durationSeconds") durationSeconds: RequestBody?,
+        @Part("metadata") metadata: RequestBody?,
         @Part file: MultipartBody.Part
     ): RecordingResponse
 }
@@ -47,29 +47,23 @@ object BackendApiFactory {
         .add(KotlinJsonAdapterFactory())
         .build()
 
-    private var sharedClient: OkHttpClient? = null
-
-    private fun getOrCreateClient(tokenProvider: () -> String?): OkHttpClient {
-        // Since the auth token can change per request (via the provider), 
-        // we use a single client but the interceptor calls the provider dynamically.
-        return sharedClient ?: synchronized(this) {
-            sharedClient ?: OkHttpClient.Builder()
-                .addInterceptor { chain ->
-                    val token = tokenProvider()
-                    val request = if (token.isNullOrBlank()) {
-                        chain.request()
-                    } else {
-                        chain.request().newBuilder()
-                            .header("Authorization", "Bearer $token")
-                            .build()
-                    }
-                    chain.proceed(request)
+    private fun createClient(tokenProvider: () -> String?): OkHttpClient {
+        return OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val token = tokenProvider()
+                val request = if (token.isNullOrBlank()) {
+                    chain.request()
+                } else {
+                    chain.request().newBuilder()
+                        .header("Authorization", "Bearer $token")
+                        .build()
                 }
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(60, TimeUnit.SECONDS)
-                .writeTimeout(120, TimeUnit.SECONDS)
-                .build().also { sharedClient = it }
-        }
+                chain.proceed(request)
+            }
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .build()
     }
 
     fun create(baseUrl: String, tokenProvider: () -> String?): BackendApi {
@@ -77,7 +71,7 @@ object BackendApiFactory {
         
         return Retrofit.Builder()
             .baseUrl(normalizedBaseUrl)
-            .client(getOrCreateClient(tokenProvider))
+            .client(createClient(tokenProvider))
             .addConverterFactory(MoshiConverterFactory.create(moshi).asLenient())
             .build()
             .create(BackendApi::class.java)
