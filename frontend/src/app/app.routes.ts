@@ -2,8 +2,10 @@ import { Routes } from '@angular/router';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { LoginPageComponent } from './features/auth/login-page.component';
-import { DashboardPageComponent } from './features/dashboard/dashboard-page.component';
-import { OperatorApiService } from './features/dashboard/operator-api.service';
+import { OperatorApiService } from '@features/operations/operator-api.service';
+import { AppShellComponent } from './shared/components/app-shell/app-shell.component';
+import { ProfilePageComponent } from './features/profile/profile-page.component';
+import { PreferencesPageComponent } from './features/preferences/preferences-page.component';
 
 const requireAuth = async () => {
   const api = inject(OperatorApiService);
@@ -44,8 +46,32 @@ const redirectAuthenticatedUser = async () => {
 export const routes: Routes = [
   {
     path: '',
-    component: DashboardPageComponent,
-    canActivate: [requireAuth]
+    component: AppShellComponent,
+    canActivate: [requireAuth],
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./features/operations/operations-page.component').then(
+            (c) => c.OperationsPageComponent
+          )
+      },
+      {
+        path: 'profile',
+        component: ProfilePageComponent
+      },
+      {
+        path: 'recordings',
+        loadComponent: () =>
+          import('./features/recordings/recordings-page.component').then(
+            (c) => c.RecordingsPageComponent
+          )
+      },
+      {
+        path: 'preferences',
+        component: PreferencesPageComponent
+      }
+    ]
   },
   {
     path: 'login',

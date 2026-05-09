@@ -2,7 +2,6 @@ package com.company.bodycam
 
 data class MainUiState(
     val backendUrl: String = BuildConfig.DEFAULT_BACKEND_URL,
-    val liveKitUrl: String = BuildConfig.DEFAULT_LIVEKIT_URL,
     val username: String = "worker1",
     val password: String = "worker123",
     val user: StoredUser? = null,
@@ -13,5 +12,6 @@ data class MainUiState(
     val streamStatus: String = "Idle",
     val syncStatus: String = "Waiting for login",
     val message: String? = null,
-    val activeSessionId: String? = null
+    val activeSessionId: String? = null,
+    val highQualityMode: Boolean = false
 )

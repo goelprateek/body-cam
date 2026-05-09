@@ -14,10 +14,12 @@
 - setup LiveKit
 - setup coturn
 - setup MinIO
+- publish LiveKit on a dedicated production `wss://` subdomain for Android and operator clients
 
 Success Criteria:
 - all containers healthy
 - LiveKit reachable
+- production join responses return a public LiveKit `wss://` URL
 - TURN working
 
 ---

@@ -1,4 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Body Cam</string>
+    <string name="brand_name_short">BodyCam</string>
+    <string name="brand_slogan">Secure Field Operations</string>
+
+    <!-- Login Screen -->
+    <string name="hint_username">Username</string>
+    <string name="hint_password">Password</string>
+    <string name="action_sign_in">Sign In</string>
+
+    <!-- Session Screen -->
+    <string name="label_live_stream">Live Stream</string>
+    <string name="label_data_sync">Data Sync</string>
+    <string name="action_start_stream">Start Stream</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_logout">Logout</string>
+
+    <!-- Preview States -->
+    <string name="preview_idle_title">Camera Standby</string>
+    <string name="preview_idle_copy">Ready for field recording session</string>
+    <string name="status_live">LIVE</string>
+    <string name="env_managed">Managed by deployed environment</string>
+    <string name="env_missing">Backend configuration missing</string>
+
+    <!-- Settings -->
+    <string name="setting_high_quality">High Quality Recording (FHD)</string>
 </resources>

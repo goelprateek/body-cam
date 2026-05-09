@@ -24,7 +24,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(
         MainUiState(
             backendUrl = session.backendUrl,
-            liveKitUrl = session.liveKitUrl,
             username = session.username,
             user = session.toUser(),
             syncStatus = if (session.toUser() != null) "Ready to start session" else "Waiting for login"
@@ -49,19 +48,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         captureManager.bindPreview(previewView, lifecycleOwner)
     }
 
-    fun login(backendUrl: String, liveKitUrl: String, username: String, password: String) {
+    fun setHighQualityMode(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(highQualityMode = enabled)
+    }
+
+    fun login(username: String, password: String) {
+        val backendUrl = _uiState.value.backendUrl
+        if (backendUrl.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                message = "Backend configuration is missing for this build"
+            )
+            return
+        }
         _uiState.value = _uiState.value.copy(
             loginInFlight = true,
             message = null,
-            backendUrl = backendUrl,
-            liveKitUrl = liveKitUrl,
             username = username,
             password = password
         )
-        authStore.saveUrls(backendUrl, liveKitUrl)
+        authStore.saveBackendUrl(backendUrl)
         viewModelScope.launch {
             runCatching {
-                repository.login(backendUrl, liveKitUrl, username, password)
+                repository.login(backendUrl, username, password)
             }.onSuccess { user ->
                 authToken = authStore.load().token
                 _uiState.value = _uiState.value.copy(
@@ -83,21 +91,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val state = _uiState.value
         val user = state.user ?: return
         val token = authToken ?: return
+        if (state.backendUrl.isBlank()) {
+            _uiState.value = state.copy(message = "Backend configuration is missing for this build")
+            return
+        }
         _uiState.value = state.copy(actionInFlight = true, message = null)
         viewModelScope.launch {
             runCatching {
                 val sessionResponse = repository.createWorkerSession(state.backendUrl, token, user)
                 val joinResponse = repository.joinWorkerSession(state.backendUrl, token, sessionResponse, user)
-                val liveKitUrl = if (state.liveKitUrl.isBlank()) joinResponse.liveKitUrl else state.liveKitUrl
                 captureManager.start(
                     ActiveSessionConfig(
                         backendUrl = state.backendUrl,
-                        liveKitUrl = liveKitUrl,
+                        liveKitUrl = joinResponse.liveKitUrl,
                         token = joinResponse.token,
                         authToken = token,
-                        sessionId = sessionResponse.id,
-                        roomName = joinResponse.roomName
-                    )
+                        sessionId = sessionResponse.id
+                    ),
+                    highQuality = state.highQualityMode
                 )
                 sessionResponse to joinResponse
             }.onSuccess { (sessionResponse, joinResponse) ->
@@ -105,7 +116,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     actionInFlight = false,
                     activeSessionId = sessionResponse.id,
                     sessionSummary = "Session ${sessionResponse.id.take(8)} in room ${joinResponse.roomName}",
-                    liveKitUrl = if (_uiState.value.liveKitUrl.isBlank()) joinResponse.liveKitUrl else _uiState.value.liveKitUrl,
                     message = "Session started"
                 )
             }.onFailure { exception ->
@@ -153,6 +163,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     class Factory(
         private val application: Application
     ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return MainViewModel(application) as T
         }

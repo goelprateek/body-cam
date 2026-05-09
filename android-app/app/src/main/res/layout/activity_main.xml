@@ -1,230 +1,384 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/screen_background">
+    android:background="@color/screen_background"
+    android:fillViewport="true"
+    android:overScrollMode="ifContentScrolls"
+    android:scrollbars="none">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingHorizontal="24dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="28dp">
 
-        <TextView
+        <LinearLayout
+            android:id="@+id/loginLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textColor="@color/text_primary"
-            android:textSize="28sp"
-            android:textStyle="bold" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Live bodycam publish plus rolling local sync"
-            android:textColor="@color/text_secondary"
-            android:textSize="14sp" />
+            <ImageView
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:layout_marginTop="48dp"
+                android:layout_marginBottom="16dp"
+                android:src="@drawable/logo"
+                android:scaleType="fitCenter" />
 
-        <TextView
-            android:id="@+id/messageBanner"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/banner_background"
-            android:padding="12dp"
-            android:textColor="@color/banner_text"
-            android:visibility="gone" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/brand_name_short"
+                android:textColor="@color/text_primary"
+                android:textSize="28sp"
+                android:textStyle="bold" />
 
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardBackgroundColor="@color/card_background"
-            app:cardCornerRadius="18dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/brand_slogan"
+                android:textColor="@color/text_secondary"
+                android:textSize="15sp"
+                android:textAlignment="center" />
 
-            <LinearLayout
+            <TextView
+                android:id="@+id/messageBanner"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
+                android:layout_marginTop="24dp"
+                android:background="@drawable/banner_background"
+                android:padding="14dp"
+                android:textColor="@color/banner_text"
+                android:textSize="14sp"
+                android:visibility="gone" />
 
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Connection"
-                    android:textColor="@color/text_primary"
-                    android:textStyle="bold" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/backendUrlInput"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="Backend URL" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/liveKitUrlInput"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="LiveKit WS URL" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/usernameInput"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="Username" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    app:endIconMode="password_toggle">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/passwordInput"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="Password"
-                        android:inputType="textPassword" />
-                </com.google.android.material.textfield.TextInputLayout>
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:orientation="vertical"
+                    android:padding="24dp">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/loginButton"
-                        android:layout_width="0dp"
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.BodyCam.TextInputLayout"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Login" />
+                        android:hint="@string/hint_username">
 
-                    <ProgressBar
-                        android:id="@+id/progressBar"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:layout_marginStart="12dp"
-                        android:visibility="gone" />
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/usernameInput"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textEmailAddress|textNoSuggestions" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.BodyCam.TextInputLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:hint="@string/hint_password"
+                        app:endIconMode="password_toggle">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/passwordInput"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textPassword" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="32dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/loginButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/action_sign_in" />
+
+                        <ProgressBar
+                            android:id="@+id/progressBar"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center_vertical|end"
+                            android:layout_marginEnd="16dp"
+                            android:indeterminateTint="@color/text_inverse"
+                            android:visibility="gone" />
+                    </FrameLayout>
                 </LinearLayout>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+            </com.google.android.material.card.MaterialCardView>
 
-        <com.google.android.material.card.MaterialCardView
+            <TextView
+                android:id="@+id/environmentValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:textStyle="normal" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/sessionLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardBackgroundColor="@color/card_background"
-            app:cardCornerRadius="18dp">
+            android:orientation="vertical"
+            android:visibility="gone">
 
+            <!-- Header Row -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Worker Session"
-                    android:textColor="@color/text_primary"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/userSummary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:textColor="@color/text_primary"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/sessionSummary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textColor="@color/text_secondary" />
-
-                <TextView
-                    android:id="@+id/streamStatus"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:textColor="@color/text_primary" />
-
-                <TextView
-                    android:id="@+id/syncStatus"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textColor="@color/text_secondary" />
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <LinearLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:orientation="horizontal">
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/startSessionButton"
-                        android:layout_width="0dp"
+                    <TextView
+                        android:id="@+id/userSummary"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Start Session" />
+                        android:textColor="@color/text_primary"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/stopSessionButton"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
+                    <TextView
+                        android:id="@+id/loginStatusChip"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="1"
-                        android:text="Stop" />
+                        android:layout_marginTop="2dp"
+                        android:textColor="@color/brand_primary_dark"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/logoutButton"
-                    style="@style/Widget.Material3.Button.TextButton"
+                    style="@style/Widget.BodyCam.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Logout" />
+                    android:text="@string/action_logout" />
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
 
-        <FrameLayout
-            android:id="@+id/previewContainer"
-            android:layout_width="match_parent"
-            android:layout_height="260dp"
-            android:layout_marginTop="16dp"
-            android:background="@color/preview_background"
-            android:visibility="gone">
-
-            <androidx.camera.view.PreviewView
-                android:id="@+id/previewView"
+            <!-- Expanded Camera Feed -->
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-        </FrameLayout>
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                app:cardBackgroundColor="@color/preview_background"
+                app:strokeColor="@color/preview_border"
+                app:strokeWidth="2dp">
+
+                <FrameLayout
+                    android:id="@+id/previewContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="560dp">
+
+                    <androidx.camera.view.PreviewView
+                        android:id="@+id/previewView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+
+                    <LinearLayout
+                        android:id="@+id/previewPlaceholder"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="32dp">
+
+                        <ImageView
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:src="@android:drawable/ic_menu_camera"
+                            app:tint="#40FFFFFF" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:text="@string/preview_idle_title"
+                            android:textColor="@color/text_inverse"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:gravity="center"
+                            android:text="@string/preview_idle_copy"
+                            android:textColor="#80FFFFFF"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <!-- Interactive Overlay for Recording -->
+                    <LinearLayout
+                        android:id="@+id/recordingIndicator"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="top|end"
+                        android:layout_margin="12dp"
+                        android:background="@drawable/banner_background"
+                        android:backgroundTint="#CC000000"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="6dp"
+                        android:visibility="gone">
+
+                        <View
+                            android:id="@+id/blinkingDot"
+                            android:layout_width="10dp"
+                            android:layout_height="10dp"
+                            android:background="@drawable/recording_dot" />
+
+                        <TextView
+                            android:id="@+id/recordingTimer"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:fontFamily="monospace"
+                            android:text="00:00"
+                            android:textColor="@android:color/white"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/sessionSummary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom|start"
+                        android:layout_margin="12dp"
+                        android:background="#CC000000"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp"
+                        android:textColor="@color/text_inverse"
+                        android:textSize="10sp"
+                        android:visibility="gone" />
+                </FrameLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Control Dashboard -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:baselineAligned="false"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/label_live_stream"
+                                android:textColor="@color/text_muted"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textAllCaps="true" />
+
+                            <TextView
+                                android:id="@+id/streamStatus"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:textColor="@color/text_primary"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/label_data_sync"
+                                android:textColor="@color/text_muted"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textAllCaps="true" />
+
+                            <TextView
+                                android:id="@+id/syncStatus"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/highQualityToggle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/setting_high_quality"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="24dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/startSessionButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/action_start_stream" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/stopSessionButton"
+                            style="@style/Widget.BodyCam.OutlinedButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/danger"
+                            app:strokeColor="@color/danger"
+                            android:visibility="gone"
+                            android:text="@string/action_stop" />
+                    </FrameLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
     </LinearLayout>
-</ScrollView>
+</androidx.core.widget.NestedScrollView>

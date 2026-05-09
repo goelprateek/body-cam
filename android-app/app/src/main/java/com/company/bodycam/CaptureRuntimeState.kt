@@ -12,6 +12,5 @@ data class ActiveSessionConfig(
     val liveKitUrl: String,
     val token: String,
     val authToken: String,
-    val sessionId: String,
-    val roomName: String
+    val sessionId: String
 )
