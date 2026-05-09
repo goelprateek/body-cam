@@ -203,7 +203,7 @@ jobs:
             -e "ssh -p ${SSH_PORT}" \
             infra/docker-compose.prod.yml \
             infra/compose \
-            infra/livekit.prod.yaml \
+            infra/livekit.yaml.template \
             scripts \
             "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"
 

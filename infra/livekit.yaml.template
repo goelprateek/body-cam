@@ -1,0 +1,24 @@
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: ${LIVEKIT_USE_EXTERNAL_IP}
+${LIVEKIT_NODE_IP_BLOCK}
+  turn_servers:
+    - host: ${TURN_HOST}
+      port: 3478
+      protocol: udp
+      username: ${TURN_USERNAME}
+      credential: ${TURN_PASSWORD}
+    - host: ${TURN_HOST}
+      port: 3478
+      protocol: tcp
+      username: ${TURN_USERNAME}
+      credential: ${TURN_PASSWORD}
+redis:
+  address: redis:6379
+keys:
+  ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}

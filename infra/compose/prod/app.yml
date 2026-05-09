@@ -3,14 +3,6 @@ services:
     image: ${BACKEND_IMAGE_REF:-${CONTAINER_REGISTRY:-registry.digitalocean.com/fleet-ops}/body-cam-backend:${BACKEND_IMAGE_TAG:-latest}}
     env_file:
       - ../../../backend/.env.prod
-    environment:
-      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL}
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
-      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
-      MINIO_BUCKET: ${MINIO_BUCKET}
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
     expose:
       - "8080"
     depends_on:

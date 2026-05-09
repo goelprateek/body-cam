@@ -32,6 +32,8 @@ frontend/.env.prod
 
 infra/.env.local
 infra/.env.prod
+infra/livekit.local.generated.yaml
+infra/livekit.prod.generated.yaml
 infra/postgres_data/
 infra/minio_data/
 infra/redis_data/
