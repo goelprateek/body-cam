@@ -1,0 +1,28 @@
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  # For same-WiFi real-device testing, advertise the host WLAN IP directly
+  # instead of Docker-internal or public-NAT addresses.
+  use_external_ip: false
+  node_ip: 192.168.29.207
+  # Local TURN fallback for browser/phone clients on real devices. Update the
+  # host when the machine's WLAN IPv4 changes.
+  turn_servers:
+    - host: 192.168.29.207
+      port: 3478
+      protocol: udp
+      username: turnuser
+      credential: turnpass
+    - host: 192.168.29.207
+      port: 3478
+      protocol: tcp
+      username: turnuser
+      credential: turnpass
+redis:
+  address: redis:6379
+keys:
+  devkey: bodycam-livekit-local-secret-2026

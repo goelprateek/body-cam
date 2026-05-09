@@ -33,8 +33,8 @@ export class LiveRoomService {
     this.disconnect();
 
     const room = new Room({
-      adaptiveStream: true,
-      dynacast: true
+      adaptiveStream: false,
+      dynacast: false
     });
 
     this.room = room;
@@ -76,9 +76,28 @@ export class LiveRoomService {
       this.syncRemoteState();
     });
 
+    room.on(RoomEvent.TrackPublished, (publication, participant) => {
+      if (!publication.isSubscribed) {
+        publication.setSubscribed(true);
+      }
+
+      this.lastEvent.set(
+        `${this.participantLabel(participant)} announced ${publication.kind} track`
+      );
+      this.syncRemoteState();
+    });
+
     room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
       this.applyTrack(track, participant);
       this.lastEvent.set(`${this.participantLabel(participant)} published ${track.kind}`);
+      this.syncRemoteState();
+    });
+
+    room.on(RoomEvent.TrackSubscriptionFailed, (trackSid, participant, error) => {
+      this.error.set(
+        `Failed to subscribe to ${this.participantLabel(participant)} track ${trackSid}: ${this.formatError(error)}`
+      );
+      this.lastEvent.set(`Unable to subscribe to ${this.participantLabel(participant)} media`);
       this.syncRemoteState();
     });
 
@@ -141,27 +160,49 @@ export class LiveRoomService {
       participants.map((participant) => this.participantLabel(participant))
     );
 
-    let videoTrack: RemoteVideoTrack | null = null;
-    let audioTrack: RemoteAudioTrack | null = null;
-    let focusParticipant: string | null = null;
+    let videoTrack: RemoteVideoTrack | null = this.remoteVideoTrack();
+    let audioTrack: RemoteAudioTrack | null = this.remoteAudioTrack();
+    let focusParticipant: string | null = this.focusParticipant();
+    let sawVideoPublication = false;
+    let sawAudioPublication = false;
 
     for (const participant of participants) {
       for (const publication of participant.trackPublications.values()) {
+        if (!publication.isSubscribed) {
+          publication.setSubscribed(true);
+        }
+
         const track = publication.track;
+        if (publication.kind === Track.Kind.Video) {
+          sawVideoPublication = true;
+        }
+
+        if (publication.kind === Track.Kind.Audio) {
+          sawAudioPublication = true;
+        }
+
         if (!track) {
           continue;
         }
 
-        if (!videoTrack && track.kind === Track.Kind.Video) {
+        if (track.kind === Track.Kind.Video) {
           videoTrack = track as RemoteVideoTrack;
           focusParticipant = this.participantLabel(participant);
         }
 
-        if (!audioTrack && track.kind === Track.Kind.Audio) {
+        if (track.kind === Track.Kind.Audio) {
           audioTrack = track as RemoteAudioTrack;
           focusParticipant ??= this.participantLabel(participant);
         }
       }
+    }
+
+    if (!sawVideoPublication) {
+      videoTrack = null;
+    }
+
+    if (!sawAudioPublication) {
+      audioTrack = null;
     }
 
     this.remoteVideoTrack.set(videoTrack);

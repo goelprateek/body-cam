@@ -15,9 +15,12 @@ spring:
           time_zone: UTC
   flyway:
     enabled: true
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
 
 server:
   port: 8080
+  shutdown: graceful
 
 management:
   endpoints:
@@ -34,7 +37,7 @@ app:
     url: ${LIVEKIT_URL:ws://livekit:7880}
     public-url: ${LIVEKIT_PUBLIC_URL:ws://10.0.2.2:7880}
     api-key: ${LIVEKIT_API_KEY:devkey}
-    api-secret: ${LIVEKIT_API_SECRET:secret}
+    api-secret: ${LIVEKIT_API_SECRET:bodycam-livekit-local-secret-2026}
   storage:
     endpoint: ${MINIO_ENDPOINT:http://minio:9000}
     public-url: ${MINIO_PUBLIC_URL:http://10.0.2.2:9000}

@@ -12,5 +12,6 @@ data class MainUiState(
     val streamStatus: String = "Idle",
     val syncStatus: String = "Waiting for login",
     val message: String? = null,
-    val activeSessionId: String? = null
+    val activeSessionId: String? = null,
+    val highQualityMode: Boolean = false
 )

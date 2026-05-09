@@ -6,6 +6,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.kriyanshtech.bodycam.common.NotFoundException;
 import com.kriyanshtech.bodycam.recording.dto.CreateRecordingRequest;
+import com.kriyanshtech.bodycam.recording.dto.RecordingPlaybackResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingResponse;
 import com.kriyanshtech.bodycam.recording.entity.RecordingAsset;
 import com.kriyanshtech.bodycam.recording.repository.RecordingAssetRepository;
@@ -18,6 +19,8 @@ import java.util.UUID;
 
 @Service
 public class RecordingService {
+    private static final int PLAYBACK_URL_EXPIRY_SECONDS = 300;
+
 
     private final RecordingAssetRepository recordingAssetRepository;
     private final LiveSessionRepository liveSessionRepository;
@@ -38,6 +41,18 @@ public class RecordingService {
         return recordingAssetRepository.findAllByOrderByCreatedAtDesc().stream().map(this::map).toList();
     }
 
+    @Transactional(readOnly = true)
+    public RecordingPlaybackResponse playbackUrl(UUID recordingId) {
+        RecordingAsset asset = recordingAssetRepository.findById(recordingId)
+                .orElseThrow(() -> new NotFoundException("Recording not found: " + recordingId));
+
+        return new RecordingPlaybackResponse(
+                asset.getId(),
+                objectStorageService.presignedPlaybackUrl(asset.getObjectKey(), PLAYBACK_URL_EXPIRY_SECONDS),
+                PLAYBACK_URL_EXPIRY_SECONDS
+        );
+    }
+
     @Transactional
     public RecordingResponse createRecording(CreateRecordingRequest request) {
         LiveSession session = liveSessionRepository.findById(request.sessionId())
@@ -46,7 +61,7 @@ public class RecordingService {
         return saveRecording(
                 session,
                 request.objectKey(),
-                request.playbackUrl(),
+                null,
                 request.durationSeconds()
         );
     }
@@ -77,7 +92,7 @@ public class RecordingService {
         return saveRecording(
                 session,
                 objectKey,
-                objectStorageService.playbackUrl(objectKey),
+                null,
                 durationSeconds
         );
     }
@@ -118,7 +133,7 @@ public class RecordingService {
                 asset.getSession().getId(),
                 asset.getSession().getRoomName(),
                 asset.getObjectKey(),
-                asset.getPlaybackUrl(),
+                null,
                 asset.getDurationSeconds(),
                 asset.getCreatedAt()
         );

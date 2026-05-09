@@ -22,6 +22,7 @@ public class LiveKitTokenService {
 
     public LiveKitTokenService(AppProperties appProperties) {
         this.appProperties = appProperties;
+        validateLiveKitSecret();
     }
 
     public String createJoinToken(String participantName, String roomName, String participantRole) {
@@ -51,6 +52,15 @@ public class LiveKitTokenService {
             return signedJwt.serialize();
         } catch (JOSEException exception) {
             throw new IllegalStateException("Failed to sign LiveKit token", exception);
+        }
+    }
+
+    private void validateLiveKitSecret() {
+        String apiSecret = appProperties.livekit().apiSecret();
+        if (apiSecret == null || apiSecret.length() < 32) {
+            throw new IllegalStateException(
+                    "LIVEKIT_API_SECRET must be at least 32 characters for HS256 token signing"
+            );
         }
     }
 }

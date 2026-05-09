@@ -16,3 +16,4 @@ Connection behavior:
 - the worker UI no longer exposes backend or LiveKit URLs
 - the app uses the configured backend base URL from `BuildConfig.DEFAULT_BACKEND_URL`
 - the backend remains the source of truth for the LiveKit WebSocket URL returned during session join
+- in production that returned LiveKit URL must be a public `wss://` subdomain such as `wss://livekit.example.com`, not an internal Docker hostname

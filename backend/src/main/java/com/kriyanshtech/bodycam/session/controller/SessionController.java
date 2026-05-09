@@ -14,9 +14,11 @@ import com.kriyanshtech.bodycam.session.dto.JoinSessionTokenRequest;
 import com.kriyanshtech.bodycam.session.dto.LiveKitTokenResponse;
 import com.kriyanshtech.bodycam.session.dto.SessionResponse;
 import com.kriyanshtech.bodycam.session.service.SessionService;
+import com.kriyanshtech.bodycam.common.PageResponse;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/sessions")
@@ -33,8 +35,16 @@ public class SessionController {
         return ResponseEntity.ok(sessionService.listSessions());
     }
 
+    @GetMapping("/active")
+    public ResponseEntity<PageResponse<SessionResponse>> listActiveSessions(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(sessionService.listActiveSessions(page, size));
+    }
+
     @GetMapping("/{sessionId}")
-    public ResponseEntity<SessionResponse> getSession(@PathVariable UUID sessionId) {
+    public ResponseEntity<SessionResponse> getSession(@PathVariable("sessionId") UUID sessionId) {
         return ResponseEntity.ok(sessionService.getSession(sessionId));
     }
 
@@ -45,14 +55,14 @@ public class SessionController {
 
     @PostMapping("/{sessionId}/join-token")
     public ResponseEntity<LiveKitTokenResponse> joinToken(
-            @PathVariable UUID sessionId,
+            @PathVariable("sessionId") UUID sessionId,
             @Valid @RequestBody JoinSessionTokenRequest request
     ) {
         return ResponseEntity.ok(sessionService.joinToken(sessionId, request));
     }
 
     @PostMapping("/{sessionId}/end")
-    public ResponseEntity<SessionResponse> endSession(@PathVariable UUID sessionId) {
+    public ResponseEntity<SessionResponse> endSession(@PathVariable("sessionId") UUID sessionId) {
         return ResponseEntity.ok(sessionService.endSession(sessionId));
     }
 }

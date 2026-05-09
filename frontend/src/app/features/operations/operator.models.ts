@@ -24,6 +24,15 @@ export interface SessionResponse {
   createdAt: string;
 }
 
+export interface PageResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+}
+
 export interface LiveKitTokenResponse {
   token: string;
   roomName: string;
@@ -38,4 +47,10 @@ export interface RecordingResponse {
   playbackUrl: string | null;
   durationSeconds: number | null;
   createdAt: string;
+}
+
+export interface RecordingPlaybackResponse {
+  recordingId: string;
+  playbackUrl: string;
+  expiresInSeconds: number;
 }

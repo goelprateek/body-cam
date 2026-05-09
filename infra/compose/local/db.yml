@@ -59,7 +59,7 @@ services:
       - "${LIVEKIT_RTC_TCP_PORT:-7881}:7881"
       - "${LIVEKIT_UDP_PORT_RANGE:-50000-50100}:50000-50100/udp"
     volumes:
-      - ../../livekit.yaml:/etc/livekit/livekit.yaml:ro
+      - ../../livekit.local.yaml:/etc/livekit/livekit.yaml:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -76,13 +76,17 @@ services:
     command:
       - -n
       - --log-file=stdout
-      - --external-ip=${TURN_EXTERNAL_IP}
+      - --external-ip=${TURN_EXTERNAL_IP}/${TURN_INTERNAL_IP}
       - --realm=${TURN_REALM}
       - --lt-cred-mech
       - --user=${TURN_USERNAME}:${TURN_PASSWORD}
+      - --relay-ip=${TURN_INTERNAL_IP}
     ports:
       - "${TURN_PORT:-3478}:3478"
       - "${TURN_PORT:-3478}:3478/udp"
+    networks:
+      default:
+        ipv4_address: ${TURN_INTERNAL_IP}
     healthcheck:
       test: ["CMD-SHELL", "ps -ef | grep [t]urnserver >/dev/null || exit 1"]
       interval: 30s

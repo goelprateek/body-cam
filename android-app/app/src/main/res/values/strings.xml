@@ -1,18 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Body Cam</string>
-    <string name="app_tagline">Remote assistance for frontline teams</string>
-    <string name="brand_badge">Remote Assistance</string>
-    <string name="brand_headline">Karebo Body Cam Platform</string>
-    <string name="brand_supporting_copy">Secure worker streaming, guided response, and evidence-backed session capture from one field-ready experience.</string>
-    <string name="signin_title">Welcome back</string>
-    <string name="signin_subtitle">Use your worker credentials to access your assigned session environment.</string>
-    <string name="managed_environment">Managed environment</string>
-    <string name="managed_environment_caption">Backend and LiveKit endpoints are supplied by deployment and session provisioning.</string>
-    <string name="session_panel_title">Worker session control</string>
-    <string name="session_panel_copy">Sign in, check readiness, then start the live stream when you are on site.</string>
-    <string name="preview_title">Live camera preview</string>
-    <string name="preview_copy">Preview becomes active when a session is streaming.</string>
-    <string name="preview_idle_title">Camera standby</string>
-    <string name="preview_idle_copy">Start a worker session to begin live publishing and rolling local capture.</string>
+    <string name="brand_name_short">BodyCam</string>
+    <string name="brand_slogan">Secure Field Operations</string>
+
+    <!-- Login Screen -->
+    <string name="hint_username">Username</string>
+    <string name="hint_password">Password</string>
+    <string name="action_sign_in">Sign In</string>
+
+    <!-- Session Screen -->
+    <string name="label_live_stream">Live Stream</string>
+    <string name="label_data_sync">Data Sync</string>
+    <string name="action_start_stream">Start Stream</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_logout">Logout</string>
+
+    <!-- Preview States -->
+    <string name="preview_idle_title">Camera Standby</string>
+    <string name="preview_idle_copy">Ready for field recording session</string>
+    <string name="status_live">LIVE</string>
+    <string name="env_managed">Managed by deployed environment</string>
+    <string name="env_missing">Backend configuration missing</string>
+
+    <!-- Settings -->
+    <string name="setting_high_quality">High Quality Recording (FHD)</string>
 </resources>

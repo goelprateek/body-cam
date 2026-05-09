@@ -6,6 +6,8 @@ import {
   CurrentUserResponse,
   LiveKitTokenResponse,
   LoginResponse,
+  PageResponse,
+  RecordingPlaybackResponse,
   RecordingResponse,
   SessionResponse
 } from './operator.models';
@@ -77,9 +79,29 @@ export class OperatorApiService {
     );
   }
 
+  async listActiveSessions(page: number, size: number): Promise<PageResponse<SessionResponse>> {
+    return firstValueFrom(
+      this.http.get<PageResponse<SessionResponse>>(this.url('/sessions/active'), {
+        headers: this.authHeaders(),
+        params: {
+          page,
+          size
+        }
+      })
+    );
+  }
+
   async listRecordings(): Promise<RecordingResponse[]> {
     return firstValueFrom(
       this.http.get<RecordingResponse[]>(this.url('/recordings'), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async getRecordingPlaybackUrl(recordingId: string): Promise<RecordingPlaybackResponse> {
+    return firstValueFrom(
+      this.http.get<RecordingPlaybackResponse>(this.url(`/recordings/${recordingId}/playback-url`), {
         headers: this.authHeaders()
       })
     );

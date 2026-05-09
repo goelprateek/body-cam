@@ -14,7 +14,31 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "DEFAULT_BACKEND_URL", "\"http://10.0.2.2:8080/\"")
+    }
+
+    flavorDimensions += "environment"
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            manifestPlaceholders["appName"] = "BodyCam Dev"
+            // REPLACE 10.0.2.2 with your computer's local IP address (e.g., 192.168.1.5)
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"http://192.168.29.207:8080/\"")
+            buildConfigField("String", "DEFAULT_LIVEKIT_URL", "\"ws://192.168.29.207:7880/\"")
+        }
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            manifestPlaceholders["appName"] = "BodyCam Staging"
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://staging-api.bodycam.company.com/\"")
+            buildConfigField("String", "DEFAULT_LIVEKIT_URL", "\"wss://staging-livekit.bodycam.company.com/\"")
+        }
+        create("prod") {
+            dimension = "environment"
+            manifestPlaceholders["appName"] = "BodyCam"
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://api.bodycam.company.com/\"")
+            buildConfigField("String", "DEFAULT_LIVEKIT_URL", "\"wss://livekit.bodycam.company.com/\"")
+        }
     }
 
     buildTypes {
@@ -33,15 +57,13 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
+}
 
-    kotlin {
-        compilerOptions {
-            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-        }
-    }
+kotlin {
+    jvmToolchain(21)
 }
 
 dependencies {

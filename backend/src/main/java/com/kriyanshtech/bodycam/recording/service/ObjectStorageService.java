@@ -1,9 +1,12 @@
 package com.kriyanshtech.bodycam.recording.service;
 
 import io.minio.BucketExistsArgs;
+import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.http.Method;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import com.kriyanshtech.bodycam.config.AppProperties;
@@ -14,20 +17,23 @@ import java.io.InputStream;
 public class ObjectStorageService {
 
     private final AppProperties appProperties;
-    private final MinioClient minioClient;
+    private final MinioClient internalMinioClient;
+    private final MinioClient publicMinioClient;
 
-    public ObjectStorageService(AppProperties appProperties) {
+    public ObjectStorageService(
+            AppProperties appProperties,
+            @Qualifier("internalMinioClient") MinioClient internalMinioClient,
+            @Qualifier("publicMinioClient") MinioClient publicMinioClient
+    ) {
         this.appProperties = appProperties;
-        this.minioClient = MinioClient.builder()
-                .endpoint(appProperties.storage().endpoint())
-                .credentials(appProperties.storage().accessKey(), appProperties.storage().secretKey())
-                .build();
+        this.internalMinioClient = internalMinioClient;
+        this.publicMinioClient = publicMinioClient;
     }
 
     public void upload(String objectKey, InputStream inputStream, long size, String contentType) {
         try {
             ensureBucket();
-            minioClient.putObject(
+            internalMinioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(appProperties.storage().bucket())
                             .object(objectKey)
@@ -40,20 +46,29 @@ public class ObjectStorageService {
         }
     }
 
-    public String playbackUrl(String objectKey) {
-        String baseUrl = appProperties.storage().publicUrl();
-        String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        return normalizedBaseUrl + "/" + appProperties.storage().bucket() + "/" + objectKey;
+    public String presignedPlaybackUrl(String objectKey, int expirySeconds) {
+        try {
+            return publicMinioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(appProperties.storage().bucket())
+                            .object(objectKey)
+                            .expiry(expirySeconds)
+                            .build()
+            );
+        } catch (Exception exception) {
+            throw new IllegalStateException("Failed to create recording playback URL", exception);
+        }
     }
 
     private void ensureBucket() throws Exception {
-        boolean exists = minioClient.bucketExists(
+        boolean exists = internalMinioClient.bucketExists(
                 BucketExistsArgs.builder()
                         .bucket(appProperties.storage().bucket())
                         .build()
         );
         if (!exists) {
-            minioClient.makeBucket(
+            internalMinioClient.makeBucket(
                     MakeBucketArgs.builder()
                             .bucket(appProperties.storage().bucket())
                             .build()

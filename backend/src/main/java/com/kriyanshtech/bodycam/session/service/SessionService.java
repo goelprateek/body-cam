@@ -2,8 +2,11 @@ package com.kriyanshtech.bodycam.session.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import com.kriyanshtech.bodycam.common.NotFoundException;
+import com.kriyanshtech.bodycam.common.PageResponse;
 import com.kriyanshtech.bodycam.config.AppProperties;
 import com.kriyanshtech.bodycam.session.dto.CreateSessionRequest;
 import com.kriyanshtech.bodycam.session.dto.JoinSessionTokenRequest;
@@ -37,6 +40,26 @@ public class SessionService {
     @Transactional(readOnly = true)
     public List<SessionResponse> listSessions() {
         return liveSessionRepository.findAllByOrderByCreatedAtDesc().stream().map(this::map).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<SessionResponse> listActiveSessions(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.clamp(size, 1, 50);
+
+        var sessionsPage = liveSessionRepository.findAllByStatusOrderByCreatedAtDesc(
+                SessionStatus.ACTIVE,
+                PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+
+        return new PageResponse<>(
+                sessionsPage.getContent().stream().map(this::map).toList(),
+                sessionsPage.getNumber(),
+                sessionsPage.getSize(),
+                sessionsPage.getTotalElements(),
+                sessionsPage.getTotalPages(),
+                sessionsPage.hasNext()
+        );
     }
 
     @Transactional(readOnly = true)

@@ -45,4 +45,5 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - `POST /api/sessions/{id}/join-token`
 - `POST /api/sessions/{id}/end`
 - `GET /api/recordings`
+- `GET /api/recordings/{id}/playback-url`
 - `POST /api/recordings`

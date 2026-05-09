@@ -24,6 +24,8 @@ class UploadRecordingWorker(
             return Result.success()
         }
 
+        android.util.Log.d("UploadRecordingWorker", "Uploading file: ${file.absolutePath}, size: ${file.length()} bytes")
+
         return try {
             repository.uploadRecording(
                 backendUrl = backendUrl,

@@ -27,7 +27,7 @@ public class RecordingAsset {
     @Column(name = "object_key", nullable = false)
     private String objectKey;
 
-    @Column(name = "playback_url", nullable = false)
+    @Column(name = "playback_url")
     private String playbackUrl;
 
     @Column(name = "duration_seconds")

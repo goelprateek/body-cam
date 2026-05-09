@@ -8,7 +8,7 @@ import java.util.UUID;
 public record CreateRecordingRequest(
         @NotNull UUID sessionId,
         @NotBlank String objectKey,
-        @NotBlank String playbackUrl,
+        String playbackUrl,
         Integer durationSeconds
 ) {
 }

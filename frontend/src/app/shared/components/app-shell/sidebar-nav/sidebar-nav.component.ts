@@ -5,7 +5,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { LayoutService } from '@shared/services/layout.service';
-import { DashboardEventService } from '@shared/services/dashboard-event.service';
 
 @Component({
   selector: 'app-sidebar-nav',
@@ -44,12 +43,7 @@ import { DashboardEventService } from '@shared/services/dashboard-event.service'
             <span class="nav-label">Recordings</span>
           }
         </a>
-        <button class="nav-item" type="button" (click)="events.triggerRefresh()" matTooltip="Refresh" matTooltipPosition="right" [matTooltipDisabled]="layout.sidebarExpanded()">
-          <mat-icon class="nav-icon">refresh</mat-icon>
-          @if (layout.sidebarExpanded()) {
-            <span class="nav-label">Refresh</span>
-          }
-        </button>
+
       </nav>
 
       <div class="sidenav-spacer"></div>
@@ -67,5 +61,4 @@ import { DashboardEventService } from '@shared/services/dashboard-event.service'
 })
 export class SidebarNavComponent {
   readonly layout = inject(LayoutService);
-  readonly events = inject(DashboardEventService);
 }

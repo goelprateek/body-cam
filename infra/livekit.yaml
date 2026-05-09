@@ -8,4 +8,4 @@ rtc:
 redis:
   address: redis:6379
 keys:
-  devkey: secret
+  devkey: bodycam-livekit-local-secret-2026

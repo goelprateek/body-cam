@@ -19,12 +19,10 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { interval } from 'rxjs';
 import { RemoteAudioTrack, RemoteVideoTrack } from 'livekit-client';
 import { LiveRoomService } from './live-room.service';
 import { OperatorApiService } from './operator-api.service';
-import { RecordingResponse, SessionResponse } from './operator.models';
-import { DashboardEventService } from '@shared/services/dashboard-event.service';
+import { SessionResponse } from './operator.models';
 
 @Component({
   selector: 'app-operations-page',
@@ -40,24 +38,29 @@ import { DashboardEventService } from '@shared/services/dashboard-event.service'
   ],
   template: `
     <section class="page workspace-grid">
-      <mat-card class="panel section-panel" appearance="outlined">
-        <div class="section-head">
-          <h2>Active Sessions</h2>
-          <span class="subtle-text">{{ sessions().length }}</span>
+      <mat-card class="panel section-panel glass-panel" appearance="outlined">
+        <div class="section-head premium-head">
+          <div class="head-title">
+            <h2>Active Sessions</h2>
+            <span class="subtle-text live-count">{{ sessions().length }}</span>
+          </div>
+          <button mat-icon-button class="refresh-btn" (click)="refreshAll()" [disabled]="isRefreshing()">
+             <mat-icon>refresh</mat-icon>
+          </button>
         </div>
 
         @if (isRefreshing() || isJoining() || isEnding()) {
-          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+          <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
         }
 
         @if (pageError()) {
           <div class="notice notice-error">{{ pageError() }}</div>
         }
 
-        <div class="session-list">
+        <div class="session-list session-list-scroll premium-scroll" (scroll)="onSessionListScroll($event)">
           @for (session of sessions(); track session.id) {
             <mat-card
-              class="session-card"
+              class="session-card premium-card"
               appearance="outlined"
               [class.session-card-selected]="session.id === selectedSessionId()"
               (click)="selectSession(session.id)"
@@ -67,21 +70,22 @@ import { DashboardEventService } from '@shared/services/dashboard-event.service'
                   <div class="session-avatar" [class.avatar-live]="session.status === 'ACTIVE'">
                     <mat-icon>person</mat-icon>
                   </div>
-                  <div>
+                  <div class="session-details">
                     <p class="session-worker">{{ session.workerName }}</p>
                     <p class="session-room">{{ session.roomName }}</p>
                   </div>
                 </div>
-                <span class="status-pill" [class.status-live]="session.status === 'ACTIVE'">
+                <span class="status-pill premium-status-pill" [class.status-live]="session.status === 'ACTIVE'">
+                  @if (session.status === 'ACTIVE') { <span class="pulse-dot"></span> }
                   {{ session.status }}
                 </span>
               </div>
 
-              <div class="inline-actions">
+              <div class="inline-actions session-actions">
                 <button
                   mat-flat-button
                   type="button"
-                  class="action-btn-join"
+                  class="action-btn-join premium-btn"
                   (click)="joinSession(session); $event.stopPropagation()"
                   [disabled]="session.status !== 'ACTIVE' || isJoining()"
                 >
@@ -101,36 +105,62 @@ import { DashboardEventService } from '@shared/services/dashboard-event.service'
               </div>
             </mat-card>
           } @empty {
-            <div class="empty-state">
-              <mat-icon>no_photography</mat-icon>
-              <span>No active sessions.</span>
+            <div class="empty-state premium-empty">
+              <div class="empty-icon-wrap">
+                <mat-icon>satellite_alt</mat-icon>
+              </div>
+              <span class="empty-title">System Standby</span>
+              <span class="empty-subtitle">No active field sessions.</span>
             </div>
+          }
+
+          @if (isLoadingMore()) {
+            <div class="session-list-footer subtle-text">Loading more active sessions...</div>
+          } @else if (!hasMoreSessions() && sessions().length) {
+            <div class="session-list-footer subtle-text">All active sessions loaded</div>
           }
         </div>
       </mat-card>
 
       <section class="workspace-main">
-        <mat-card class="panel viewer-panel" appearance="outlined">
-          <div class="section-head">
-            <h2>{{ selectedSession()?.workerName || 'Live Viewer' }}</h2>
+        <mat-card class="panel viewer-panel glass-panel" appearance="outlined">
+          <div class="section-head premium-head viewer-head">
+            <div class="viewer-head-copy">
+              <h2>{{ selectedSession()?.workerName || 'Live Viewer' }}</h2>
+              <p class="viewer-caption">
+                {{ liveRoom.lastEvent() }}
+              </p>
+            </div>
             <div class="viewer-status">
-              <span class="status-pill" [class.status-live]="liveRoom.connectionLabel() === 'Live'">
+              <span class="status-pill premium-status-pill" [class.status-live]="liveRoom.connectionLabel() === 'Live'">
+                @if (liveRoom.connectionLabel() === 'Live') { <span class="pulse-dot"></span> }
                 {{ liveRoom.connectionLabel() }}
               </span>
             </div>
           </div>
 
-          <div class="viewer-frame" [class.frame-live]="liveRoom.remoteVideoTrack()">
-            <div class="viewer-stage" #videoHost>
+          @if (liveRoom.error()) {
+            <div class="notice notice-error">{{ liveRoom.error() }}</div>
+          }
+
+          <div class="viewer-frame premium-frame" [class.frame-live]="liveRoom.remoteVideoTrack()">
+            <div class="viewer-stage premium-stage" #videoHost>
               @if (!liveRoom.remoteVideoTrack()) {
-                <div class="viewer-empty">
-                  <mat-icon class="huge-icon">videocam_off</mat-icon>
+                <div class="viewer-empty premium-empty-viewer">
+                  <div class="radar-scan"></div>
+                  <mat-icon class="huge-icon premium-huge-icon">videocam_off</mat-icon>
                   <strong>{{ viewerMessage() }}</strong>
                 </div>
               } @else {
-                 <div class="hud-overlay">
+                 <div class="hud-overlay premium-hud">
                     <div class="hud-top-right">
                        <span class="hud-rec"><mat-icon>fiber_manual_record</mat-icon> REC</span>
+                    </div>
+                    <div class="hud-corners">
+                       <div class="corner tl"></div>
+                       <div class="corner tr"></div>
+                       <div class="corner bl"></div>
+                       <div class="corner br"></div>
                     </div>
                  </div>
               }
@@ -143,6 +173,8 @@ import { DashboardEventService } from '@shared/services/dashboard-event.service'
   `
 })
 export class OperationsPageComponent implements AfterViewInit, OnDestroy {
+  private static readonly SESSION_PAGE_SIZE = 10;
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
 
@@ -154,7 +186,6 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
 
   readonly api = inject(OperatorApiService);
   readonly liveRoom = inject(LiveRoomService);
-  private readonly events = inject(DashboardEventService);
 
   readonly sessions = signal<SessionResponse[]>([]);
   readonly selectedSessionId = signal<string | null>(null);
@@ -162,7 +193,11 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   readonly isJoining = signal(false);
   readonly joiningSessionId = signal<string | null>(null);
   readonly isEnding = signal(false);
+  readonly isLoadingMore = signal(false);
+  readonly hasMoreSessions = signal(false);
   readonly pageError = signal<string | null>(null);
+
+  private nextSessionsPage = 0;
 
   readonly selectedSession = computed(
     () => this.sessions().find((session) => session.id === this.selectedSessionId()) ?? null
@@ -185,12 +220,6 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
 
   constructor() {
 
-
-    this.events.refresh$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        void this.refreshAll();
-      });
 
     void this.refreshAll();
   }
@@ -231,27 +260,22 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     }
 
     try {
-      const sessions = await this.api.listSessions();
+      const page = await this.api.listActiveSessions(0, OperationsPageComponent.SESSION_PAGE_SIZE);
 
-      const sortedSessions = [...sessions].sort((left, right) => {
-        if (left.status !== right.status) {
-          return left.status === 'ACTIVE' ? -1 : 1;
-        }
-
-        return right.createdAt.localeCompare(left.createdAt);
-      });
-
-      this.sessions.set(sortedSessions);
+      this.sessions.set(page.items);
+      this.nextSessionsPage = page.page + 1;
+      this.hasMoreSessions.set(page.hasNext);
 
       if (
-        sortedSessions.length &&
-        !sortedSessions.some((session) => session.id === this.selectedSessionId())
+        page.items.length &&
+        !page.items.some((session) => session.id === this.selectedSessionId())
       ) {
-        this.selectedSessionId.set(sortedSessions[0].id);
+        this.selectedSessionId.set(page.items[0].id);
       }
 
-      if (!sortedSessions.length) {
+      if (!page.items.length) {
         this.selectedSessionId.set(null);
+        this.liveRoom.disconnect();
       }
     } catch (error) {
       if (!silent) {
@@ -261,6 +285,35 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
       if (!silent) {
         this.isRefreshing.set(false);
       }
+    }
+  }
+
+  async loadMoreSessions(): Promise<void> {
+    if (
+      this.isRefreshing() ||
+      this.isLoadingMore() ||
+      !this.hasMoreSessions()
+    ) {
+      return;
+    }
+
+    this.isLoadingMore.set(true);
+
+    try {
+      const page = await this.api.listActiveSessions(
+        this.nextSessionsPage,
+        OperationsPageComponent.SESSION_PAGE_SIZE
+      );
+
+      const knownIds = new Set(this.sessions().map((session) => session.id));
+      const nextItems = page.items.filter((session) => !knownIds.has(session.id));
+      this.sessions.update((sessions) => [...sessions, ...nextItems]);
+      this.nextSessionsPage = page.page + 1;
+      this.hasMoreSessions.set(page.hasNext);
+    } catch (error) {
+      this.pageError.set(this.api.explainError(error));
+    } finally {
+      this.isLoadingMore.set(false);
     }
   }
 
@@ -297,6 +350,18 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
       this.pageError.set(this.api.explainError(error));
     } finally {
       this.isEnding.set(false);
+    }
+  }
+
+  onSessionListScroll(event: Event): void {
+    const host = event.target as HTMLDivElement | null;
+    if (!host) {
+      return;
+    }
+
+    const remaining = host.scrollHeight - host.scrollTop - host.clientHeight;
+    if (remaining <= 120) {
+      void this.loadMoreSessions();
     }
   }
 
