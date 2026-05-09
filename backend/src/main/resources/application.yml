@@ -1,6 +1,10 @@
 spring:
   application:
     name: bodycam-backend
+  servlet:
+    multipart:
+      max-file-size: ${APP_RECORDING_MAX_UPLOAD_SIZE:512MB}
+      max-request-size: ${APP_RECORDING_MAX_UPLOAD_SIZE:512MB}
   datasource:
     url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:bodycam}
     username: ${DB_USER:bodycam}

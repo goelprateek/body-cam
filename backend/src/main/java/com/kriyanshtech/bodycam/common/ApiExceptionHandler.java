@@ -7,6 +7,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MultipartException;
 
 import java.time.Instant;
 import java.util.Map;
@@ -32,6 +33,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<Map<String, Object>> handleForbidden(AccessDeniedException exception) {
         return build(HttpStatus.FORBIDDEN, exception.getMessage());
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    ResponseEntity<Map<String, Object>> handleMultipart(MultipartException exception) {
+        return build(HttpStatus.PAYLOAD_TOO_LARGE,
+                "Recording upload exceeds the configured max size. Increase APP_RECORDING_MAX_UPLOAD_SIZE if larger files are expected.");
     }
 
     @ExceptionHandler(Exception.class)
