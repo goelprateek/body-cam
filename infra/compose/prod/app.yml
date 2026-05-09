@@ -24,6 +24,7 @@ services:
       - traefik.docker.network=proxy
       - traefik.http.routers.bodycam-api.rule=Host(`${API_DOMAIN}`)
       - traefik.http.routers.bodycam-api.entrypoints=websecure
+      - traefik.http.routers.bodycam-api.tls=true
       - traefik.http.routers.bodycam-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}
       - traefik.http.services.bodycam-api.loadbalancer.server.port=8080
     healthcheck:
@@ -51,6 +52,7 @@ services:
       - traefik.docker.network=proxy
       - traefik.http.routers.bodycam-frontend.rule=Host(`${FRONTEND_DOMAIN}`)
       - traefik.http.routers.bodycam-frontend.entrypoints=websecure
+      - traefik.http.routers.bodycam-frontend.tls=true
       - traefik.http.routers.bodycam-frontend.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}
       - traefik.http.services.bodycam-frontend.loadbalancer.server.port=8080
     restart: unless-stopped
