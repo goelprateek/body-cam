@@ -1,4 +1,4 @@
-FROM gradle:9.1.0-jdk25 AS build
+FROM gradle:9.1.0-jdk21 AS build
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY src ./src
 
 RUN ./gradlew bootJar --no-daemon
 
-FROM eclipse-temurin:25-jdk AS runtime-build
+FROM eclipse-temurin:21-jdk AS runtime-build
 
 WORKDIR /work
 COPY --from=build /app/build/libs/bodycam-backend-0.0.1-SNAPSHOT.jar app.jar
