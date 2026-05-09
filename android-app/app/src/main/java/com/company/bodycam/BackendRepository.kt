@@ -1,5 +1,7 @@
 package com.company.bodycam
 
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.MultipartBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -9,6 +11,10 @@ import java.io.File
 class BackendRepository(
     private val authStore: AuthStore
 ) {
+    private val moshi = Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
+    private val recordingMetadataAdapter = moshi.adapter(RecordingMetadataRequest::class.java)
 
     private fun api(baseUrl: String, token: String?): BackendApi {
         return BackendApiFactory.create(baseUrl) { token }
@@ -71,12 +77,20 @@ class BackendRepository(
         token: String,
         sessionId: String,
         durationSeconds: Int?,
+        metadata: RecordingMetadataRequest?,
         file: File
     ): RecordingResponse {
-        val durationPart = durationSeconds?.toString()?.toRequestBody(textPlainMediaType)
-        val sessionPart = sessionId.toRequestBody(textPlainMediaType)
+        val metadataPart = metadata
+            ?.let(recordingMetadataAdapter::toJson)
+            ?.toRequestBody("application/json".toMediaType())
+            ?.let { MultipartBody.Part.createFormData("metadata", null, it) }
         val fileBody = file.asRequestBody("video/mp4".toMediaType())
         val filePart = MultipartBody.Part.createFormData("file", file.name, fileBody)
-        return api(backendUrl, token).uploadRecording(sessionPart, durationPart, filePart)
+        return api(backendUrl, token).uploadRecording(
+            sessionId = sessionId,
+            durationSeconds = durationSeconds,
+            metadata = metadataPart,
+            file = filePart
+        )
     }
 }

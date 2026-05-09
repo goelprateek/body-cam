@@ -1,12 +1,17 @@
 package com.company.bodycam
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
 import androidx.camera.view.PreviewView
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +22,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val authStore = AuthStore(application)
     private val repository = BackendRepository(authStore)
-    private val captureManager = LiveCaptureManager(application)
+    private var captureService: CaptureService? = null
+    private var isBound = false
+    private var stateCollectionJob: Job? = null
+
     private val session = authStore.load()
     private var authToken: String? = session.token
 
@@ -31,141 +39,165 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
-    init {
-        viewModelScope.launch {
-            captureManager.state.collectLatest { runtime ->
-                _uiState.value = _uiState.value.copy(
-                    isStreaming = runtime.isStreaming,
-                    streamStatus = runtime.streamStatus,
-                    syncStatus = runtime.syncStatus,
-                    message = runtime.lastError ?: _uiState.value.message
-                )
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as CaptureService.LocalBinder
+            val boundService = binder.getService()
+            captureService = boundService
+            isBound = true
+
+            stateCollectionJob?.cancel()
+            stateCollectionJob = viewModelScope.launch {
+                boundService.captureManager?.state?.collectLatest { runtime ->
+                    _uiState.value = _uiState.value.copy(
+                        isStreaming = runtime.isStreaming,
+                        streamStatus = runtime.streamStatus,
+                        syncStatus = runtime.syncStatus,
+                        message = runtime.lastError ?: _uiState.value.message,
+                        usingFrontCamera = runtime.usingFrontCamera,
+                        canFlipCamera = runtime.canFlipCamera,
+                        cameraSwitchInFlight = runtime.cameraSwitchInFlight,
+                        thermalThrottling = runtime.thermalThrottling
+                    )
+                }
             }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            captureService = null
+            isBound = false
+            stateCollectionJob?.cancel()
+        }
+    }
+
+    init {
+        Intent(application, CaptureService::class.java).also { intent ->
+            application.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
     }
 
     fun bindPreview(previewView: PreviewView, lifecycleOwner: LifecycleOwner) {
-        captureManager.bindPreview(previewView, lifecycleOwner)
+        viewModelScope.launch {
+            // Wait for service to be bound if it's not yet
+            while (captureService == null) {
+                kotlinx.coroutines.delay(100)
+            }
+            captureService?.captureManager?.bindPreview(previewView, lifecycleOwner)
+        }
     }
 
-    fun setHighQualityMode(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(highQualityMode = enabled)
+    fun setHighQualityMode(highQuality: Boolean) {
+        _uiState.value = _uiState.value.copy(highQualityMode = highQuality)
+    }
+
+    fun flipCamera() {
+        captureService?.captureManager?.flipCamera()
     }
 
     fun login(username: String, password: String) {
-        val backendUrl = _uiState.value.backendUrl
-        if (backendUrl.isBlank()) {
-            _uiState.value = _uiState.value.copy(
-                message = "Backend configuration is missing for this build"
-            )
-            return
-        }
-        _uiState.value = _uiState.value.copy(
-            loginInFlight = true,
-            message = null,
-            username = username,
-            password = password
-        )
-        authStore.saveBackendUrl(backendUrl)
         viewModelScope.launch {
-            runCatching {
-                repository.login(backendUrl, username, password)
-            }.onSuccess { user ->
-                authToken = authStore.load().token
+            _uiState.value = _uiState.value.copy(loginInFlight = true, message = null)
+            try {
+                val user = repository.login(_uiState.value.backendUrl, username, password)
+                val newSession = authStore.load()
+                authToken = newSession.token
+                
                 _uiState.value = _uiState.value.copy(
                     loginInFlight = false,
                     user = user,
-                    syncStatus = "Ready to start session",
-                    message = "Logged in successfully"
+                    syncStatus = "Ready to start session"
                 )
-            }.onFailure { exception ->
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     loginInFlight = false,
-                    message = exception.message ?: "Login failed"
+                    message = "Login error: ${e.message}"
                 )
             }
         }
     }
 
     fun startSession() {
-        val state = _uiState.value
-        val user = state.user ?: return
         val token = authToken ?: return
-        if (state.backendUrl.isBlank()) {
-            _uiState.value = state.copy(message = "Backend configuration is missing for this build")
-            return
-        }
-        _uiState.value = state.copy(actionInFlight = true, message = null)
+        val user = _uiState.value.user ?: return
+        val url = _uiState.value.backendUrl
+
+        _uiState.value = _uiState.value.copy(actionInFlight = true)
+
         viewModelScope.launch {
-            runCatching {
-                val sessionResponse = repository.createWorkerSession(state.backendUrl, token, user)
-                val joinResponse = repository.joinWorkerSession(state.backendUrl, token, sessionResponse, user)
-                captureManager.start(
-                    ActiveSessionConfig(
-                        backendUrl = state.backendUrl,
-                        liveKitUrl = joinResponse.liveKitUrl,
-                        token = joinResponse.token,
-                        authToken = token,
-                        sessionId = sessionResponse.id
-                    ),
-                    highQuality = state.highQualityMode
+            try {
+                val sessionResp = repository.createWorkerSession(url, token, user)
+                val liveKitResp = repository.joinWorkerSession(url, token, sessionResp, user)
+                
+                val context = getApplication<Application>()
+                val serviceIntent = Intent(context, CaptureService::class.java)
+                context.startForegroundService(serviceIntent)
+
+                val config = ActiveSessionConfig(
+                    backendUrl = url,
+                    liveKitUrl = liveKitResp.liveKitUrl,
+                    token = liveKitResp.token,
+                    authToken = token,
+                    sessionId = sessionResp.id
                 )
-                sessionResponse to joinResponse
-            }.onSuccess { (sessionResponse, joinResponse) ->
+                
+                // Ensure service is bound before calling start
+                while (captureService == null) {
+                    kotlinx.coroutines.delay(50)
+                }
+
+                captureService?.captureManager?.start(config, _uiState.value.highQualityMode)
                 _uiState.value = _uiState.value.copy(
                     actionInFlight = false,
-                    activeSessionId = sessionResponse.id,
-                    sessionSummary = "Session ${sessionResponse.id.take(8)} in room ${joinResponse.roomName}",
-                    message = "Session started"
+                    activeSessionId = sessionResp.id
                 )
-            }.onFailure { exception ->
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     actionInFlight = false,
-                    message = exception.message ?: "Unable to start session"
+                    message = "Start session error: ${e.message}"
                 )
             }
         }
     }
 
     fun stopSession() {
-        val sessionId = _uiState.value.activeSessionId ?: return
-        val token = authToken ?: return
-        val backendUrl = _uiState.value.backendUrl
-        _uiState.value = _uiState.value.copy(actionInFlight = true, message = null)
-        captureManager.stop()
-        viewModelScope.launch {
-            runCatching {
-                repository.endSession(backendUrl, token, sessionId)
-            }
-            _uiState.value = _uiState.value.copy(
-                actionInFlight = false,
-                activeSessionId = null,
-                sessionSummary = "",
-                isStreaming = false,
-                streamStatus = "Idle",
-                syncStatus = "Session ended",
-                message = "Session stopped"
-            )
-        }
+        _uiState.value = _uiState.value.copy(
+            actionInFlight = true,
+            streamStatus = "Stopping",
+            syncStatus = "Finalizing recording"
+        )
+        captureService?.stopCaptureGracefully()
+        _uiState.value = _uiState.value.copy(
+            actionInFlight = false,
+            activeSessionId = null
+        )
     }
 
     fun logout() {
-        captureManager.stop()
-        authToken = null
+        stopSession()
         authStore.clear()
-        _uiState.value = MainUiState()
+        authToken = null
+        _uiState.value = _uiState.value.copy(
+            user = null,
+            syncStatus = "Waiting for login",
+            message = null
+        )
     }
 
-    fun release() {
-        captureManager.release()
+    override fun onCleared() {
+        super.onCleared()
+        if (isBound) {
+            getApplication<Application>().unbindService(serviceConnection)
+            isBound = false
+        }
     }
 
-    class Factory(
-        private val application: Application
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return MainViewModel(application) as T
+    class Factory(private val application: Application) : ViewModelProvider.Factory {
+        override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
+                @Suppress("UNCHECKED_CAST")
+                return MainViewModel(application) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class")
         }
     }
 }

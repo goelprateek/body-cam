@@ -7,9 +7,9 @@
 ## Primary Building Blocks
 
 - `android-app/`
-  Field worker app. Captures audio and video, stores media locally first, and publishes to LiveKit for near real-time viewing.
+  Field worker app. Captures audio and video, stores media locally first, publishes to LiveKit for near real-time viewing, and uploads finalized recording files to the backend recording API. During an active session it can switch between front and back cameras, but all generated clips still remain under the same session.
 - `backend/`
-  Spring Boot API. Owns operator authentication, session metadata, recording metadata, and LiveKit join token generation.
+  Spring Boot API. Owns operator authentication, session metadata, recording metadata, LiveKit join token generation, and the current recording upload handoff into MinIO. The backend groups uploaded clips by `sessionId`, stores each uploaded segment as a recording row for that session, and supports an extensible per-clip metadata model for location, camera-facing, thermal, and future sensor data.
 - `frontend/`
   Angular backoffice console. Operators sign in, inspect sessions, join live rooms, and review recordings.
 - `infra/`
@@ -40,12 +40,31 @@
                  +-----------+   |        +--------------+
                  | PostgreSQL|   |        | Android App  |
                  | sessions  |   |        | field worker |
-                 +-----------+   |        +------+-------+
-                                 |               |
-                                 |               | local files
-                                 |               v
-                                 |        +--------------+
-                                 +------->| MinIO / S3   |
+                 +-----+-----+   |        +------+-------+
+                       ^         |               |
+                       |         |               | local file segments
+                       |         |               | back camera / front camera
+                       |         |               v
+                       |         |        +--------------+
+                       |         |        | Sync Worker  |
+                       |         |        | same session |
+                       |         |        +------+-------+
+                       |         |               |
+                       |         +---------------+
+                       |                         | multipart upload with sessionId
+                       |                         | plus optional metadata JSON
+                       |                         v
+                       |                  +--------------+
+                       +------------------| Recording API|
+                                          | backend/     |
+                                          +------+-------+
+                                                 |
+                                persist row per  | store object with session path
+                                clip + sessionId | sessions/<sessionId>/<clip>.mp4
+                                persist metadata | location / camera / thermal
+                                                 v
+                                          +--------------+
+                                          | MinIO / S3   |
                                           | recordings   |
                                           +--------------+
 ```
@@ -55,7 +74,9 @@
 - Live media transport belongs to LiveKit.
 - Recording objects belong to object storage.
 - Session and recording metadata belong to Spring Boot plus PostgreSQL.
-- The backend should not process media streams directly.
+- The backend currently brokers recording file uploads into object storage, but it does not handle live media transport.
+- Camera flips happen inside one live session. The app may finalize one clip and start the next on the other lens, but all resulting clips still belong to the same backend session.
+- Per-clip metadata is the extension point for future device context such as GPS and thermal measurements; new fields should attach to the clip, not create a new session type.
 - The frontend should stay service-based and operationally simple.
 
 ## Deployment Shape

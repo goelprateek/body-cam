@@ -9,6 +9,7 @@ public record CreateRecordingRequest(
         @NotNull UUID sessionId,
         @NotBlank String objectKey,
         String playbackUrl,
-        Integer durationSeconds
+        Integer durationSeconds,
+        RecordingMetadataRequest metadata
 ) {
 }

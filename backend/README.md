@@ -21,6 +21,21 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - The `local` Spring profile now provides a dev-only fallback secret for convenience.
 - Non-local environments should set `APP_JWT_SECRET` explicitly instead of relying on defaults.
 
+## Recording Upload Size
+
+- Recording uploads currently use Spring multipart handling at `POST /api/recordings/upload`, with the Android app posting the finalized file to the backend first.
+- The backend now defaults to a `512MB` upload cap via `APP_RECORDING_MAX_UPLOAD_SIZE`.
+- Increase `APP_RECORDING_MAX_UPLOAD_SIZE` if field devices upload larger finalized segments.
+- Keep the frontend proxy aligned by setting `NGINX_CLIENT_MAX_BODY_SIZE` to the same ceiling, for example `512m`.
+
+## Recording Metadata
+
+- Each uploaded clip still creates one `recording_asset` row tied to a session.
+- Optional structured metadata can now be attached per clip and is stored in `recording_metadata`.
+- The multipart upload endpoint accepts an optional JSON `metadata` part alongside `sessionId`, `durationSeconds`, and `file`.
+- Current Android uploads can include `capturedAt`, `cameraFacing`, and best-effort location fields.
+- The metadata model is designed to grow cleanly into thermal or other sensor capture through typed thermal columns plus flexible `sensorPayload` JSON.
+
 ## Database Migrations
 
 - Flyway versioned migrations live in `src/main/resources/db/migration`.
@@ -47,3 +62,4 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - `GET /api/recordings`
 - `GET /api/recordings/{id}/playback-url`
 - `POST /api/recordings`
+- `POST /api/recordings/upload`

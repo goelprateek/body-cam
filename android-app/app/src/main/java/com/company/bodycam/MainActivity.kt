@@ -61,7 +61,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        viewModel.release()
     }
 
     private fun bindActions() {
@@ -90,6 +89,10 @@ class MainActivity : ComponentActivity() {
 
         binding.highQualityToggle.setOnCheckedChangeListener { _, isChecked ->
             viewModel.setHighQualityMode(isChecked)
+        }
+
+        binding.flipCameraIcon.setOnClickListener {
+            viewModel.flipCamera()
         }
     }
 
@@ -163,12 +166,24 @@ class MainActivity : ComponentActivity() {
         binding.messageBanner.visibility = if (state.message.isNullOrBlank()) View.GONE else View.VISIBLE
         binding.messageBanner.text = state.message
         binding.loginStatusChip.text = if (state.user != null) "Authenticated" else "Sign in required"
+        
+        if (state.thermalThrottling) {
+            binding.streamStatus.setTextColor(ContextCompat.getColor(this, R.color.danger))
+        } else {
+            binding.streamStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+        }
 
         binding.highQualityToggle.apply {
             if (isChecked != state.highQualityMode) {
                 isChecked = state.highQualityMode
             }
             isEnabled = !state.isStreaming && !state.actionInFlight
+        }
+
+        binding.flipCameraIcon.apply {
+            visibility = if (state.isStreaming && state.canFlipCamera) View.VISIBLE else View.GONE
+            isEnabled = !state.cameraSwitchInFlight
+            alpha = if (state.cameraSwitchInFlight) 0.5f else 1.0f
         }
 
         binding.loginLayout.visibility = if (state.user == null) View.VISIBLE else View.GONE
@@ -213,7 +228,9 @@ class MainActivity : ComponentActivity() {
     private fun requestNeededPermissions() {
         val permissions = listOf(
             Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION
         ).filter {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_DENIED
         }

@@ -15,6 +15,10 @@
     <string name="action_start_stream">Start Stream</string>
     <string name="action_stop">Stop</string>
     <string name="action_logout">Logout</string>
+    <string name="action_switch_to_front_camera">Switch to Front Camera</string>
+    <string name="action_switch_to_back_camera">Switch to Back Camera</string>
+    <string name="action_switching_camera">Switching Camera...</string>
+    <string name="action_switch_camera">Switch Camera</string>
 
     <!-- Preview States -->
     <string name="preview_idle_title">Camera Standby</string>

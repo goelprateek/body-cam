@@ -32,6 +32,8 @@ services:
     build:
       context: ../../../frontend
       dockerfile: Dockerfile
+    environment:
+      NGINX_CLIENT_MAX_BODY_SIZE: ${NGINX_CLIENT_MAX_BODY_SIZE:-512m}
     ports:
       - "${FRONTEND_PORT:-8081}:8080"
     depends_on:

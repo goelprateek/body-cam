@@ -10,6 +10,7 @@ public record RecordingResponse(
         String objectKey,
         String playbackUrl,
         Integer durationSeconds,
-        Instant createdAt
+        Instant createdAt,
+        RecordingMetadataResponse metadata
 ) {
 }

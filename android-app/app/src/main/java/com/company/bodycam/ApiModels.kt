@@ -1,5 +1,7 @@
 package com.company.bodycam
 
+import com.squareup.moshi.JsonClass
+
 data class LoginRequest(
     val username: String,
     val password: String
@@ -35,4 +37,19 @@ data class LiveKitTokenResponse(
 
 data class RecordingResponse(
     val id: String
+)
+
+@JsonClass(generateAdapter = true)
+data class RecordingMetadataRequest(
+    val capturedAt: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val altitudeMeters: Double? = null,
+    val locationAccuracyMeters: Double? = null,
+    val cameraFacing: String? = null,
+    val thermalEnabled: Boolean? = null,
+    val thermalMinC: Double? = null,
+    val thermalMaxC: Double? = null,
+    val thermalAvgC: Double? = null,
+    val sensorPayload: Map<String, Any?>? = null
 )

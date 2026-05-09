@@ -13,5 +13,9 @@ data class MainUiState(
     val syncStatus: String = "Waiting for login",
     val message: String? = null,
     val activeSessionId: String? = null,
-    val highQualityMode: Boolean = false
+    val highQualityMode: Boolean = false,
+    val usingFrontCamera: Boolean = false,
+    val canFlipCamera: Boolean = false,
+    val cameraSwitchInFlight: Boolean = false,
+    val thermalThrottling: Boolean = false
 )

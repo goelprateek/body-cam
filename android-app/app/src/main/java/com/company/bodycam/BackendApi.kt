@@ -7,7 +7,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody
-import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -36,8 +35,9 @@ interface BackendApi {
     @Multipart
     @POST("api/recordings/upload")
     suspend fun uploadRecording(
-        @Part("sessionId") sessionId: RequestBody,
-        @Part("durationSeconds") durationSeconds: RequestBody?,
+        @Part("sessionId") sessionId: String,
+        @Part("durationSeconds") durationSeconds: Int?,
+        @Part metadata: MultipartBody.Part?,
         @Part file: MultipartBody.Part
     ): RecordingResponse
 }
@@ -47,33 +47,37 @@ object BackendApiFactory {
         .add(KotlinJsonAdapterFactory())
         .build()
 
+    private var sharedClient: OkHttpClient? = null
+
+    private fun getOrCreateClient(tokenProvider: () -> String?): OkHttpClient {
+        // Since the auth token can change per request (via the provider), 
+        // we use a single client but the interceptor calls the provider dynamically.
+        return sharedClient ?: synchronized(this) {
+            sharedClient ?: OkHttpClient.Builder()
+                .addInterceptor { chain ->
+                    val token = tokenProvider()
+                    val request = if (token.isNullOrBlank()) {
+                        chain.request()
+                    } else {
+                        chain.request().newBuilder()
+                            .header("Authorization", "Bearer $token")
+                            .build()
+                    }
+                    chain.proceed(request)
+                }
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(120, TimeUnit.SECONDS)
+                .build().also { sharedClient = it }
+        }
+    }
+
     fun create(baseUrl: String, tokenProvider: () -> String?): BackendApi {
         val normalizedBaseUrl = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
-        val authInterceptor = Interceptor { chain ->
-            val token = tokenProvider()
-            val request = if (token.isNullOrBlank()) {
-                chain.request()
-            } else {
-                chain.request().newBuilder()
-                    .header("Authorization", "Bearer $token")
-                    .build()
-            }
-            chain.proceed(request)
-        }
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
-        val client = OkHttpClient.Builder()
-            .addInterceptor(authInterceptor)
-            .addInterceptor(logging)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(120, TimeUnit.SECONDS)
-            .build()
-
+        
         return Retrofit.Builder()
             .baseUrl(normalizedBaseUrl)
-            .client(client)
+            .client(getOrCreateClient(tokenProvider))
             .addConverterFactory(MoshiConverterFactory.create(moshi).asLenient())
             .build()
             .create(BackendApi::class.java)

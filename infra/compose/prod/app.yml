@@ -34,6 +34,8 @@ services:
 
   frontend:
     image: ${FRONTEND_IMAGE_REF:-${CONTAINER_REGISTRY:-registry.digitalocean.com/fleet-ops}/body-cam-frontend:${FRONTEND_IMAGE_TAG:-latest}}
+    environment:
+      NGINX_CLIENT_MAX_BODY_SIZE: ${NGINX_CLIENT_MAX_BODY_SIZE:-512m}
     expose:
       - "8080"
     depends_on:
