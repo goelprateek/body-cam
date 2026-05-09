@@ -8,7 +8,8 @@ data class CaptureRuntimeState(
     val usingFrontCamera: Boolean = false,
     val canFlipCamera: Boolean = false,
     val cameraSwitchInFlight: Boolean = false,
-    val thermalThrottling: Boolean = false
+    val thermalThrottling: Boolean = false,
+    val sessionId: String? = null
 )
 
 data class ActiveSessionConfig(
