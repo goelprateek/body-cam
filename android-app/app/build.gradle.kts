@@ -54,11 +54,6 @@ android {
                 "DEFAULT_BACKEND_URL",
                 asBuildConfigString(props.requireValue("DEFAULT_BACKEND_URL", env))
             )
-            buildConfigField(
-                "String",
-                "DEFAULT_LIVEKIT_URL",
-                asBuildConfigString(props.requireValue("DEFAULT_LIVEKIT_URL", env))
-            )
         }
         create("staging") {
             val env = "staging"
@@ -71,11 +66,6 @@ android {
                 "DEFAULT_BACKEND_URL",
                 asBuildConfigString(props.requireValue("DEFAULT_BACKEND_URL", env))
             )
-            buildConfigField(
-                "String",
-                "DEFAULT_LIVEKIT_URL",
-                asBuildConfigString(props.requireValue("DEFAULT_LIVEKIT_URL", env))
-            )
         }
         create("prod") {
             val env = "prod"
@@ -86,11 +76,6 @@ android {
                 "String",
                 "DEFAULT_BACKEND_URL",
                 asBuildConfigString(props.requireValue("DEFAULT_BACKEND_URL", env))
-            )
-            buildConfigField(
-                "String",
-                "DEFAULT_LIVEKIT_URL",
-                asBuildConfigString(props.requireValue("DEFAULT_LIVEKIT_URL", env))
             )
         }
     }

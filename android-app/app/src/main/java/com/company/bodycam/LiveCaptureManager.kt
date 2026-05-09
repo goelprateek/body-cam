@@ -118,8 +118,7 @@ class LiveCaptureManager(
                 _state.value = CaptureRuntimeState(
                     isStreaming = false,
                     streamStatus = "Connecting to LiveKit",
-                    syncStatus = "Preparing capture pipeline",
-                    highQualityMode = highQuality
+                    syncStatus = "Preparing capture pipeline"
                 )
                 val currentRoom = LiveKit.create(appContext)
                 room = currentRoom

@@ -19,14 +19,7 @@ data class CreateSessionRequest(
 )
 
 data class SessionResponse(
-    val id: String,
-    val workerId: String,
-    val workerName: String,
-    val roomName: String,
-    val status: String,
-    val startedAt: String,
-    val endedAt: String?,
-    val createdAt: String
+    val id: String
 )
 
 data class JoinSessionTokenRequest(
@@ -41,11 +34,5 @@ data class LiveKitTokenResponse(
 )
 
 data class RecordingResponse(
-    val id: String,
-    val sessionId: String,
-    val roomName: String,
-    val objectKey: String,
-    val playbackUrl: String,
-    val durationSeconds: Int?,
-    val createdAt: String
+    val id: String
 )

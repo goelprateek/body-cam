@@ -4,8 +4,7 @@ data class CaptureRuntimeState(
     val isStreaming: Boolean = false,
     val streamStatus: String = "Idle",
     val syncStatus: String = "Waiting for session start",
-    val lastError: String? = null,
-    val highQualityMode: Boolean = false
+    val lastError: String? = null
 )
 
 data class ActiveSessionConfig(
@@ -13,6 +12,5 @@ data class ActiveSessionConfig(
     val liveKitUrl: String,
     val token: String,
     val authToken: String,
-    val sessionId: String,
-    val roomName: String
+    val sessionId: String
 )

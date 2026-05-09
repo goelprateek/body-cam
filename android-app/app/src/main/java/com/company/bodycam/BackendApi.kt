@@ -12,7 +12,6 @@ import java.util.concurrent.TimeUnit
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.Body
-import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
@@ -33,9 +32,6 @@ interface BackendApi {
 
     @POST("api/sessions/{sessionId}/end")
     suspend fun endSession(@Path("sessionId") sessionId: String): SessionResponse
-
-    @GET("api/recordings")
-    suspend fun listRecordings(): List<RecordingResponse>
 
     @Multipart
     @POST("api/recordings/upload")

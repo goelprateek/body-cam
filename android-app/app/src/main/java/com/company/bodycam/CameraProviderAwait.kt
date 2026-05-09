@@ -1,6 +1,5 @@
 package com.company.bodycam
 
-import androidx.camera.lifecycle.ProcessCameraProvider
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume

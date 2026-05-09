@@ -7,7 +7,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.company.bodycam.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -101,25 +100,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runCatching {
                 val sessionResponse = repository.createWorkerSession(state.backendUrl, token, user)
                 val joinResponse = repository.joinWorkerSession(state.backendUrl, token, sessionResponse, user)
-                
-                // Use BuildConfig.DEFAULT_LIVEKIT_URL if it's set and the joinResponse is blank, 
-                // or if you want to force a specific URL for local dev.
-                val effectiveLiveKitUrl = if (BuildConfig.DEFAULT_LIVEKIT_URL.isNotBlank() && 
-                    (joinResponse.liveKitUrl.isBlank() || joinResponse.liveKitUrl.contains("localhost"))) {
-                    BuildConfig.DEFAULT_LIVEKIT_URL
-                } else {
-                    joinResponse.liveKitUrl
-                }
-
-                println("Effective LiveKit URL: $effectiveLiveKitUrl")
                 captureManager.start(
                     ActiveSessionConfig(
                         backendUrl = state.backendUrl,
-                        liveKitUrl = effectiveLiveKitUrl,
+                        liveKitUrl = joinResponse.liveKitUrl,
                         token = joinResponse.token,
                         authToken = token,
-                        sessionId = sessionResponse.id,
-                        roomName = joinResponse.roomName
+                        sessionId = sessionResponse.id
                     ),
                     highQuality = state.highQualityMode
                 )

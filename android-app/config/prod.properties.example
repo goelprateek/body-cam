@@ -1,2 +1,1 @@
 DEFAULT_BACKEND_URL=https://api-bodycam.idti.dev/
-DEFAULT_LIVEKIT_URL=wss://livekit-bodycam.idti.dev/
