@@ -42,8 +42,10 @@ Production DNS and TLS contract:
 - `LIVEKIT_PUBLIC_URL` must be the full `wss://...` URL for that same host because the backend returns it during session join
 - `MINIO_DOMAIN` must resolve to the reverse proxy host when `MINIO_PUBLIC_URL` points at a public MinIO endpoint
 - `MINIO_PUBLIC_URL` should normally be `https://<MINIO_DOMAIN>` so browser playback URLs resolve without exposing port `9000` directly
+- `MINIO_REGION` should stay aligned between environments; for the current MinIO setup we default it to `us-east-1` so presigned playback URL generation does not depend on runtime region discovery through the public endpoint
 - `infra/.env.local` and `infra/.env.prod` should keep only infra and compose variables
 - `backend/.env.docker.local` and `backend/.env.prod` should keep application runtime values, including JWT, LiveKit, storage, and backend DB connection settings
+- production backend logs are written to `/app/logs` inside the container and persisted through the `backend_logs` volume mounted by `compose/prod/app.yml`
 - the shared LiveKit template file is `infra/livekit.yaml.template`; rendered runtime files are generated per environment and should not be edited by hand
 
 Production firewall ports:
