@@ -44,7 +44,7 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "ps -ef | grep [m]inio >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9000/minio/health/live || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
