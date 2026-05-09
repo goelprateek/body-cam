@@ -45,6 +45,7 @@ app:
   storage:
     endpoint: ${MINIO_ENDPOINT:http://minio:9000}
     public-url: ${MINIO_PUBLIC_URL:http://10.0.2.2:9000}
+    region: ${MINIO_REGION:us-east-1}
     bucket: ${MINIO_BUCKET:recordings}
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${MINIO_SECRET_KEY:minioadmin}

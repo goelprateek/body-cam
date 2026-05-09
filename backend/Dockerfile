@@ -22,7 +22,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends wget ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system spring \
-    && useradd --system --gid spring --create-home spring
+    && useradd --system --gid spring --create-home spring \
+    && mkdir -p /app/logs/archive
 
 COPY --from=build /app/build/libs/bodycam-backend-0.0.1-SNAPSHOT.jar app.jar
 

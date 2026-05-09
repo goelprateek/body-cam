@@ -16,3 +16,4 @@ app:
   storage:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     public-url: ${MINIO_PUBLIC_URL:http://localhost:9000}
+    region: ${MINIO_REGION:us-east-1}

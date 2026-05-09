@@ -27,6 +27,7 @@ public record AppProperties(
     public record Storage(
             String endpoint,
             String publicUrl,
+            String region,
             String bucket,
             String accessKey,
             String secretKey

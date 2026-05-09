@@ -69,6 +69,14 @@ public class ObjectStorageService {
 
     public String presignedPlaybackUrl(String objectKey, int expirySeconds) {
         try {
+            log.info(
+                    "Generating playback URL via public storage endpoint={} bucket={} key={} expirySeconds={} region={}",
+                    appProperties.storage().publicUrl(),
+                    appProperties.storage().bucket(),
+                    objectKey,
+                    expirySeconds,
+                    appProperties.storage().region()
+            );
             String playbackUrl = publicMinioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
@@ -84,7 +92,14 @@ public class ObjectStorageService {
             );
             return playbackUrl;
         } catch (Exception exception) {
-            log.error("Failed to generate playback URL for recording key={}", objectKey, exception);
+            log.error(
+                    "Failed to generate playback URL for endpoint={} bucket={} key={} region={}",
+                    appProperties.storage().publicUrl(),
+                    appProperties.storage().bucket(),
+                    objectKey,
+                    appProperties.storage().region(),
+                    exception
+            );
             throw new IllegalStateException("Failed to create recording playback URL", exception);
         }
     }

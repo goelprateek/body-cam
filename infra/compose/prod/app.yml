@@ -3,6 +3,8 @@ services:
     image: ${BACKEND_IMAGE_REF:-${CONTAINER_REGISTRY:-registry.digitalocean.com/fleet-ops}/body-cam-backend:${BACKEND_IMAGE_TAG:-latest}}
     env_file:
       - ../../../backend/.env.prod
+    volumes:
+      - backend_logs:/app/logs
     expose:
       - "8080"
     depends_on:

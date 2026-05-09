@@ -19,6 +19,7 @@ public class StorageClientConfig {
     MinioClient internalMinioClient(AppProperties appProperties, OkHttpClient minioHttpClient) {
         return MinioClient.builder()
                 .endpoint(appProperties.storage().endpoint())
+                .region(appProperties.storage().region())
                 .credentials(appProperties.storage().accessKey(), appProperties.storage().secretKey())
                 .httpClient(minioHttpClient)
                 .build();
@@ -29,6 +30,7 @@ public class StorageClientConfig {
     MinioClient publicMinioClient(AppProperties appProperties, OkHttpClient minioHttpClient) {
         return MinioClient.builder()
                 .endpoint(appProperties.storage().publicUrl())
+                .region(appProperties.storage().region())
                 .credentials(appProperties.storage().accessKey(), appProperties.storage().secretKey())
                 .httpClient(minioHttpClient)
                 .build();

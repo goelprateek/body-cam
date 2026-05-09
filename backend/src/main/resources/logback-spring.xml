@@ -38,7 +38,7 @@
     </appender>
 
     <springProfile name="local">
-        <logger name="com.company.bodycam" level="${APP_LOG_LEVEL}"/>
+        <logger name="com.kriyanshtech.bodycam" level="${APP_LOG_LEVEL}"/>
         <logger name="org.springframework.security" level="INFO"/>
         <logger name="org.hibernate.SQL" level="WARN"/>
         <root level="${ROOT_LOG_LEVEL}">
@@ -47,7 +47,7 @@
     </springProfile>
 
     <springProfile name="!local">
-        <logger name="com.company.bodycam" level="${APP_LOG_LEVEL}"/>
+        <logger name="com.kriyanshtech.bodycam" level="${APP_LOG_LEVEL}"/>
         <logger name="org.springframework.security" level="INFO"/>
         <logger name="org.hibernate.SQL" level="WARN"/>
         <root level="${ROOT_LOG_LEVEL}">
