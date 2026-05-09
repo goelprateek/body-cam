@@ -17,3 +17,23 @@ Connection behavior:
 - the app uses the configured backend base URL from `BuildConfig.DEFAULT_BACKEND_URL`
 - the backend remains the source of truth for the LiveKit WebSocket URL returned during session join
 - in production that returned LiveKit URL must be a public `wss://` subdomain such as `wss://livekit.example.com`, not an internal Docker hostname
+
+Environment-specific build values:
+
+- `android-app/app/build.gradle.kts` now reads per-flavor values from `android-app/config/dev.properties`, `android-app/config/staging.properties`, and `android-app/config/prod.properties`
+- commit only the `*.properties.example` files; the real `*.properties` files are ignored for local overrides
+- each file must define `DEFAULT_BACKEND_URL` and `DEFAULT_LIVEKIT_URL`
+- Gradle loads the committed example first, then overlays the untracked local file if present
+
+Example setup:
+
+```properties
+DEFAULT_BACKEND_URL=http://192.168.1.10:8080/
+DEFAULT_LIVEKIT_URL=ws://192.168.1.10:7880/
+```
+
+Build examples:
+
+- `./gradlew assembleDevDebug`
+- `./gradlew assembleStagingDebug`
+- `./gradlew assembleProdRelease`

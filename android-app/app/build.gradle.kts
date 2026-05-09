@@ -1,6 +1,31 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
 }
+
+fun loadEnvironmentProperties(environment: String): Properties {
+    val properties = Properties()
+    val exampleFile = rootProject.file("config/$environment.properties.example")
+    val localFile = rootProject.file("config/$environment.properties")
+
+    if (exampleFile.exists()) {
+        exampleFile.inputStream().use(properties::load)
+    }
+
+    if (localFile.exists()) {
+        localFile.inputStream().use(properties::load)
+    }
+
+    return properties
+}
+
+fun Properties.requireValue(key: String, environment: String): String =
+    getProperty(key)?.takeIf { it.isNotBlank() }
+        ?: error("Missing '$key' for Android environment '$environment'.")
+
+fun asBuildConfigString(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
     namespace = "com.company.bodycam"
@@ -19,25 +44,54 @@ android {
     flavorDimensions += "environment"
     productFlavors {
         create("dev") {
+            val env = "dev"
+            val props = loadEnvironmentProperties(env)
             dimension = "environment"
             applicationIdSuffix = ".dev"
             manifestPlaceholders["appName"] = "BodyCam Dev"
-            // REPLACE 10.0.2.2 with your computer's local IP address (e.g., 192.168.1.5)
-            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"http://192.168.29.207:8080/\"")
-            buildConfigField("String", "DEFAULT_LIVEKIT_URL", "\"ws://192.168.29.207:7880/\"")
+            buildConfigField(
+                "String",
+                "DEFAULT_BACKEND_URL",
+                asBuildConfigString(props.requireValue("DEFAULT_BACKEND_URL", env))
+            )
+            buildConfigField(
+                "String",
+                "DEFAULT_LIVEKIT_URL",
+                asBuildConfigString(props.requireValue("DEFAULT_LIVEKIT_URL", env))
+            )
         }
         create("staging") {
+            val env = "staging"
+            val props = loadEnvironmentProperties(env)
             dimension = "environment"
             applicationIdSuffix = ".staging"
             manifestPlaceholders["appName"] = "BodyCam Staging"
-            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://staging-api.bodycam.company.com/\"")
-            buildConfigField("String", "DEFAULT_LIVEKIT_URL", "\"wss://staging-livekit.bodycam.company.com/\"")
+            buildConfigField(
+                "String",
+                "DEFAULT_BACKEND_URL",
+                asBuildConfigString(props.requireValue("DEFAULT_BACKEND_URL", env))
+            )
+            buildConfigField(
+                "String",
+                "DEFAULT_LIVEKIT_URL",
+                asBuildConfigString(props.requireValue("DEFAULT_LIVEKIT_URL", env))
+            )
         }
         create("prod") {
+            val env = "prod"
+            val props = loadEnvironmentProperties(env)
             dimension = "environment"
             manifestPlaceholders["appName"] = "BodyCam"
-            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://api.bodycam.company.com/\"")
-            buildConfigField("String", "DEFAULT_LIVEKIT_URL", "\"wss://livekit.bodycam.company.com/\"")
+            buildConfigField(
+                "String",
+                "DEFAULT_BACKEND_URL",
+                asBuildConfigString(props.requireValue("DEFAULT_BACKEND_URL", env))
+            )
+            buildConfigField(
+                "String",
+                "DEFAULT_LIVEKIT_URL",
+                asBuildConfigString(props.requireValue("DEFAULT_LIVEKIT_URL", env))
+            )
         }
     }
 

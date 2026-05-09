@@ -36,6 +36,9 @@ infra/postgres_data/
 infra/minio_data/
 infra/redis_data/
 
+android-app/config/*.properties
+!android-app/config/*.properties.example
+
 release-manifests/
 
 *.class
