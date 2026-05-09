@@ -7,6 +7,7 @@ production_env_file="${PRODUCTION_ENV_FILE:-infra/.env.prod}"
 backend_env_file="${BACKEND_ENV_FILE:-backend/.env.prod}"
 compose_file="${repo_root}/infra/docker-compose.prod.yml"
 env_file_path="${repo_root}/${production_env_file}"
+backend_env_path="${repo_root}/${backend_env_file}"
 livekit_render_script="${repo_root}/scripts/deploy/render-livekit-config.sh"
 deploy_action="${DEPLOY_ACTION:-deploy}"
 release_label="${RELEASE_LABEL:-}"
@@ -181,6 +182,11 @@ fi
 
 if [[ ! -f "${env_file_path}" ]]; then
   echo "Missing production env file: ${env_file_path}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${backend_env_path}" ]]; then
+  echo "Missing backend production env file: ${backend_env_path}" >&2
   exit 1
 fi
 

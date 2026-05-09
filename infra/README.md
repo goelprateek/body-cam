@@ -32,7 +32,7 @@ Production-specific behavior:
 - `infra/livekit.yaml.template` is the single source for both local and production LiveKit config generation
 - the local and production flows render `infra/livekit.local.generated.yaml` and `infra/livekit.prod.generated.yaml` from that shared template
 - production keeps `rtc.use_external_ip: true` via `infra/.env.prod`, while local can set `LIVEKIT_USE_EXTERNAL_IP=false` and provide `LIVEKIT_NODE_IP` for same-WiFi device testing
-- `infra/livekit.local.yaml` also enables `rtc.use_external_ip: true` for real-device testing against a locally Dockerized LiveKit server that is reached through the host public IP
+- local same-WiFi real-device testing is driven by `TURN_HOST`, `LIVEKIT_USE_EXTERNAL_IP`, and `LIVEKIT_NODE_IP` in `infra/.env.local`
 - MinIO's S3 API is exposed through Traefik on `https://<MINIO_DOMAIN>` while the MinIO console stays loopback-bound on port `9001`
 - coturn stays directly published for TURN traffic
 

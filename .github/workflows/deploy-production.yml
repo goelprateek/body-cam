@@ -220,6 +220,7 @@ jobs:
             printf 'export APP_DIR=%q\n' "${APP_DIR}"
             printf 'export CONTAINER_REGISTRY=%q\n' "${CONTAINER_REGISTRY}"
             printf 'export PRODUCTION_ENV_FILE=%q\n' "${DEPLOY_ENV_FILE}"
+            printf 'export BACKEND_ENV_FILE=%q\n' "backend/.env.prod"
             printf 'export RELEASE_LABEL=%q\n' "${RELEASE_LABEL}"
             printf 'export BACKEND_IMAGE_REF=%q\n' "${RELEASE_BACKEND_IMAGE_REF}"
             printf 'export FRONTEND_IMAGE_REF=%q\n' "${RELEASE_FRONTEND_IMAGE_REF}"
@@ -286,6 +287,7 @@ jobs:
             printf 'export APP_DIR=%q\n' "${APP_DIR}"
             printf 'export CONTAINER_REGISTRY=%q\n' "${CONTAINER_REGISTRY}"
             printf 'export PRODUCTION_ENV_FILE=%q\n' "${DEPLOY_ENV_FILE}"
+            printf 'export BACKEND_ENV_FILE=%q\n' "backend/.env.prod"
             printf 'export DIGITALOCEAN_ACCESS_TOKEN=%q\n' "${DIGITALOCEAN_ACCESS_TOKEN}"
             printf 'export DEPLOY_ACTION=%q\n' "rollback-last-successful"
             printf 'cd "$APP_DIR"\n'
