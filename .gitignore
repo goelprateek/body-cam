@@ -22,6 +22,7 @@
 
 android-app/.gradle/
 android-app/captures/
+android-app/keystores/
 
 backend/bin/
 backend/.env.local
