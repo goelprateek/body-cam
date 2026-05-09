@@ -202,10 +202,15 @@ jobs:
         run: |
           set -euo pipefail
           rsync -az --delete \
+            --delete-excluded \
             --relative \
+            --include='infra/' \
+            --include='infra/compose/' \
+            --include='infra/compose/prod/***' \
+            --exclude='infra/compose/*' \
             -e "ssh -p ${SSH_PORT}" \
             infra/docker-compose.prod.yml \
-            infra/compose \
+            infra/compose/ \
             infra/livekit.yaml.template \
             scripts \
             "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"

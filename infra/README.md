@@ -60,7 +60,7 @@ Production firewall ports:
 The deploy workflow should sync only deployment assets:
 
 - `infra/docker-compose.prod.yml`
-- `infra/compose/`
+- `infra/compose/prod/`
 - `infra/livekit.yaml.template`
 - `scripts/deploy/`
 
