@@ -36,6 +36,21 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - Current Android uploads can include `capturedAt`, `cameraFacing`, and best-effort location fields.
 - The metadata model is designed to grow cleanly into thermal or other sensor capture through typed thermal columns plus flexible `sensorPayload` JSON.
 
+## Transcript Runtime
+
+- Transcript generation now uses a pluggable engine boundary selected by `APP_TRANSCRIPT_ENGINE`.
+- `vosk` is the first engine and keeps the current self-hosted WebSocket flow.
+- `faster-whisper` is now implemented as a second engine option for the planned quality-upgrade path.
+- Audio extraction is now handled through embedded JavaCV native bindings instead of shelling out to a host or container `ffmpeg` binary.
+- That means local IDE runs and backend containers no longer require a separately installed `ffmpeg`.
+- The transcript DB and API contract stays engine-neutral so a later move to `whisper.cpp` can remain a backend engine swap.
+- The `faster-whisper` engine expects an OpenAI-compatible self-hosted transcription endpoint, defaulting to `TRANSCRIPT_FASTER_WHISPER_URL=http://localhost:8001/v1/audio/transcriptions`.
+- When you are ready to switch, set:
+  `APP_TRANSCRIPT_ENGINE=faster-whisper`
+  `TRANSCRIPT_FASTER_WHISPER_URL=...`
+  `TRANSCRIPT_FASTER_WHISPER_MODEL=large-v3`
+  `TRANSCRIPT_FASTER_WHISPER_TASK=transcribe`
+
 ## Database Migrations
 
 - Flyway versioned migrations live in `src/main/resources/db/migration`.

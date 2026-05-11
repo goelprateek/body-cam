@@ -51,6 +51,11 @@ app:
     secret-key: ${MINIO_SECRET_KEY:minioadmin}
   transcript:
     enabled: ${APP_TRANSCRIPT_ENABLED:true}
+    engine: ${APP_TRANSCRIPT_ENGINE:vosk}
     vosk-url: ${TRANSCRIPT_VOSK_URL:ws://localhost:2700}
-    ffmpeg-command: ${APP_TRANSCRIPT_FFMPEG_COMMAND:ffmpeg}
     language-code: ${APP_TRANSCRIPT_LANGUAGE_CODE:en-ZA}
+    faster-whisper:
+      url: ${TRANSCRIPT_FASTER_WHISPER_URL:http://localhost:8001/v1/audio/transcriptions}
+      model: ${TRANSCRIPT_FASTER_WHISPER_MODEL:large-v3}
+      task: ${TRANSCRIPT_FASTER_WHISPER_TASK:transcribe}
+      timeout-seconds: ${TRANSCRIPT_FASTER_WHISPER_TIMEOUT_SECONDS:300}

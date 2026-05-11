@@ -19,7 +19,7 @@ FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends wget ca-certificates ffmpeg \
+    && apt-get install -y --no-install-recommends wget ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system spring \
     && useradd --system --gid spring --create-home spring \

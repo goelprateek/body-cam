@@ -37,9 +37,18 @@ public record AppProperties(
 
     public record Transcript(
             boolean enabled,
+            String engine,
             String voskUrl,
-            String ffmpegCommand,
-            String languageCode
+            String languageCode,
+            FasterWhisper fasterWhisper
+    ) {
+    }
+
+    public record FasterWhisper(
+            String url,
+            String model,
+            String task,
+            long timeoutSeconds
     ) {
     }
 }
