@@ -34,6 +34,7 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
     private static final String ENGINE_NAME = "vosk";
     private static final String MODEL_NAME = "alphacep/kaldi-en";
     private static final int AUDIO_CHUNK_SIZE_BYTES = 16_000 * 2 / 4;
+    private static final String EOF_MESSAGE = "{\"eof\" : 1}";
 
     private final RecordingTranscriptAudioExtractor audioExtractor;
     private final AppProperties appProperties;
@@ -124,7 +125,9 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
                 collectSegment(listener.awaitMessage(), segments);
             }
 
-            webSocket.sendText("{\"eof\":1}", true).join();
+            log.info("Sending transcript engine EOF recordingId={} transcriptId={} engine={}",
+                    recordingId, transcriptId, ENGINE_NAME);
+            webSocket.sendText(EOF_MESSAGE, true).join();
             collectSegment(listener.awaitMessage(), segments);
             webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "done").join();
 
