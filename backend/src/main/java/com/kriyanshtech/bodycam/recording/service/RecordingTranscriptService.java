@@ -4,6 +4,8 @@ import com.kriyanshtech.bodycam.common.NotFoundException;
 import com.kriyanshtech.bodycam.config.AppProperties;
 import com.kriyanshtech.bodycam.recording.dto.RecordingTranscriptResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingTranscriptSegmentResponse;
+import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptResponse;
+import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSegmentResponse;
 import com.kriyanshtech.bodycam.recording.entity.RecordingAsset;
 import com.kriyanshtech.bodycam.recording.entity.RecordingTranscript;
 import com.kriyanshtech.bodycam.recording.entity.RecordingTranscriptSegment;
@@ -13,6 +15,7 @@ import com.kriyanshtech.bodycam.recording.repository.RecordingTranscriptReposito
 import com.kriyanshtech.bodycam.recording.transcript.RecordingTranscriptEngine;
 import com.kriyanshtech.bodycam.recording.transcript.RecordingTranscriptGenerationResult;
 import com.kriyanshtech.bodycam.recording.transcript.TranscriptSegmentPayload;
+import com.kriyanshtech.bodycam.session.repository.LiveSessionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -32,6 +35,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class RecordingTranscriptService {
@@ -42,17 +46,20 @@ public class RecordingTranscriptService {
     private final ObjectStorageService objectStorageService;
     private final AppProperties appProperties;
     private final Map<String, RecordingTranscriptEngine> transcriptEngines;
+    private final LiveSessionRepository liveSessionRepository;
 
     public RecordingTranscriptService(
             RecordingAssetRepository recordingAssetRepository,
             RecordingTranscriptRepository recordingTranscriptRepository,
             ObjectStorageService objectStorageService,
             AppProperties appProperties,
+            LiveSessionRepository liveSessionRepository,
             List<RecordingTranscriptEngine> transcriptEngines) {
         this.recordingAssetRepository = recordingAssetRepository;
         this.recordingTranscriptRepository = recordingTranscriptRepository;
         this.objectStorageService = objectStorageService;
         this.appProperties = appProperties;
+        this.liveSessionRepository = liveSessionRepository;
         this.transcriptEngines = indexEngines(transcriptEngines);
     }
 
@@ -74,6 +81,60 @@ public class RecordingTranscriptService {
 
         RecordingAsset recording = recordingAssetRepository.findById(recordingId)
                 .orElseThrow(() -> new NotFoundException("Recording not found: " + recordingId));
+        return generateTranscript(recording);
+    }
+
+    @Transactional(readOnly = true)
+    public SessionTranscriptResponse getSessionTranscript(UUID sessionId) {
+        List<RecordingAsset> recordings = orderedSessionRecordings(sessionId);
+        return aggregateSessionTranscript(sessionId, recordings);
+    }
+
+    public SessionTranscriptResponse generateSessionTranscript(UUID sessionId) {
+        if (!appProperties.transcript().enabled()) {
+            throw new IllegalStateException("Transcript generation is disabled in backend configuration");
+        }
+
+        List<RecordingAsset> recordings = orderedSessionRecordings(sessionId);
+        int generatedCount = 0;
+        log.info("Session transcript generation started sessionId={} recordingCount={}", sessionId, recordings.size());
+
+        for (RecordingAsset recording : recordings) {
+            RecordingTranscript transcript = recording.getTranscript();
+            if (transcript != null && transcript.getStatus() == RecordingTranscriptStatus.READY) {
+                continue;
+            }
+            generateTranscript(recording);
+            generatedCount++;
+        }
+
+        log.info("Session transcript generation completed sessionId={} generatedRecordings={}", sessionId, generatedCount);
+        return aggregateSessionTranscript(sessionId, orderedSessionRecordings(sessionId));
+    }
+
+    @Transactional(readOnly = true)
+    public String buildSessionSubtitleVtt(UUID sessionId) {
+        SessionTranscriptResponse transcript = getSessionTranscript(sessionId);
+        if (transcript.segments().isEmpty()) {
+            throw new IllegalStateException("Session transcript subtitles are not available yet");
+        }
+
+        StringBuilder builder = new StringBuilder("WEBVTT\n\n");
+        for (int index = 0; index < transcript.segments().size(); index++) {
+            SessionTranscriptSegmentResponse segment = transcript.segments().get(index);
+            builder.append(index + 1).append('\n')
+                    .append(formatVttTimestamp(segment.startSeconds()))
+                    .append(" --> ")
+                    .append(formatVttTimestamp(segment.endSeconds()))
+                    .append('\n')
+                    .append(HtmlUtils.htmlEscape(segment.text()))
+                    .append("\n\n");
+        }
+        return builder.toString();
+    }
+
+    private RecordingTranscriptResponse generateTranscript(RecordingAsset recording) {
+        UUID recordingId = recording.getId();
 
         RecordingTranscript transcript = recordingTranscriptRepository.findByRecording_Id(recordingId)
                 .orElseGet(() -> createTranscript(recording));
@@ -146,6 +207,137 @@ public class RecordingTranscriptService {
                     .append("\n\n");
         }
         return builder.toString();
+    }
+
+    private SessionTranscriptResponse aggregateSessionTranscript(UUID sessionId, List<RecordingAsset> recordings) {
+        RecordingTranscriptStatus status = RecordingTranscriptStatus.NOT_REQUESTED;
+        int readyRecordings = 0;
+        int failedRecordings = 0;
+        int processingRecordings = 0;
+        int pendingRecordings = 0;
+
+        Instant startedAt = null;
+        Instant completedAt = null;
+        Instant createdAt = null;
+        Instant updatedAt = null;
+        String engine = null;
+        String model = null;
+        String languageCode = null;
+        List<SessionTranscriptSegmentResponse> aggregateSegments = new ArrayList<>();
+        long fallbackOffsetMs = 0L;
+
+        for (RecordingAsset recording : recordings) {
+            long recordingOffsetMs = RecordingTimelineSupport.inferredSessionStartMs(recording, fallbackOffsetMs);
+            long nextFallbackOffsetMs = RecordingTimelineSupport.inferredSessionEndMs(recording, recordingOffsetMs);
+            fallbackOffsetMs = nextFallbackOffsetMs;
+
+            RecordingTranscript transcript = recording.getTranscript();
+            if (transcript == null) {
+                continue;
+            }
+
+            startedAt = earliest(startedAt, transcript.getStartedAt());
+            completedAt = latest(completedAt, transcript.getCompletedAt());
+            createdAt = earliest(createdAt, transcript.getCreatedAt());
+            updatedAt = latest(updatedAt, transcript.getUpdatedAt());
+            engine = coalesce(engine, transcript.getEngine());
+            model = coalesce(model, transcript.getModel());
+            languageCode = coalesce(languageCode, transcript.getLanguageCode());
+
+            switch (transcript.getStatus()) {
+                case READY -> {
+                    readyRecordings++;
+                    aggregateSegments.addAll(transcript.getSegments().stream()
+                            .map(segment -> mapSessionSegment(segment, recording, recordingOffsetMs))
+                            .toList());
+                }
+                case FAILED -> failedRecordings++;
+                case PROCESSING -> processingRecordings++;
+                case PENDING -> pendingRecordings++;
+                case NOT_REQUESTED -> {
+                }
+            }
+        }
+
+        if (readyRecordings == recordings.size() && !recordings.isEmpty()) {
+            status = RecordingTranscriptStatus.READY;
+        } else if (processingRecordings > 0) {
+            status = RecordingTranscriptStatus.PROCESSING;
+        } else if (pendingRecordings > 0) {
+            status = RecordingTranscriptStatus.PENDING;
+        } else if (failedRecordings > 0) {
+            status = RecordingTranscriptStatus.FAILED;
+        } else if (readyRecordings > 0) {
+            status = RecordingTranscriptStatus.READY;
+        }
+
+        String fullText = aggregateSegments.stream()
+                .map(SessionTranscriptSegmentResponse::text)
+                .filter(text -> text != null && !text.isBlank())
+                .collect(Collectors.joining(" "))
+                .trim();
+
+        String errorMessage = failedRecordings > 0
+                ? failedRecordings + " recording segment transcript(s) failed."
+                : null;
+
+        log.info(
+                "Aggregated session transcript sessionId={} status={} totalRecordings={} readyRecordings={} failedRecordings={} processingRecordings={} pendingRecordings={} transcriptSegmentCount={}",
+                sessionId,
+                status,
+                recordings.size(),
+                readyRecordings,
+                failedRecordings,
+                processingRecordings,
+                pendingRecordings,
+                aggregateSegments.size()
+        );
+
+        return new SessionTranscriptResponse(
+                sessionId,
+                status,
+                engine,
+                model,
+                languageCode,
+                fullText.isBlank() ? null : fullText,
+                errorMessage,
+                startedAt,
+                completedAt,
+                createdAt,
+                updatedAt,
+                recordings.size(),
+                readyRecordings,
+                failedRecordings,
+                processingRecordings,
+                pendingRecordings,
+                aggregateSegments
+        );
+    }
+
+    private SessionTranscriptSegmentResponse mapSessionSegment(
+            RecordingTranscriptSegment segment,
+            RecordingAsset recording,
+            long recordingOffsetMs) {
+        BigDecimal offsetSeconds = RecordingTimelineSupport.millisToSeconds(recordingOffsetMs);
+        return new SessionTranscriptSegmentResponse(
+                segment.getId(),
+                recording.getId(),
+                RecordingTimelineSupport.segmentSequence(recording),
+                segment.getSegmentIndex(),
+                offsetSeconds.add(segment.getStartSeconds()),
+                offsetSeconds.add(segment.getEndSeconds()),
+                segment.getText(),
+                segment.getConfidence()
+        );
+    }
+
+    private List<RecordingAsset> orderedSessionRecordings(UUID sessionId) {
+        liveSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
+
+        return recordingAssetRepository.findBySession_IdOrderByCreatedAtAsc(sessionId).stream()
+                .sorted(RecordingTimelineSupport.segmentTimelineComparator())
+                .toList();
     }
 
     private Map<String, RecordingTranscriptEngine> indexEngines(List<RecordingTranscriptEngine> engines) {
@@ -278,5 +470,29 @@ public class RecordingTranscriptService {
                 segment.getEndSeconds(),
                 segment.getText(),
                 segment.getConfidence());
+    }
+
+    private Instant earliest(Instant current, Instant candidate) {
+        if (current == null) {
+            return candidate;
+        }
+        if (candidate == null) {
+            return current;
+        }
+        return candidate.isBefore(current) ? candidate : current;
+    }
+
+    private Instant latest(Instant current, Instant candidate) {
+        if (current == null) {
+            return candidate;
+        }
+        if (candidate == null) {
+            return current;
+        }
+        return candidate.isAfter(current) ? candidate : current;
+    }
+
+    private String coalesce(String current, String candidate) {
+        return current != null && !current.isBlank() ? current : candidate;
     }
 }

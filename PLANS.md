@@ -67,3 +67,33 @@ Success Criteria:
 - reconnect handling
 - audio stabilization
 - bug fixes
+
+---
+
+# Phase 6 - Continuous Session Recording
+
+Reference doc:
+- `docs/architecture/continuous-session-recording-phased.md`
+
+Objective:
+- preserve weak-network reliability by keeping chunked uploads
+- let operators watch a session as one continuous recording instead of unrelated 30-second clips
+- avoid eager backend video merging during ingest
+
+Planned slices:
+- Phase 6.1: add ordered segment timeline metadata to Android uploads and backend persistence
+- Phase 6.2: add backend session recording timeline and manifest APIs
+- Phase 6.3: add frontend continuous session playback over ordered segments
+- Phase 6.4: add optional async merged export for evidence/download workflows
+
+Current implementation status:
+- Phase 6.1 is implemented
+- Phase 6.2 is implemented with `GET /api/sessions/{sessionId}/recordings/timeline`
+- Phase 6.3 is implemented with session-based frontend playback and session transcript aggregation
+- Phase 6.4 remains pending
+
+Success Criteria:
+- Android can keep recording and queue uploads in poor connectivity
+- backend stores session-aligned recording segments with deterministic ordering
+- operator can open one session recording and watch it as a continuous timeline
+- export/merge remains optional and asynchronous

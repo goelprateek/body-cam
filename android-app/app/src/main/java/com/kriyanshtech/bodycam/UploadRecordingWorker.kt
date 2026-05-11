@@ -25,6 +25,11 @@ class UploadRecordingWorker(
         val durationSeconds = inputData.getInt(KEY_DURATION_SECONDS, 0).takeIf { it > 0 }
         val cameraFacing = inputData.getString(KEY_CAMERA_FACING)
         val capturedAt = inputData.getString(KEY_CAPTURED_AT)
+        val segmentSequence = inputData.getInt(KEY_SEGMENT_SEQUENCE, -1).takeIf { it >= 0 }
+        val segmentStartedAt = inputData.getString(KEY_SEGMENT_STARTED_AT)
+        val segmentEndedAt = inputData.getString(KEY_SEGMENT_ENDED_AT)
+        val sessionElapsedStartMs = inputData.getLong(KEY_SESSION_ELAPSED_START_MS, -1L).takeIf { it >= 0L }
+        val sessionElapsedEndMs = inputData.getLong(KEY_SESSION_ELAPSED_END_MS, -1L).takeIf { it >= 0L }
         val highQuality = inputData.getBoolean(KEY_HIGH_QUALITY, false)
         val file = File(filePath)
 
@@ -33,12 +38,20 @@ class UploadRecordingWorker(
         }
 
         val startTime = System.currentTimeMillis()
-        android.util.Log.d("UploadRecordingWorker", "Starting upload: ${file.name}, size: ${file.length()} bytes")
+        android.util.Log.i(
+            "UploadRecordingWorker",
+            "Starting upload sessionId=$sessionId file=${file.name} sizeBytes=${file.length()} durationSeconds=$durationSeconds segmentSequence=$segmentSequence sessionElapsedStartMs=$sessionElapsedStartMs sessionElapsedEndMs=$sessionElapsedEndMs"
+        )
 
         return try {
             val location = locationMetadataProvider.getLatestLocationMetadata()
             val metadata = RecordingMetadataRequest(
                 capturedAt = capturedAt,
+                segmentSequence = segmentSequence,
+                segmentStartedAt = segmentStartedAt,
+                segmentEndedAt = segmentEndedAt,
+                sessionElapsedStartMs = sessionElapsedStartMs,
+                sessionElapsedEndMs = sessionElapsedEndMs,
                 latitude = location?.latitude,
                 longitude = location?.longitude,
                 altitudeMeters = location?.altitudeMeters,
@@ -61,21 +74,30 @@ class UploadRecordingWorker(
             val duration = System.currentTimeMillis() - startTime
             val sizeKb = file.length() / 1024.0
             val speedKbps = if (duration > 0) (sizeKb / (duration / 1000.0)) else 0.0
-            android.util.Log.i("UploadRecordingWorker", "Upload successful: ${file.name}. Took ${duration}ms, Speed: ${"%.2f".format(speedKbps)} KB/s")
-            
-            file.delete()
+            android.util.Log.i(
+                "UploadRecordingWorker",
+                "Upload successful sessionId=$sessionId file=${file.name} segmentSequence=$segmentSequence tookMs=$duration speedKbps=${"%.2f".format(speedKbps)}"
+            )
+
+            if (!file.delete()) {
+                android.util.Log.w("UploadRecordingWorker", "Uploaded file could not be deleted: ${file.absolutePath}")
+            }
             Result.success()
         } catch (e: HttpException) {
             val errorMessage = parseBackendErrorMessage(e.response()?.errorBody())
             val retryable = e.code() >= 500 || e.code() == 429
             android.util.Log.e(
                 "UploadRecordingWorker",
-                "Upload failed for ${file.name}: HTTP ${e.code()}${errorMessage?.let { " - $it" } ?: ""}. ${if (retryable) "Will retry if possible." else "Not retrying because the request is invalid or unauthorized."}",
+                "Upload failed sessionId=$sessionId file=${file.name} segmentSequence=$segmentSequence: HTTP ${e.code()}${errorMessage?.let { " - $it" } ?: ""}. ${if (retryable) "Will retry if possible." else "Not retrying because the request is invalid or unauthorized."}",
                 e
             )
             if (retryable) Result.retry() else Result.failure()
         } catch (e: Exception) {
-            android.util.Log.e("UploadRecordingWorker", "Upload failed for ${file.name}: ${e.message}. Will retry if possible.", e)
+            android.util.Log.e(
+                "UploadRecordingWorker",
+                "Upload failed sessionId=$sessionId file=${file.name} segmentSequence=$segmentSequence: ${e.message}. Will retry if possible.",
+                e
+            )
             Result.retry()
         }
     }
@@ -105,6 +127,11 @@ class UploadRecordingWorker(
         const val KEY_DURATION_SECONDS = "duration_seconds"
         const val KEY_CAMERA_FACING = "camera_facing"
         const val KEY_CAPTURED_AT = "captured_at"
+        const val KEY_SEGMENT_SEQUENCE = "segment_sequence"
+        const val KEY_SEGMENT_STARTED_AT = "segment_started_at"
+        const val KEY_SEGMENT_ENDED_AT = "segment_ended_at"
+        const val KEY_SESSION_ELAPSED_START_MS = "session_elapsed_start_ms"
+        const val KEY_SESSION_ELAPSED_END_MS = "session_elapsed_end_ms"
         const val KEY_HIGH_QUALITY = "high_quality"
     }
 }

@@ -9,6 +9,8 @@ import {
   PageResponse,
   RecordingPlaybackResponse,
   RecordingResponse,
+  SessionRecordingTimelineResponse,
+  SessionTranscriptResponse,
   RecordingTranscriptResponse,
   SessionResponse
 } from './operator.models';
@@ -105,6 +107,34 @@ export class OperatorApiService {
       this.http.get<RecordingPlaybackResponse>(this.url(`/recordings/${recordingId}/playback-url`), {
         headers: this.authHeaders()
       })
+    );
+  }
+
+  async getSessionRecordingTimeline(sessionId: string): Promise<SessionRecordingTimelineResponse> {
+    return firstValueFrom(
+      this.http.get<SessionRecordingTimelineResponse>(this.url(`/sessions/${sessionId}/recordings/timeline`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async getSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
+    return firstValueFrom(
+      this.http.get<SessionTranscriptResponse>(this.url(`/sessions/${sessionId}/transcript`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async generateSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
+    return firstValueFrom(
+      this.http.post<SessionTranscriptResponse>(
+        this.url(`/sessions/${sessionId}/transcript/generate`),
+        {},
+        {
+          headers: this.authHeaders()
+        }
+      )
     );
   }
 

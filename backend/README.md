@@ -44,6 +44,7 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - Audio extraction is now handled through embedded JavaCV native bindings instead of shelling out to a host or container `ffmpeg` binary.
 - That means local IDE runs and backend containers no longer require a separately installed `ffmpeg`.
 - The transcript DB and API contract stays engine-neutral so a later move to `whisper.cpp` can remain a backend engine swap.
+- The backend now also exposes session-level transcript aggregation so continuous session playback and transcript review follow the same ordered segment timeline.
 - The `faster-whisper` engine expects an OpenAI-compatible self-hosted transcription endpoint, defaulting to `TRANSCRIPT_FASTER_WHISPER_URL=http://localhost:8001/v1/audio/transcriptions`.
 - When you are ready to switch, set:
   `APP_TRANSCRIPT_ENGINE=faster-whisper`
@@ -76,6 +77,10 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - `POST /api/sessions/{id}/end`
 - `GET /api/recordings`
 - `GET /api/recordings/{id}/playback-url`
+- `GET /api/sessions/{id}/recordings/timeline`
+- `GET /api/sessions/{id}/transcript`
+- `GET /api/sessions/{id}/transcript/subtitles.vtt`
+- `POST /api/sessions/{id}/transcript/generate`
 - `GET /api/recordings/{id}/transcript`
 - `GET /api/recordings/{id}/transcript/subtitles.vtt`
 - `POST /api/recordings/{id}/transcript/generate`

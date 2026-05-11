@@ -10,6 +10,7 @@ public record RecordingResponse(
         UUID sessionId,
         UUID workerId,
         String workerName,
+        String referenceNumber,
         String roomName,
         String objectKey,
         String playbackUrl,

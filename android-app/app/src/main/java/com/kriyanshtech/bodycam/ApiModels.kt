@@ -43,6 +43,11 @@ data class RecordingResponse(
 @JsonClass(generateAdapter = true)
 data class RecordingMetadataRequest(
     val capturedAt: String? = null,
+    val segmentSequence: Int? = null,
+    val segmentStartedAt: String? = null,
+    val segmentEndedAt: String? = null,
+    val sessionElapsedStartMs: Long? = null,
+    val sessionElapsedEndMs: Long? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val altitudeMeters: Double? = null,

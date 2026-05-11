@@ -32,6 +32,21 @@ public class RecordingMetadata {
     @Column(name = "captured_at")
     private Instant capturedAt;
 
+    @Column(name = "segment_sequence")
+    private Integer segmentSequence;
+
+    @Column(name = "segment_started_at")
+    private Instant segmentStartedAt;
+
+    @Column(name = "segment_ended_at")
+    private Instant segmentEndedAt;
+
+    @Column(name = "session_elapsed_start_ms")
+    private Long sessionElapsedStartMs;
+
+    @Column(name = "session_elapsed_end_ms")
+    private Long sessionElapsedEndMs;
+
     @Column(name = "latitude", precision = 9, scale = 6)
     private BigDecimal latitude;
 
@@ -88,6 +103,46 @@ public class RecordingMetadata {
 
     public void setCapturedAt(Instant capturedAt) {
         this.capturedAt = capturedAt;
+    }
+
+    public Integer getSegmentSequence() {
+        return segmentSequence;
+    }
+
+    public void setSegmentSequence(Integer segmentSequence) {
+        this.segmentSequence = segmentSequence;
+    }
+
+    public Instant getSegmentStartedAt() {
+        return segmentStartedAt;
+    }
+
+    public void setSegmentStartedAt(Instant segmentStartedAt) {
+        this.segmentStartedAt = segmentStartedAt;
+    }
+
+    public Instant getSegmentEndedAt() {
+        return segmentEndedAt;
+    }
+
+    public void setSegmentEndedAt(Instant segmentEndedAt) {
+        this.segmentEndedAt = segmentEndedAt;
+    }
+
+    public Long getSessionElapsedStartMs() {
+        return sessionElapsedStartMs;
+    }
+
+    public void setSessionElapsedStartMs(Long sessionElapsedStartMs) {
+        this.sessionElapsedStartMs = sessionElapsedStartMs;
+    }
+
+    public Long getSessionElapsedEndMs() {
+        return sessionElapsedEndMs;
+    }
+
+    public void setSessionElapsedEndMs(Long sessionElapsedEndMs) {
+        this.sessionElapsedEndMs = sessionElapsedEndMs;
     }
 
     public BigDecimal getLatitude() {

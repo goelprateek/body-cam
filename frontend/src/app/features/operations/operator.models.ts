@@ -42,6 +42,11 @@ export interface LiveKitTokenResponse {
 
 export interface RecordingMetadataResponse {
   capturedAt: string | null;
+  segmentSequence: number | null;
+  segmentStartedAt: string | null;
+  segmentEndedAt: string | null;
+  sessionElapsedStartMs: number | null;
+  sessionElapsedEndMs: number | null;
   latitude: string | null;
   longitude: string | null;
   altitudeMeters: string | null;
@@ -91,6 +96,7 @@ export interface RecordingResponse {
   sessionId: string;
   workerId: string;
   workerName: string;
+  referenceNumber: string;
   roomName: string;
   objectKey: string;
   playbackUrl: string | null;
@@ -104,4 +110,63 @@ export interface RecordingPlaybackResponse {
   recordingId: string;
   playbackUrl: string;
   expiresInSeconds: number;
+}
+
+export interface SessionRecordingTimelineSegmentResponse {
+  recordingId: string;
+  segmentSequence: number | null;
+  objectKey: string;
+  playbackUrl: string;
+  durationSeconds: number | null;
+  createdAt: string;
+  capturedAt: string | null;
+  segmentStartedAt: string | null;
+  segmentEndedAt: string | null;
+  sessionElapsedStartMs: number | null;
+  sessionElapsedEndMs: number | null;
+  transcriptStatus?: RecordingTranscriptStatus | null;
+}
+
+export interface SessionRecordingTimelineResponse {
+  sessionId: string;
+  workerId: string;
+  workerName: string;
+  referenceNumber: string;
+  roomName: string;
+  sessionStartedAt: string | null;
+  sessionEndedAt: string | null;
+  totalDurationMs: number | null;
+  hasTimelineGaps: boolean;
+  segments: SessionRecordingTimelineSegmentResponse[];
+}
+
+export interface SessionTranscriptSegmentResponse {
+  id: string;
+  recordingId: string;
+  recordingSequence: number | null;
+  segmentIndex: number;
+  startSeconds: string;
+  endSeconds: string;
+  text: string;
+  confidence: string | null;
+}
+
+export interface SessionTranscriptResponse {
+  sessionId: string;
+  status: RecordingTranscriptStatus;
+  engine: string | null;
+  model: string | null;
+  languageCode: string | null;
+  fullText: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  totalRecordings: number;
+  readyRecordings: number;
+  failedRecordings: number;
+  processingRecordings: number;
+  pendingRecordings: number;
+  segments: SessionTranscriptSegmentResponse[];
 }

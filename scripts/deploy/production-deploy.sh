@@ -146,6 +146,30 @@ login_registry() {
   printf '%s' "${DIGITALOCEAN_ACCESS_TOKEN}" | docker login "${registry_host}" --username "${DIGITALOCEAN_ACCESS_TOKEN}" --password-stdin >/dev/null
 }
 
+wait_for_service_health() {
+  local service_name="${1:?service name is required}"
+  local timeout_seconds="${2:-180}"
+  local deadline=$((SECONDS + timeout_seconds))
+  local container_id=""
+  local health_status=""
+
+  while (( SECONDS < deadline )); do
+    container_id="$(docker compose --env-file "${production_env_file}" -f "${compose_file}" ps -q "${service_name}" 2>/dev/null || true)"
+    if [[ -n "${container_id}" ]]; then
+      health_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${container_id}" 2>/dev/null || true)"
+      if [[ "${health_status}" == "healthy" || "${health_status}" == "running" ]]; then
+        echo "Service ${service_name} is ${health_status}"
+        return 0
+      fi
+    fi
+    sleep 5
+  done
+
+  echo "Service ${service_name} did not become healthy within ${timeout_seconds}s." >&2
+  docker compose --env-file "${production_env_file}" -f "${compose_file}" ps >&2 || true
+  return 1
+}
+
 apply_compose_stack() {
   local services=()
   local rendered_livekit_config="${repo_root}/infra/livekit.prod.generated.yaml"
@@ -159,6 +183,12 @@ apply_compose_stack() {
 
   docker compose --env-file "${production_env_file}" -f "${compose_file}" pull "${services[@]}"
   docker compose --env-file "${production_env_file}" -f "${compose_file}" up -d --remove-orphans
+  wait_for_service_health postgres 180
+  wait_for_service_health redis 180
+  wait_for_service_health minio 180
+  wait_for_service_health livekit 180
+  wait_for_service_health vosk 180
+  wait_for_service_health backend 240
   docker compose --env-file "${production_env_file}" -f "${compose_file}" ps
 }
 

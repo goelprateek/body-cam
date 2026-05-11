@@ -89,6 +89,12 @@ class LiveCaptureManager(
     private var activeSegmentStartedAtMs = 0L
     private var activeSegmentHasData = false
     private var delayedStopPending = false
+    private var sessionRecordingStartedAtMs = 0L
+    private var nextSegmentSequence = 0
+    private var activeSegmentSequence = 0
+    private var activeSegmentCapturedAt: Instant? = null
+    private var activeSegmentStartedAt: Instant? = null
+    private var activeSegmentSessionElapsedStartMs = 0L
 
     var onStopSafeToRelease: (() -> Unit)? = null
 
@@ -184,6 +190,9 @@ class LiveCaptureManager(
         activeSegmentStartedAtMs = 0L
         activeSegmentHasData = false
         delayedStopPending = false
+        sessionRecordingStartedAtMs = 0L
+        nextSegmentSequence = 0
+        resetActiveSegmentTracking()
     }
 
     fun start(config: ActiveSessionConfig, highQuality: Boolean = false) {
@@ -198,6 +207,9 @@ class LiveCaptureManager(
                 pendingCameraFacing = null
                 isSwitchingCamera = false
                 stopRequested = false
+                sessionRecordingStartedAtMs = SystemClock.elapsedRealtime()
+                nextSegmentSequence = 0
+                resetActiveSegmentTracking()
                 
                 try {
                     _state.value = CaptureRuntimeState(
@@ -412,7 +424,7 @@ class LiveCaptureManager(
                     if (isTrackStarted) {
                         currentCapturer.pushBitmap(finalBitmap, rotationDegrees)
                     }
-                    if (finalBitmap != null && !finalBitmap.isRecycled) {
+                    if (!finalBitmap.isRecycled) {
                         finalBitmap.recycle()
                     }
                 } catch (e: Exception) {
@@ -510,6 +522,10 @@ class LiveCaptureManager(
         val outputFile = File(segmentsDir, "segment-${System.currentTimeMillis()}.mp4")
         val outputOptions = FileOutputOptions.Builder(outputFile).build()
         var pendingRecording = capture.output.prepareRecording(appContext, outputOptions)
+        activeSegmentSequence = nextSegmentSequence
+        activeSegmentStartedAt = Instant.now()
+        activeSegmentCapturedAt = activeSegmentStartedAt
+        activeSegmentSessionElapsedStartMs = sessionElapsedNowMs()
 
         try {
             pendingRecording = pendingRecording.withAudioEnabled()
@@ -557,7 +573,20 @@ class LiveCaptureManager(
                 
                 if (!event.hasError() && file.exists() && duration >= MIN_UPLOAD_DURATION_SEC && size > 1024) {
                     android.util.Log.d("LiveCaptureManager", "Segment finalized: ${file.name}, duration: $duration s, size: $size bytes")
-                    enqueueUpload(config, file, duration)
+                    val segmentEndedAt = Instant.now()
+                    val sessionElapsedEndMs = sessionElapsedNowMs(activeSegmentSessionElapsedStartMs + (duration * 1000L))
+                    enqueueUpload(
+                        config = config,
+                        file = file,
+                        durationSeconds = duration,
+                        segmentSequence = activeSegmentSequence,
+                        capturedAt = activeSegmentCapturedAt,
+                        segmentStartedAt = activeSegmentStartedAt,
+                        segmentEndedAt = segmentEndedAt,
+                        sessionElapsedStartMs = activeSegmentSessionElapsedStartMs,
+                        sessionElapsedEndMs = sessionElapsedEndMs
+                    )
+                    nextSegmentSequence += 1
                 } else {
                     if (event.hasError() && !noValidDataOnExpectedStop) {
                         android.util.Log.e("LiveCaptureManager", "Segment finalize error: ${event.error}, cause: ${event.cause?.message}")
@@ -572,11 +601,14 @@ class LiveCaptureManager(
                     } else {
                         android.util.Log.d("LiveCaptureManager", "Discarding short or empty segment: ${file.name}, duration: ${duration}s, size: $size")
                     }
-                    file.delete()
+                    if (!file.delete()) {
+                        android.util.Log.w("LiveCaptureManager", "Failed to delete discarded segment file ${file.absolutePath}")
+                    }
                 }
 
                 activeSegmentStartedAtMs = 0L
                 activeSegmentHasData = false
+                resetActiveSegmentTracking()
 
                 if (pendingCameraFacing != null) {
                     switchCameraAndResume(pendingCameraFacing!!)
@@ -600,8 +632,22 @@ class LiveCaptureManager(
         }
     }
 
-    private fun enqueueUpload(config: ActiveSessionConfig, file: File, durationSeconds: Int) {
+    private fun enqueueUpload(
+        config: ActiveSessionConfig,
+        file: File,
+        durationSeconds: Int,
+        segmentSequence: Int,
+        capturedAt: Instant?,
+        segmentStartedAt: Instant?,
+        segmentEndedAt: Instant,
+        sessionElapsedStartMs: Long,
+        sessionElapsedEndMs: Long
+    ) {
         val clipFacing = if (currentCameraFacing == CameraFacing.FRONT) "FRONT" else "BACK"
+        android.util.Log.i(
+            "LiveCaptureManager",
+            "Queueing segment upload sessionId=${config.sessionId} sequence=$segmentSequence durationSeconds=$durationSeconds sessionElapsedStartMs=$sessionElapsedStartMs sessionElapsedEndMs=$sessionElapsedEndMs file=${file.name}"
+        )
         val inputData = Data.Builder()
             .putString(UploadRecordingWorker.KEY_BACKEND_URL, config.backendUrl)
             .putString(UploadRecordingWorker.KEY_AUTH_TOKEN, config.authToken)
@@ -609,7 +655,12 @@ class LiveCaptureManager(
             .putString(UploadRecordingWorker.KEY_FILE_PATH, file.absolutePath)
             .putInt(UploadRecordingWorker.KEY_DURATION_SECONDS, durationSeconds)
             .putString(UploadRecordingWorker.KEY_CAMERA_FACING, clipFacing)
-            .putString(UploadRecordingWorker.KEY_CAPTURED_AT, Instant.now().toString())
+            .putString(UploadRecordingWorker.KEY_CAPTURED_AT, (capturedAt ?: segmentStartedAt ?: segmentEndedAt).toString())
+            .putInt(UploadRecordingWorker.KEY_SEGMENT_SEQUENCE, segmentSequence)
+            .putString(UploadRecordingWorker.KEY_SEGMENT_STARTED_AT, segmentStartedAt?.toString())
+            .putString(UploadRecordingWorker.KEY_SEGMENT_ENDED_AT, segmentEndedAt.toString())
+            .putLong(UploadRecordingWorker.KEY_SESSION_ELAPSED_START_MS, sessionElapsedStartMs)
+            .putLong(UploadRecordingWorker.KEY_SESSION_ELAPSED_END_MS, sessionElapsedEndMs)
             .putBoolean(UploadRecordingWorker.KEY_HIGH_QUALITY, currentHighQuality)
             .build()
 
@@ -661,6 +712,21 @@ class LiveCaptureManager(
                     notifyStopSafeToReleaseIfIdle()
                 }
             }
+        }
+    }
+
+    private fun resetActiveSegmentTracking() {
+        activeSegmentSequence = 0
+        activeSegmentCapturedAt = null
+        activeSegmentStartedAt = null
+        activeSegmentSessionElapsedStartMs = 0L
+    }
+
+    private fun sessionElapsedNowMs(fallbackMs: Long = 0L): Long {
+        return if (sessionRecordingStartedAtMs > 0L) {
+            SystemClock.elapsedRealtime() - sessionRecordingStartedAtMs
+        } else {
+            fallbackMs
         }
     }
 

@@ -13,11 +13,11 @@ services:
       redis:
         condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
       livekit:
-        condition: service_started
+        condition: service_healthy
       vosk:
-        condition: service_started
+        condition: service_healthy
     networks:
       - private
       - proxy
