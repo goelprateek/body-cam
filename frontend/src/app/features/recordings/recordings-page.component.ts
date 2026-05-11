@@ -1,16 +1,22 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { OperatorApiService } from '@features/operations/operator-api.service';
-import { RecordingResponse } from '@features/operations/operator.models';
+import {
+  RecordingResponse,
+  RecordingTranscriptResponse,
+  RecordingTranscriptSegmentResponse,
+  RecordingTranscriptStatus
+} from '@features/operations/operator.models';
 
 @Component({
   selector: 'app-recordings-page',
   standalone: true,
-  imports: [CommonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatTooltipModule],
+  imports: [CommonModule, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatTooltipModule],
   template: `
     <section class="page workspace-grid">
       <mat-card class="panel section-panel glass-panel" appearance="outlined">
@@ -50,13 +56,16 @@ import { RecordingResponse } from '@features/operations/operator.models';
                   </div>
                   <div class="duration-pill">REC</div>
                 </div>
-                
+
                 <div class="archive-details">
                   <div class="archive-header">
                     <strong class="archive-worker">{{ recording.workerName }}</strong>
+                    <span class="transcript-pill" [class]="transcriptPillClass(recording.transcriptStatus)">
+                      {{ transcriptLabel(recording.transcriptStatus) }}
+                    </span>
                   </div>
                   <span class="archive-room">{{ recording.roomName }}</span>
-                  
+
                   <div class="archive-meta">
                     <div class="meta-item">
                       <mat-icon>schedule</mat-icon>
@@ -126,6 +135,94 @@ import { RecordingResponse } from '@features/operations/operator.models';
             </div>
           </div>
         </mat-card>
+
+        <mat-card class="panel glass-panel transcript-panel" appearance="outlined">
+          <div class="section-head premium-head">
+            <div class="viewer-head-copy">
+              <h2>Transcript</h2>
+              <p class="viewer-caption">
+                {{ selectedTranscript()?.engine === 'stub'
+                  ? 'Stub transcript for flow validation until a real speech engine is added.'
+                  : 'Read what was captured in this recording.' }}
+              </p>
+            </div>
+            @if (selectedRecording()) {
+              <button
+                mat-flat-button
+                class="premium-btn"
+                type="button"
+                (click)="generateTranscript()"
+                [disabled]="isTranscriptGenerating() || isTranscriptLoading()"
+              >
+                {{ selectedTranscript()?.status === 'FAILED' ? 'Retry Transcript' : 'Generate Transcript' }}
+              </button>
+            }
+          </div>
+
+          @if (isTranscriptLoading()) {
+            <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
+          }
+
+          @if (transcriptError()) {
+            <div class="notice notice-error">{{ transcriptError() }}</div>
+          }
+
+          @if (selectedTranscript()) {
+            <div class="transcript-status-row">
+              <span class="transcript-pill transcript-pill-detail" [class]="transcriptPillClass(selectedTranscript()?.status)">
+                {{ transcriptLabel(selectedTranscript()?.status) }}
+              </span>
+              @if (selectedTranscript()?.engine) {
+                <span class="subtle-text">Engine: {{ selectedTranscript()?.engine }}</span>
+              }
+              @if (selectedTranscript()?.model) {
+                <span class="subtle-text">Model: {{ selectedTranscript()?.model }}</span>
+              }
+            </div>
+
+            @switch (selectedTranscript()?.status) {
+              @case ('NOT_REQUESTED') {
+                <div class="empty-state transcript-empty">
+                  <strong>No transcript yet</strong>
+                  <span>Generate one for this recording when the operator needs it.</span>
+                </div>
+              }
+              @case ('FAILED') {
+                <div class="notice notice-error">
+                  {{ selectedTranscript()?.errorMessage || 'Transcript generation failed.' }}
+                </div>
+              }
+              @default {
+                @if (selectedTranscript()?.fullText) {
+                  <div class="transcript-full-text">
+                    {{ selectedTranscript()?.fullText }}
+                  </div>
+                }
+
+                @if (selectedTranscript()?.segments?.length) {
+                  <div class="transcript-segments">
+                    @for (segment of selectedTranscript()?.segments || []; track segment.id || segment.segmentIndex) {
+                      <div class="transcript-segment">
+                        <span class="segment-time">{{ formatSegmentTime(segment) }}</span>
+                        <span class="segment-text">{{ segment.text }}</span>
+                      </div>
+                    }
+                  </div>
+                } @else if (selectedTranscript()?.status === 'PROCESSING' || selectedTranscript()?.status === 'PENDING') {
+                  <div class="empty-state transcript-empty">
+                    <strong>Transcript request accepted</strong>
+                    <span>The backend is preparing transcript content for this recording.</span>
+                  </div>
+                }
+              }
+            }
+          } @else {
+            <div class="empty-state transcript-empty">
+              <strong>Select a recording</strong>
+              <span>Transcript details will appear here with playback.</span>
+            </div>
+          }
+        </mat-card>
       </section>
     </section>
   `
@@ -136,10 +233,14 @@ export class RecordingsPageComponent implements OnInit {
   readonly recordings = signal<RecordingResponse[]>([]);
   readonly selectedRecordingId = signal<string | null>(null);
   readonly selectedPlaybackUrl = signal<string | null>(null);
+  readonly selectedTranscript = signal<RecordingTranscriptResponse | null>(null);
   readonly isLoading = signal(false);
   readonly isPlaybackLoading = signal(false);
+  readonly isTranscriptLoading = signal(false);
+  readonly isTranscriptGenerating = signal(false);
   readonly pageError = signal<string | null>(null);
   readonly playbackError = signal<string | null>(null);
+  readonly transcriptError = signal<string | null>(null);
 
   selectedRecording(): RecordingResponse | null {
     const selectedRecordingId = this.selectedRecordingId();
@@ -153,6 +254,44 @@ export class RecordingsPageComponent implements OnInit {
       return 'Location unavailable';
     }
     return `${latitude}, ${longitude}`;
+  }
+
+  transcriptLabel(status?: RecordingTranscriptStatus | null): string {
+    switch (status) {
+      case 'READY':
+        return 'Transcript Ready';
+      case 'PROCESSING':
+        return 'Processing';
+      case 'PENDING':
+        return 'Pending';
+      case 'FAILED':
+        return 'Failed';
+      case 'NOT_REQUESTED':
+      default:
+        return 'Not Requested';
+    }
+  }
+
+  transcriptPillClass(status?: RecordingTranscriptStatus | null): string {
+    switch (status) {
+      case 'READY':
+        return 'transcript-pill-ready';
+      case 'PROCESSING':
+      case 'PENDING':
+        return 'transcript-pill-progress';
+      case 'FAILED':
+        return 'transcript-pill-failed';
+      case 'NOT_REQUESTED':
+      default:
+        return 'transcript-pill-idle';
+    }
+  }
+
+  formatSegmentTime(segment: RecordingTranscriptSegmentResponse): string {
+    const startSeconds = Number.parseFloat(segment.startSeconds ?? '0');
+    const minutes = Math.floor(startSeconds / 60);
+    const seconds = Math.floor(startSeconds % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
   ngOnInit(): void {
@@ -181,22 +320,69 @@ export class RecordingsPageComponent implements OnInit {
   async selectRecording(id: string): Promise<void> {
     this.selectedRecordingId.set(id);
     this.selectedPlaybackUrl.set(null);
+    this.selectedTranscript.set(null);
     this.playbackError.set(null);
+    this.transcriptError.set(null);
     this.isPlaybackLoading.set(true);
+    this.isTranscriptLoading.set(true);
+
+    const [playbackResult, transcriptResult] = await Promise.allSettled([
+      this.api.getRecordingPlaybackUrl(id),
+      this.api.getRecordingTranscript(id)
+    ]);
+
+    if (this.selectedRecordingId() !== id) {
+      return;
+    }
+
+    if (playbackResult.status === 'fulfilled') {
+      this.selectedPlaybackUrl.set(playbackResult.value.playbackUrl);
+    } else {
+      this.playbackError.set(this.api.explainError(playbackResult.reason));
+    }
+
+    if (transcriptResult.status === 'fulfilled') {
+      this.selectedTranscript.set(transcriptResult.value);
+      this.patchRecordingTranscriptStatus(id, transcriptResult.value.status);
+    } else {
+      this.transcriptError.set(this.api.explainError(transcriptResult.reason));
+    }
+
+    this.isPlaybackLoading.set(false);
+    this.isTranscriptLoading.set(false);
+  }
+
+  async generateTranscript(): Promise<void> {
+    const recording = this.selectedRecording();
+    if (!recording) {
+      return;
+    }
+
+    this.isTranscriptGenerating.set(true);
+    this.transcriptError.set(null);
 
     try {
-      const response = await this.api.getRecordingPlaybackUrl(id);
-      if (this.selectedRecordingId() === id) {
-        this.selectedPlaybackUrl.set(response.playbackUrl);
+      const transcript = await this.api.generateRecordingTranscript(recording.id);
+      if (this.selectedRecordingId() === recording.id) {
+        this.selectedTranscript.set(transcript);
+        this.patchRecordingTranscriptStatus(recording.id, transcript.status);
       }
     } catch (error) {
-      if (this.selectedRecordingId() === id) {
-        this.playbackError.set(this.api.explainError(error));
+      if (this.selectedRecordingId() === recording.id) {
+        this.transcriptError.set(this.api.explainError(error));
       }
     } finally {
-      if (this.selectedRecordingId() === id) {
-        this.isPlaybackLoading.set(false);
-      }
+      this.isTranscriptGenerating.set(false);
     }
+  }
+
+  private patchRecordingTranscriptStatus(recordingId: string, status: RecordingTranscriptStatus): void {
+    this.recordings.update((recordings) =>
+      recordings.map((recording) =>
+        recording.id === recordingId
+          ? { ...recording, transcriptStatus: status }
+          : recording
+      )
+    );
   }
 }

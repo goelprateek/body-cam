@@ -216,7 +216,8 @@ public class RecordingService {
                 null,
                 asset.getDurationSeconds(),
                 asset.getCreatedAt(),
-                mapMetadata(asset.getMetadata())
+                mapMetadata(asset.getMetadata()),
+                asset.getTranscript() == null ? null : asset.getTranscript().getStatus()
         );
     }
 

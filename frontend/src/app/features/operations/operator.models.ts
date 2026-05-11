@@ -54,6 +54,38 @@ export interface RecordingMetadataResponse {
   sensorPayload: unknown;
 }
 
+export type RecordingTranscriptStatus =
+  | 'NOT_REQUESTED'
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'READY'
+  | 'FAILED';
+
+export interface RecordingTranscriptSegmentResponse {
+  id: string;
+  segmentIndex: number;
+  startSeconds: string;
+  endSeconds: string;
+  text: string;
+  confidence: string | null;
+}
+
+export interface RecordingTranscriptResponse {
+  id: string | null;
+  recordingId: string;
+  status: RecordingTranscriptStatus;
+  engine: string | null;
+  model: string | null;
+  languageCode: string | null;
+  fullText: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  segments: RecordingTranscriptSegmentResponse[];
+}
+
 export interface RecordingResponse {
   id: string;
   sessionId: string;
@@ -65,6 +97,7 @@ export interface RecordingResponse {
   durationSeconds: number | null;
   createdAt: string;
   metadata?: RecordingMetadataResponse | null;
+  transcriptStatus?: RecordingTranscriptStatus | null;
 }
 
 export interface RecordingPlaybackResponse {

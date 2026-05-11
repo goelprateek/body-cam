@@ -3,6 +3,8 @@ package com.kriyanshtech.bodycam.recording.dto;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.kriyanshtech.bodycam.recording.entity.RecordingTranscriptStatus;
+
 public record RecordingResponse(
         UUID id,
         UUID sessionId,
@@ -13,6 +15,7 @@ public record RecordingResponse(
         String playbackUrl,
         Integer durationSeconds,
         Instant createdAt,
-        RecordingMetadataResponse metadata
+        RecordingMetadataResponse metadata,
+        RecordingTranscriptStatus transcriptStatus
 ) {
 }

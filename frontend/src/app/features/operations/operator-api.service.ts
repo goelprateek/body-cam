@@ -9,6 +9,7 @@ import {
   PageResponse,
   RecordingPlaybackResponse,
   RecordingResponse,
+  RecordingTranscriptResponse,
   SessionResponse
 } from './operator.models';
 
@@ -104,6 +105,26 @@ export class OperatorApiService {
       this.http.get<RecordingPlaybackResponse>(this.url(`/recordings/${recordingId}/playback-url`), {
         headers: this.authHeaders()
       })
+    );
+  }
+
+  async getRecordingTranscript(recordingId: string): Promise<RecordingTranscriptResponse> {
+    return firstValueFrom(
+      this.http.get<RecordingTranscriptResponse>(this.url(`/recordings/${recordingId}/transcript`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async generateRecordingTranscript(recordingId: string): Promise<RecordingTranscriptResponse> {
+    return firstValueFrom(
+      this.http.post<RecordingTranscriptResponse>(
+        this.url(`/recordings/${recordingId}/transcript/generate`),
+        {},
+        {
+          headers: this.authHeaders()
+        }
+      )
     );
   }
 

@@ -40,6 +40,9 @@ public class RecordingAsset {
     @OneToOne(mappedBy = "recording", fetch = FetchType.LAZY)
     private RecordingMetadata metadata;
 
+    @OneToOne(mappedBy = "recording", fetch = FetchType.LAZY)
+    private RecordingTranscript transcript;
+
     public UUID getId() {
         return id;
     }
@@ -94,5 +97,13 @@ public class RecordingAsset {
 
     public void setMetadata(RecordingMetadata metadata) {
         this.metadata = metadata;
+    }
+
+    public RecordingTranscript getTranscript() {
+        return transcript;
+    }
+
+    public void setTranscript(RecordingTranscript transcript) {
+        this.transcript = transcript;
     }
 }
