@@ -10,7 +10,7 @@ services:
       DB_HOST: postgres
       LIVEKIT_URL: ws://livekit:7880
       MINIO_ENDPOINT: http://minio:9000
-      TRANSCRIPT_VOSK_URL: ws://transcription:2700
+      TRANSCRIPT_VOSK_URL: ws://vosk:2700
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -22,7 +22,7 @@ services:
         condition: service_started
       livekit:
         condition: service_started
-      transcription:
+      vosk:
         condition: service_started
     healthcheck:
       test:

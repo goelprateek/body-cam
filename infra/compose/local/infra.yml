@@ -24,14 +24,20 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9000/minio/health/live || exit 1"]
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://127.0.0.1:9000/minio/health/live",
+        ]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 20s
     restart: unless-stopped
 
-  transcription:
+  vosk:
     image: ${TRANSCRIPT_IMAGE:-alphacep/kaldi-en:latest}
     ports:
       - "${TRANSCRIPT_PORT:-2700}:2700"

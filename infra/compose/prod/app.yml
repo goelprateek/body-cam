@@ -16,7 +16,7 @@ services:
         condition: service_started
       livekit:
         condition: service_started
-      transcription:
+      vosk:
         condition: service_started
     networks:
       - private
