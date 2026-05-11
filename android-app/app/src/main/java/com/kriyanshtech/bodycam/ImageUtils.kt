@@ -9,7 +9,7 @@ import androidx.camera.core.ImageProxy
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
-fun ImageProxy.toBitmap(): Bitmap {
+fun ImageProxy.toBitmapCompatible(): Bitmap {
     val nv21 = yuv420888ToNv21(this)
     val yuvImage = YuvImage(nv21, ImageFormat.NV21, width, height, null)
     val out = ByteArrayOutputStream()

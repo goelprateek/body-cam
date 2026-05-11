@@ -1068,6 +1068,43 @@ button:not(:disabled):hover {
   gap: 0.75rem;
 }
 
+.transcript-search-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+
+.transcript-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.8rem 0.95rem;
+  font: inherit;
+  color: var(--ink);
+}
+
+.transcript-search-input:focus {
+  outline: none;
+  border-color: rgba(53, 123, 166, 0.35);
+  box-shadow: 0 0 0 3px rgba(53, 123, 166, 0.12);
+}
+
+.transcript-search-meta {
+  margin-bottom: 0.85rem;
+}
+
+.transcript-search-clear {
+  white-space: nowrap;
+}
+
+:root.dark-theme .transcript-search-input {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
 .transcript-segment {
   display: grid;
   grid-template-columns: 4rem minmax(0, 1fr);
@@ -1081,6 +1118,27 @@ button:not(:disabled):hover {
 :root.dark-theme .transcript-segment {
   background: rgba(0, 0, 0, 0.15);
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+.transcript-segment-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.transcript-segment-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(97, 183, 72, 0.32);
+}
+
+.transcript-segment-active {
+  border-color: rgba(97, 183, 72, 0.5);
+  background: rgba(97, 183, 72, 0.12);
+}
+
+:root.dark-theme .transcript-segment-active {
+  background: rgba(97, 183, 72, 0.16);
 }
 
 .segment-time {
@@ -1821,8 +1879,47 @@ html, body, .mat-typography,
   color: var(--danger);
 }
 
+.timeline-summary-pill-success {
+  background: rgba(97, 183, 72, 0.1);
+  border-color: rgba(97, 183, 72, 0.2);
+  color: #3d7c28;
+}
+
+.timeline-summary-pill-success mat-icon {
+  color: #4f9734;
+}
+
+.timeline-summary-pill-info {
+  background: rgba(53, 123, 166, 0.08);
+  border-color: rgba(53, 123, 166, 0.18);
+  color: #1f5879;
+}
+
+.timeline-summary-pill-info mat-icon {
+  color: #2c78a4;
+}
+
+.timeline-summary-pill-neutral {
+  background: rgba(26, 31, 35, 0.06);
+  border-color: rgba(26, 31, 35, 0.12);
+}
+
 :root.dark-theme .timeline-summary-pill {
   background: rgba(255, 255, 255, 0.06);
+}
+
+:root.dark-theme .timeline-summary-pill-success {
+  background: rgba(97, 183, 72, 0.16);
+  color: #c8ecb8;
+}
+
+:root.dark-theme .timeline-summary-pill-info {
+  background: rgba(53, 123, 166, 0.16);
+  color: #c5e2f4;
+}
+
+:root.dark-theme .timeline-summary-pill-neutral {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .timeline-segment-strip {

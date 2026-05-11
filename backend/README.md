@@ -41,10 +41,12 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - Transcript generation now uses a pluggable engine boundary selected by `APP_TRANSCRIPT_ENGINE`.
 - `vosk` is the first engine and keeps the current self-hosted WebSocket flow.
 - `faster-whisper` is now implemented as a second engine option for the planned quality-upgrade path.
+- Transcript requests are now queued in the backend and processed asynchronously by a scheduled background runner instead of blocking the request path.
 - Audio extraction is now handled through embedded JavaCV native bindings instead of shelling out to a host or container `ffmpeg` binary.
 - That means local IDE runs and backend containers no longer require a separately installed `ffmpeg`.
 - The transcript DB and API contract stays engine-neutral so a later move to `whisper.cpp` can remain a backend engine swap.
 - The backend now also exposes session-level transcript aggregation so continuous session playback and transcript review follow the same ordered segment timeline.
+- The transcript poll loop delay is configurable with `APP_TRANSCRIPT_POLL_DELAY_MS`, defaulting to `5000`.
 - The `faster-whisper` engine expects an OpenAI-compatible self-hosted transcription endpoint, defaulting to `TRANSCRIPT_FASTER_WHISPER_URL=http://localhost:8001/v1/audio/transcriptions`.
 - When you are ready to switch, set:
   `APP_TRANSCRIPT_ENGINE=faster-whisper`
@@ -79,6 +81,7 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - `GET /api/recordings/{id}/playback-url`
 - `GET /api/sessions/{id}/recordings/timeline`
 - `GET /api/sessions/{id}/transcript`
+- `GET /api/sessions/{id}/transcript/search?q=...`
 - `GET /api/sessions/{id}/transcript/subtitles.vtt`
 - `POST /api/sessions/{id}/transcript/generate`
 - `GET /api/recordings/{id}/transcript`

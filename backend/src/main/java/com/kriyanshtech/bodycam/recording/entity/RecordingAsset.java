@@ -28,6 +28,9 @@ public class RecordingAsset {
     @Column(name = "object_key", nullable = false)
     private String objectKey;
 
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
     @Column(name = "playback_url")
     private String playbackUrl;
 
@@ -65,6 +68,14 @@ public class RecordingAsset {
 
     public void setObjectKey(String objectKey) {
         this.objectKey = objectKey;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public String getPlaybackUrl() {

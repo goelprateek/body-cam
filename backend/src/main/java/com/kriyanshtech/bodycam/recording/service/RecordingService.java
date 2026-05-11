@@ -12,6 +12,7 @@ import com.kriyanshtech.bodycam.recording.dto.RecordingMetadataRequest;
 import com.kriyanshtech.bodycam.recording.dto.RecordingMetadataResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingPlaybackResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingResponse;
+import com.kriyanshtech.bodycam.recording.dto.SessionRecordingIntegrityStatus;
 import com.kriyanshtech.bodycam.recording.dto.SessionRecordingTimelineResponse;
 import com.kriyanshtech.bodycam.recording.dto.SessionRecordingTimelineSegmentResponse;
 import com.kriyanshtech.bodycam.recording.entity.RecordingAsset;
@@ -89,13 +90,17 @@ public class RecordingService {
                 .max(Long::compareTo)
                 .orElseGet(() -> estimateTotalDurationMs(segments));
 
-        boolean hasTimelineGaps = detectTimelineGaps(segments);
+        TimelineIntegrityEvaluation integrity = evaluateTimelineIntegrity(session, segments);
         log.info(
-                "Built session recording timeline sessionId={} segmentCount={} totalDurationMs={} hasTimelineGaps={}",
+                "Built session recording timeline sessionId={} segmentCount={} totalDurationMs={} integrityStatus={} hasTimelineGaps={} duplicateSegmentCount={} missingSequenceCount={} segmentsMissingTimingCount={}",
                 sessionId,
                 segments.size(),
                 totalDurationMs,
-                hasTimelineGaps
+                integrity.integrityStatus(),
+                integrity.hasTimelineGaps(),
+                integrity.duplicateSegmentCount(),
+                integrity.missingSequenceCount(),
+                integrity.segmentsMissingTimingCount()
         );
 
         return new SessionRecordingTimelineResponse(
@@ -107,7 +112,11 @@ public class RecordingService {
                 session.getStartedAt(),
                 session.getEndedAt(),
                 totalDurationMs,
-                hasTimelineGaps,
+                integrity.integrityStatus(),
+                integrity.hasTimelineGaps(),
+                integrity.duplicateSegmentCount(),
+                integrity.missingSequenceCount(),
+                integrity.segmentsMissingTimingCount(),
                 segments
         );
     }
@@ -127,6 +136,7 @@ public class RecordingService {
         return saveRecording(
                 session,
                 request.objectKey(),
+                buildIdempotencyKey(request.sessionId(), request.metadata()),
                 null,
                 request.durationSeconds(),
                 request.metadata()
@@ -147,17 +157,33 @@ public class RecordingService {
             throw new IllegalArgumentException("Recording segment file is required");
         }
 
+        String idempotencyKey = buildIdempotencyKey(sessionId, metadata);
+        if (idempotencyKey != null) {
+            RecordingAsset existingRecording = recordingAssetRepository.findByIdempotencyKey(idempotencyKey).orElse(null);
+            if (existingRecording != null) {
+                log.info(
+                        "Reusing existing recording for duplicate upload sessionId={} idempotencyKey={} recordingId={} objectKey={}",
+                        sessionId,
+                        idempotencyKey,
+                        existingRecording.getId(),
+                        existingRecording.getObjectKey()
+                );
+                return map(existingRecording);
+            }
+        }
+
         String extension = extensionFor(file.getOriginalFilename(), file.getContentType());
         String objectKey = "sessions/%s/%s%s".formatted(sessionId, UUID.randomUUID(), extension);
         log.info(
-                "Uploading recording for sessionId={} originalFilename={} sizeBytes={} contentType={} durationSeconds={} metadataPresent={} objectKey={}",
+                "Uploading recording for sessionId={} originalFilename={} sizeBytes={} contentType={} durationSeconds={} metadataPresent={} objectKey={} idempotencyKey={}",
                 sessionId,
                 file.getOriginalFilename(),
                 file.getSize(),
                 file.getContentType(),
                 durationSeconds,
                 metadata != null,
-                objectKey
+                objectKey,
+                idempotencyKey
         );
 
         try (var inputStream = file.getInputStream()) {
@@ -177,6 +203,7 @@ public class RecordingService {
         return saveRecording(
                 session,
                 objectKey,
+                idempotencyKey,
                 null,
                 durationSeconds,
                 metadata
@@ -186,6 +213,7 @@ public class RecordingService {
     private RecordingResponse saveRecording(
             LiveSession session,
             String objectKey,
+            String idempotencyKey,
             String playbackUrl,
             Integer durationSeconds,
             RecordingMetadataRequest metadata
@@ -194,16 +222,18 @@ public class RecordingService {
         recordingAsset.setId(UUID.randomUUID());
         recordingAsset.setSession(session);
         recordingAsset.setObjectKey(objectKey);
+        recordingAsset.setIdempotencyKey(idempotencyKey);
         recordingAsset.setPlaybackUrl(playbackUrl);
         recordingAsset.setDurationSeconds(durationSeconds);
         recordingAsset.setCreatedAt(Instant.now());
         RecordingAsset savedRecording = recordingAssetRepository.save(recordingAsset);
         log.info(
-                "Saved recording asset id={} sessionId={} objectKey={} durationSeconds={}",
+                "Saved recording asset id={} sessionId={} objectKey={} durationSeconds={} idempotencyKey={}",
                 savedRecording.getId(),
                 session.getId(),
                 objectKey,
-                durationSeconds
+                durationSeconds,
+                idempotencyKey
         );
 
         if (metadata != null) {
@@ -327,32 +357,98 @@ public class RecordingService {
         return total;
     }
 
-    private boolean detectTimelineGaps(List<SessionRecordingTimelineSegmentResponse> segments) {
+    private TimelineIntegrityEvaluation evaluateTimelineIntegrity(
+            LiveSession session,
+            List<SessionRecordingTimelineSegmentResponse> segments) {
         Integer expectedNextSequence = null;
         Long previousEndMs = null;
+        int duplicateSegmentCount = 0;
+        int missingSequenceCount = 0;
+        int segmentsMissingTimingCount = 0;
+        boolean hasTimelineGaps = false;
 
         for (SessionRecordingTimelineSegmentResponse segment : segments) {
+            boolean missingTimingForSegment = false;
             Integer sequence = segment.segmentSequence();
             if (sequence != null) {
-                if (expectedNextSequence != null && !sequence.equals(expectedNextSequence)) {
-                    return true;
+                if (expectedNextSequence != null) {
+                    if (sequence.equals(expectedNextSequence)) {
+                        expectedNextSequence = sequence + 1;
+                    } else if (sequence > expectedNextSequence) {
+                        missingSequenceCount += sequence - expectedNextSequence;
+                        expectedNextSequence = sequence + 1;
+                        hasTimelineGaps = true;
+                    } else {
+                        duplicateSegmentCount++;
+                        hasTimelineGaps = true;
+                    }
+                } else {
+                    expectedNextSequence = sequence + 1;
                 }
-                expectedNextSequence = sequence + 1;
             }
 
             if (previousEndMs != null
                     && segment.sessionElapsedStartMs() != null
                     && segment.sessionElapsedStartMs() > previousEndMs + TIMELINE_GAP_THRESHOLD_MS) {
-                return true;
+                hasTimelineGaps = true;
+            }
+
+            if (previousEndMs != null
+                    && segment.sessionElapsedStartMs() != null
+                    && segment.sessionElapsedStartMs() < previousEndMs - TIMELINE_GAP_THRESHOLD_MS) {
+                hasTimelineGaps = true;
             }
 
             if (segment.sessionElapsedEndMs() != null) {
                 previousEndMs = segment.sessionElapsedEndMs();
             } else if (segment.sessionElapsedStartMs() != null && segment.durationSeconds() != null) {
                 previousEndMs = segment.sessionElapsedStartMs() + (segment.durationSeconds() * 1000L);
+            } else {
+                missingTimingForSegment = true;
+            }
+
+            if (segment.sessionElapsedStartMs() == null || segment.sessionElapsedEndMs() == null) {
+                missingTimingForSegment = true;
+            }
+
+            if (missingTimingForSegment) {
+                segmentsMissingTimingCount++;
             }
         }
 
-        return false;
+        SessionRecordingIntegrityStatus integrityStatus;
+        if (hasTimelineGaps || duplicateSegmentCount > 0 || missingSequenceCount > 0) {
+            integrityStatus = SessionRecordingIntegrityStatus.HAS_GAPS;
+        } else if (session.getEndedAt() == null) {
+            integrityStatus = SessionRecordingIntegrityStatus.PROCESSING_UPLOADS;
+        } else if (segments.isEmpty() || segmentsMissingTimingCount > 0) {
+            integrityStatus = SessionRecordingIntegrityStatus.PARTIAL;
+        } else {
+            integrityStatus = SessionRecordingIntegrityStatus.COMPLETE;
+        }
+
+        return new TimelineIntegrityEvaluation(
+                integrityStatus,
+                hasTimelineGaps,
+                duplicateSegmentCount,
+                missingSequenceCount,
+                segmentsMissingTimingCount
+        );
+    }
+
+    private String buildIdempotencyKey(UUID sessionId, RecordingMetadataRequest metadata) {
+        if (sessionId == null || metadata == null || metadata.segmentSequence() == null) {
+            return null;
+        }
+        return sessionId + ":" + metadata.segmentSequence();
+    }
+
+    private record TimelineIntegrityEvaluation(
+            SessionRecordingIntegrityStatus integrityStatus,
+            boolean hasTimelineGaps,
+            int duplicateSegmentCount,
+            int missingSequenceCount,
+            int segmentsMissingTimingCount
+    ) {
     }
 }

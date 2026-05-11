@@ -13,7 +13,11 @@ public record SessionRecordingTimelineResponse(
         Instant sessionStartedAt,
         Instant sessionEndedAt,
         Long totalDurationMs,
+        SessionRecordingIntegrityStatus integrityStatus,
         boolean hasTimelineGaps,
+        int duplicateSegmentCount,
+        int missingSequenceCount,
+        int segmentsMissingTimingCount,
         List<SessionRecordingTimelineSegmentResponse> segments
 ) {
 }

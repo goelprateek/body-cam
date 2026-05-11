@@ -5,6 +5,7 @@ import com.kriyanshtech.bodycam.config.AppProperties;
 import com.kriyanshtech.bodycam.recording.dto.RecordingTranscriptResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingTranscriptSegmentResponse;
 import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptResponse;
+import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSearchResponse;
 import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSegmentResponse;
 import com.kriyanshtech.bodycam.recording.entity.RecordingAsset;
 import com.kriyanshtech.bodycam.recording.entity.RecordingTranscript;
@@ -25,7 +26,6 @@ import org.springframework.web.util.HtmlUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -75,13 +75,18 @@ public class RecordingTranscriptService {
 
     @Transactional
     public RecordingTranscriptResponse generateTranscript(UUID recordingId) {
-        if (!appProperties.transcript().enabled()) {
-            throw new IllegalStateException("Transcript generation is disabled in backend configuration");
-        }
-
+        assertTranscriptEnabled();
         RecordingAsset recording = recordingAssetRepository.findById(recordingId)
                 .orElseThrow(() -> new NotFoundException("Recording not found: " + recordingId));
-        return generateTranscript(recording);
+        RecordingTranscript transcript = enqueueTranscript(recording, true);
+        log.info(
+                "Queued transcript generation recordingId={} transcriptId={} status={} engine={}",
+                recordingId,
+                transcript.getId(),
+                transcript.getStatus(),
+                transcript.getEngine()
+        );
+        return map(transcript);
     }
 
     @Transactional(readOnly = true)
@@ -90,26 +95,70 @@ public class RecordingTranscriptService {
         return aggregateSessionTranscript(sessionId, recordings);
     }
 
+    @Transactional
     public SessionTranscriptResponse generateSessionTranscript(UUID sessionId) {
-        if (!appProperties.transcript().enabled()) {
-            throw new IllegalStateException("Transcript generation is disabled in backend configuration");
-        }
-
+        assertTranscriptEnabled();
         List<RecordingAsset> recordings = orderedSessionRecordings(sessionId);
-        int generatedCount = 0;
-        log.info("Session transcript generation started sessionId={} recordingCount={}", sessionId, recordings.size());
+        int queuedCount = 0;
+        log.info("Session transcript generation queued sessionId={} recordingCount={}", sessionId, recordings.size());
 
         for (RecordingAsset recording : recordings) {
-            RecordingTranscript transcript = recording.getTranscript();
-            if (transcript != null && transcript.getStatus() == RecordingTranscriptStatus.READY) {
-                continue;
+            RecordingTranscript transcript = enqueueTranscript(recording, true);
+            if (transcript.getStatus() == RecordingTranscriptStatus.PENDING
+                    || transcript.getStatus() == RecordingTranscriptStatus.PROCESSING) {
+                queuedCount++;
             }
-            generateTranscript(recording);
-            generatedCount++;
         }
 
-        log.info("Session transcript generation completed sessionId={} generatedRecordings={}", sessionId, generatedCount);
+        log.info("Session transcript generation request completed sessionId={} queuedRecordings={}", sessionId, queuedCount);
         return aggregateSessionTranscript(sessionId, orderedSessionRecordings(sessionId));
+    }
+
+    @Transactional(readOnly = true)
+    public SessionTranscriptSearchResponse searchSessionTranscript(UUID sessionId, String query) {
+        String normalizedQuery = query == null ? "" : query.trim();
+        if (normalizedQuery.isBlank()) {
+            throw new IllegalArgumentException("Session transcript search query is required");
+        }
+
+        SessionTranscriptResponse transcript = getSessionTranscript(sessionId);
+        String loweredQuery = normalizedQuery.toLowerCase(Locale.ROOT);
+        List<SessionTranscriptSegmentResponse> matches = transcript.segments().stream()
+                .filter(segment -> segment.text() != null && segment.text().toLowerCase(Locale.ROOT).contains(loweredQuery))
+                .toList();
+
+        log.info(
+                "Session transcript search completed sessionId={} queryLength={} totalMatches={} transcriptStatus={}",
+                sessionId,
+                normalizedQuery.length(),
+                matches.size(),
+                transcript.status()
+        );
+        return new SessionTranscriptSearchResponse(
+                sessionId,
+                normalizedQuery,
+                transcript.status(),
+                matches.size(),
+                matches
+        );
+    }
+
+    @Transactional
+    public int processPendingTranscripts() {
+        if (!appProperties.transcript().enabled()) {
+            return 0;
+        }
+
+        int processedCount = 0;
+        while (true) {
+            UUID transcriptId = claimNextPendingTranscript();
+            if (transcriptId == null) {
+                break;
+            }
+            processClaimedTranscript(transcriptId);
+            processedCount++;
+        }
+        return processedCount;
     }
 
     @Transactional(readOnly = true)
@@ -133,60 +182,6 @@ public class RecordingTranscriptService {
         return builder.toString();
     }
 
-    private RecordingTranscriptResponse generateTranscript(RecordingAsset recording) {
-        UUID recordingId = recording.getId();
-
-        RecordingTranscript transcript = recordingTranscriptRepository.findByRecording_Id(recordingId)
-                .orElseGet(() -> createTranscript(recording));
-
-        RecordingTranscriptEngine engine = requiredEngine();
-        Instant startedAt = Instant.now();
-        transcript.setStatus(RecordingTranscriptStatus.PROCESSING);
-        transcript.setEngine(engine.key());
-        transcript.setModel(null);
-        transcript.setLanguageCode(appProperties.transcript().languageCode());
-        transcript.setErrorMessage(null);
-        transcript.setStartedAt(startedAt);
-        transcript.setCompletedAt(null);
-        transcript.setUpdatedAt(startedAt);
-        transcript.replaceSegments(List.of());
-        recordingTranscriptRepository.save(transcript);
-        log.info("Transcript generation started recordingId={} transcriptId={} objectKey={} engine={}",
-                recordingId, transcript.getId(), recording.getObjectKey(), engine.key());
-
-        Path sourceVideoPath = null;
-        try {
-            sourceVideoPath = downloadRecordingToTempFile(recording);
-            RecordingTranscriptGenerationResult result = engine.generate(sourceVideoPath, recordingId,
-                    transcript.getId());
-
-            transcript.setEngine(result.engine());
-            transcript.setModel(result.model());
-            transcript.setLanguageCode(result.languageCode());
-            transcript.setFullText(result.fullText());
-            transcript.replaceSegments(toSegments(transcript, result.segments(), Instant.now()));
-            transcript.setStatus(RecordingTranscriptStatus.READY);
-            transcript.setCompletedAt(Instant.now());
-            transcript.setUpdatedAt(Instant.now());
-            RecordingTranscript savedTranscript = recordingTranscriptRepository.save(transcript);
-            log.info("Transcript generation completed recordingId={} transcriptId={} engine={} segmentCount={}",
-                    recordingId, savedTranscript.getId(), result.engine(), savedTranscript.getSegments().size());
-            return map(savedTranscript);
-        } catch (Exception exception) {
-            transcript.replaceSegments(List.of());
-            transcript.setStatus(RecordingTranscriptStatus.FAILED);
-            transcript.setErrorMessage(exception.getMessage());
-            transcript.setCompletedAt(Instant.now());
-            transcript.setUpdatedAt(Instant.now());
-            recordingTranscriptRepository.save(transcript);
-            log.error("Transcript generation failed recordingId={} transcriptId={} engine={}",
-                    recordingId, transcript.getId(), engine.key(), exception);
-            return map(transcript);
-        } finally {
-            deleteIfExists(sourceVideoPath);
-        }
-    }
-
     @Transactional(readOnly = true)
     public String buildSubtitleVtt(UUID recordingId) {
         RecordingTranscript transcript = recordingTranscriptRepository.findByRecording_Id(recordingId)
@@ -207,6 +202,143 @@ public class RecordingTranscriptService {
                     .append("\n\n");
         }
         return builder.toString();
+    }
+
+    @Transactional
+    protected UUID claimNextPendingTranscript() {
+        RecordingTranscript transcript = recordingTranscriptRepository.findFirstByStatusOrderByCreatedAtAsc(RecordingTranscriptStatus.PENDING)
+                .orElse(null);
+        if (transcript == null) {
+            return null;
+        }
+
+        Instant now = Instant.now();
+        transcript.setStatus(RecordingTranscriptStatus.PROCESSING);
+        transcript.setStartedAt(now);
+        transcript.setCompletedAt(null);
+        transcript.setErrorMessage(null);
+        transcript.setUpdatedAt(now);
+        recordingTranscriptRepository.save(transcript);
+        log.info(
+                "Claimed transcript job recordingId={} transcriptId={} engine={}",
+                transcript.getRecording().getId(),
+                transcript.getId(),
+                transcript.getEngine()
+        );
+        return transcript.getId();
+    }
+
+    private void processClaimedTranscript(UUID transcriptId) {
+        RecordingTranscript transcript = recordingTranscriptRepository.findById(transcriptId)
+                .orElseThrow(() -> new NotFoundException("Transcript not found: " + transcriptId));
+
+        if (transcript.getStatus() != RecordingTranscriptStatus.PROCESSING) {
+            log.info(
+                    "Skipping transcript processing because job is no longer claimable recordingId={} transcriptId={} status={}",
+                    transcript.getRecording().getId(),
+                    transcriptId,
+                    transcript.getStatus()
+            );
+            return;
+        }
+
+        RecordingTranscriptEngine engine = requiredEngine();
+        transcript.setEngine(engine.key());
+        transcript.setLanguageCode(appProperties.transcript().languageCode());
+        transcript.setUpdatedAt(Instant.now());
+        recordingTranscriptRepository.save(transcript);
+
+        UUID recordingId = transcript.getRecording().getId();
+        Path sourceVideoPath = null;
+        log.info(
+                "Transcript generation started recordingId={} transcriptId={} objectKey={} engine={}",
+                recordingId,
+                transcript.getId(),
+                transcript.getRecording().getObjectKey(),
+                engine.key()
+        );
+
+        try {
+            sourceVideoPath = downloadRecordingToTempFile(transcript.getRecording());
+            RecordingTranscriptGenerationResult result = engine.generate(sourceVideoPath, recordingId, transcript.getId());
+
+            finalizeTranscriptSuccess(transcript.getId(), result);
+        } catch (Exception exception) {
+            finalizeTranscriptFailure(transcript.getId(), engine.key(), exception);
+        } finally {
+            deleteIfExists(sourceVideoPath);
+        }
+    }
+
+    @Transactional
+    protected void finalizeTranscriptSuccess(UUID transcriptId, RecordingTranscriptGenerationResult result) {
+        RecordingTranscript transcript = recordingTranscriptRepository.findById(transcriptId)
+                .orElseThrow(() -> new NotFoundException("Transcript not found: " + transcriptId));
+
+        transcript.setEngine(result.engine());
+        transcript.setModel(result.model());
+        transcript.setLanguageCode(result.languageCode());
+        transcript.setFullText(result.fullText());
+        transcript.replaceSegments(toSegments(transcript, result.segments(), Instant.now()));
+        transcript.setStatus(RecordingTranscriptStatus.READY);
+        transcript.setErrorMessage(null);
+        transcript.setCompletedAt(Instant.now());
+        transcript.setUpdatedAt(Instant.now());
+        RecordingTranscript savedTranscript = recordingTranscriptRepository.save(transcript);
+        log.info(
+                "Transcript generation completed recordingId={} transcriptId={} engine={} segmentCount={}",
+                savedTranscript.getRecording().getId(),
+                savedTranscript.getId(),
+                result.engine(),
+                savedTranscript.getSegments().size()
+        );
+    }
+
+    @Transactional
+    protected void finalizeTranscriptFailure(UUID transcriptId, String engineKey, Exception exception) {
+        RecordingTranscript transcript = recordingTranscriptRepository.findById(transcriptId)
+                .orElseThrow(() -> new NotFoundException("Transcript not found: " + transcriptId));
+
+        transcript.replaceSegments(List.of());
+        transcript.setStatus(RecordingTranscriptStatus.FAILED);
+        transcript.setErrorMessage(exception.getMessage());
+        transcript.setCompletedAt(Instant.now());
+        transcript.setUpdatedAt(Instant.now());
+        recordingTranscriptRepository.save(transcript);
+        log.error(
+                "Transcript generation failed recordingId={} transcriptId={} engine={}",
+                transcript.getRecording().getId(),
+                transcript.getId(),
+                engineKey,
+                exception
+        );
+    }
+
+    private RecordingTranscript enqueueTranscript(RecordingAsset recording, boolean forceRegeneration) {
+        RecordingTranscript transcript = recordingTranscriptRepository.findByRecording_Id(recording.getId())
+                .orElseGet(() -> createTranscript(recording));
+
+        if (!forceRegeneration && transcript.getStatus() == RecordingTranscriptStatus.READY) {
+            return transcript;
+        }
+
+        if (transcript.getStatus() == RecordingTranscriptStatus.PROCESSING) {
+            log.info("Transcript already processing recordingId={} transcriptId={}", recording.getId(), transcript.getId());
+            return transcript;
+        }
+
+        Instant now = Instant.now();
+        transcript.setStatus(RecordingTranscriptStatus.PENDING);
+        transcript.setEngine(requiredEngine().key());
+        transcript.setModel(null);
+        transcript.setLanguageCode(appProperties.transcript().languageCode());
+        transcript.setFullText(null);
+        transcript.setErrorMessage(null);
+        transcript.setStartedAt(null);
+        transcript.setCompletedAt(null);
+        transcript.setUpdatedAt(now);
+        transcript.replaceSegments(List.of());
+        return recordingTranscriptRepository.save(transcript);
     }
 
     private SessionTranscriptResponse aggregateSessionTranscript(UUID sessionId, List<RecordingAsset> recordings) {
@@ -359,6 +491,12 @@ public class RecordingTranscriptService {
             throw new IllegalStateException("Unsupported transcript engine configured: " + configuredEngine);
         }
         return engine;
+    }
+
+    private void assertTranscriptEnabled() {
+        if (!appProperties.transcript().enabled()) {
+            throw new IllegalStateException("Transcript generation is disabled in backend configuration");
+        }
     }
 
     private RecordingTranscriptResponse notRequested(RecordingAsset recording) {

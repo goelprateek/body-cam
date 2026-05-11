@@ -54,6 +54,7 @@ app:
     engine: ${APP_TRANSCRIPT_ENGINE:vosk}
     vosk-url: ${TRANSCRIPT_VOSK_URL:ws://localhost:2700}
     language-code: ${APP_TRANSCRIPT_LANGUAGE_CODE:en-ZA}
+    poll-delay-ms: ${APP_TRANSCRIPT_POLL_DELAY_MS:5000}
     faster-whisper:
       url: ${TRANSCRIPT_FASTER_WHISPER_URL:http://localhost:8001/v1/audio/transcriptions}
       model: ${TRANSCRIPT_FASTER_WHISPER_MODEL:large-v3}

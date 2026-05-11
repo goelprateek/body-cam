@@ -70,11 +70,13 @@ class LiveCaptureManager(
     private val workManager = WorkManager.getInstance(appContext)
     private val _state = MutableStateFlow(CaptureRuntimeState())
     private val pendingUploadIds = linkedSetOf<UUID>()
+    private val uploadWorkStates = linkedMapOf<UUID, WorkInfo.State>()
 
     private var previewView: PreviewView? = null
     private var room: Room? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private var videoCapture: VideoCapture<Recorder>? = null
+    private var previewUseCase: Preview? = null
     private var activeRecording: Recording? = null
     private var localVideoTrack: LocalVideoTrack? = null
     private var videoCapturer: BitmapFrameCapturer? = null
@@ -109,8 +111,18 @@ class LiveCaptureManager(
         activeRecording?.stop()
     }
 
-    fun bindPreview(previewView: PreviewView, lifecycleOwner: LifecycleOwner) {
+    fun bindPreview(previewView: PreviewView) {
         this.previewView = previewView
+        mainHandler.post {
+            previewUseCase?.setSurfaceProvider(previewView.surfaceProvider)
+        }
+    }
+
+    fun unbindPreview() {
+        this.previewView = null
+        mainHandler.post {
+            previewUseCase?.setSurfaceProvider(null)
+        }
     }
 
     fun release() {
@@ -164,6 +176,7 @@ class LiveCaptureManager(
         activeRecording?.stop()
         activeRecording = null
         pendingUploadIds.clear()
+        uploadWorkStates.clear()
         teardownCapturePipeline()
 
         _state.value = CaptureRuntimeState(
@@ -182,6 +195,7 @@ class LiveCaptureManager(
         videoCapturer = null
         cameraProvider?.unbindAll()
         cameraProvider = null
+        previewUseCase = null
         activeConfig = null
         currentHighQuality = false
         currentCameraFacing = CameraFacing.BACK
@@ -359,6 +373,7 @@ class LiveCaptureManager(
         val preview = Preview.Builder().build().also {
             it.surfaceProvider = previewView.surfaceProvider
         }
+        previewUseCase = preview
 
         // Use SD (480p) as default to save data/bandwidth, allow FHD (1080p) as high quality option
         val targetQuality = if (highQuality) Quality.FHD else Quality.SD
@@ -405,7 +420,7 @@ class LiveCaptureManager(
                 }
 
                 try {
-                    val bitmap = proxy.toBitmap()
+                    val bitmap = proxy.toBitmapCompatible()
                     val rotationDegrees = proxy.imageInfo.rotationDegrees
 
                     val finalBitmap = if (currentCameraFacing == CameraFacing.FRONT) {
@@ -677,7 +692,9 @@ class LiveCaptureManager(
         val workId = request.id
         val fileName = file.name
         pendingUploadIds += workId
+        uploadWorkStates[workId] = WorkInfo.State.ENQUEUED
         workManager.enqueue(request)
+        publishUploadQueueState("Queued $fileName")
 
         captureScope.launch {
             var terminalStateHandled = false
@@ -692,22 +709,22 @@ class LiveCaptureManager(
                     WorkInfo.State.BLOCKED -> "Upload $fileName blocked (waiting for network)"
                     WorkInfo.State.CANCELLED -> "Upload $fileName cancelled"
                 }
-                
-                // Only update the sync status if we're not currently recording a new segment
-                // to avoid flickering, but usually we want to see the latest upload progress.
-                _state.value = _state.value.copy(syncStatus = status)
+
+                uploadWorkStates[workId] = workInfo.state
+                publishUploadQueueState(status)
 
                 if (workInfo.state.isFinished && !terminalStateHandled) {
                     terminalStateHandled = true
                     pendingUploadIds.remove(workId)
+                    uploadWorkStates.remove(workId)
                     if (stopRequested && !_state.value.isStreaming) {
                         if (pendingUploadIds.isEmpty()) {
-                            _state.value = _state.value.copy(syncStatus = status)
+                            publishUploadQueueState(status)
                         } else {
-                            _state.value = _state.value.copy(
-                                syncStatus = "$status. ${pendingUploadIds.size} upload(s) remaining"
-                            )
+                            publishUploadQueueState("$status. ${pendingUploadIds.size} upload(s) remaining")
                         }
+                    } else {
+                        publishUploadQueueState(status)
                     }
                     notifyStopSafeToReleaseIfIdle()
                 }
@@ -720,6 +737,25 @@ class LiveCaptureManager(
         activeSegmentCapturedAt = null
         activeSegmentStartedAt = null
         activeSegmentSessionElapsedStartMs = 0L
+    }
+
+    private fun publishUploadQueueState(syncStatusOverride: String? = null) {
+        val queuedUploads = uploadWorkStates.values.count {
+            it == WorkInfo.State.ENQUEUED || it == WorkInfo.State.BLOCKED
+        }
+        val uploadingUploads = uploadWorkStates.values.count { it == WorkInfo.State.RUNNING }
+        val pendingUploads = queuedUploads + uploadingUploads
+        val queueSummary = when {
+            pendingUploads > 0 -> "Queue: $pendingUploads pending ($queuedUploads queued, $uploadingUploads uploading)"
+            else -> "Queue clear"
+        }
+        _state.value = _state.value.copy(
+            syncStatus = syncStatusOverride ?: _state.value.syncStatus,
+            uploadQueueSummary = queueSummary,
+            pendingUploadCount = pendingUploads,
+            queuedUploadCount = queuedUploads,
+            uploadingUploadCount = uploadingUploads
+        )
     }
 
     private fun sessionElapsedNowMs(fallbackMs: Long = 0L): Long {

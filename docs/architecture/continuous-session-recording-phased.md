@@ -1,5 +1,9 @@
 # Continuous Session Recording Phased Plan
 
+See also:
+
+- `docs/architecture/recording-transcript-roadmap.md`
+
 ## Goal
 
 Support long-running bodycam sessions, for example 20 to 30 minutes, while:

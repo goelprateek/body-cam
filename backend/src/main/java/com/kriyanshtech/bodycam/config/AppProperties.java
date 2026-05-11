@@ -40,6 +40,7 @@ public record AppProperties(
             String engine,
             String voskUrl,
             String languageCode,
+            long pollDelayMs,
             FasterWhisper fasterWhisper
     ) {
     }

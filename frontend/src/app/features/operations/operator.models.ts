@@ -66,6 +66,12 @@ export type RecordingTranscriptStatus =
   | 'READY'
   | 'FAILED';
 
+export type SessionRecordingIntegrityStatus =
+  | 'COMPLETE'
+  | 'PROCESSING_UPLOADS'
+  | 'PARTIAL'
+  | 'HAS_GAPS';
+
 export interface RecordingTranscriptSegmentResponse {
   id: string;
   segmentIndex: number;
@@ -136,7 +142,11 @@ export interface SessionRecordingTimelineResponse {
   sessionStartedAt: string | null;
   sessionEndedAt: string | null;
   totalDurationMs: number | null;
+  integrityStatus: SessionRecordingIntegrityStatus;
   hasTimelineGaps: boolean;
+  duplicateSegmentCount: number;
+  missingSequenceCount: number;
+  segmentsMissingTimingCount: number;
   segments: SessionRecordingTimelineSegmentResponse[];
 }
 

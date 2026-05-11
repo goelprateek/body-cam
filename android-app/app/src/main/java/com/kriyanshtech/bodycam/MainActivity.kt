@@ -58,13 +58,14 @@ class MainActivity : ComponentActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        viewModel.bindPreview(binding.previewView, this)
+        viewModel.bindPreview(binding.previewView)
         requestNeededPermissions()
         bindActions()
         observeState()
     }
 
     override fun onDestroy() {
+        viewModel.unbindPreview()
         super.onDestroy()
     }
 
@@ -151,10 +152,8 @@ class MainActivity : ComponentActivity() {
             binding.referenceNumberInput.setSelection(binding.referenceNumberInput.text?.length ?: 0)
         }
 
-        binding.environmentValue.text = if (state.backendUrl.isBlank()) {
+        binding.environmentValue.text = state.backendUrl.ifBlank {
             getString(R.string.env_missing)
-        } else {
-            state.backendUrl
         }
         binding.userSummary.text = state.user?.let {
             "${it.displayName} (${it.role})"
@@ -162,6 +161,9 @@ class MainActivity : ComponentActivity() {
         binding.sessionSummary.text = state.sessionSummary.ifBlank { "No active session" }
         binding.streamStatus.text = state.streamStatus
         binding.syncStatus.text = state.syncStatus
+        binding.uploadQueueStatus.text = state.uploadQueueSummary
+        binding.uploadQueueStatus.visibility =
+            if (state.pendingUploadCount > 0 || state.isStreaming || state.actionInFlight) View.VISIBLE else View.GONE
         binding.previewContainer.visibility = View.VISIBLE
         binding.previewPlaceholder.visibility = if (state.isStreaming) View.GONE else View.VISIBLE
         binding.sessionSummary.visibility = if (state.isStreaming) View.VISIBLE else View.GONE

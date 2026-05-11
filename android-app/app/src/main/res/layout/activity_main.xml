@@ -361,6 +361,16 @@
                         </LinearLayout>
                     </LinearLayout>
 
+                    <TextView
+                        android:id="@+id/uploadQueueStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="@string/upload_queue_clear"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/highQualityToggle"
                         android:layout_width="match_parent"

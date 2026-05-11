@@ -14,5 +14,7 @@ This directory holds the project-facing documentation for the `body-cam` MVP.
 2. `architecture/frontend-operator-console.md`
 3. `architecture/transcript-integration-phased.md`
 4. `architecture/continuous-session-recording-phased.md`
-5. `flows/live-session-flow.md`
-6. `flows/recording-sync-flow.md`
+5. `architecture/recording-transcript-roadmap.md`
+6. `architecture/system-feature-catalog.md`
+7. `flows/live-session-flow.md`
+8. `flows/recording-sync-flow.md`

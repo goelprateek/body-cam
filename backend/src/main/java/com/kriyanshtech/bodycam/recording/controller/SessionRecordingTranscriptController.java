@@ -1,6 +1,7 @@
 package com.kriyanshtech.bodycam.recording.controller;
 
 import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptResponse;
+import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSearchResponse;
 import com.kriyanshtech.bodycam.recording.service.RecordingTranscriptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,6 +37,14 @@ public class SessionRecordingTranscriptController {
     public ResponseEntity<SessionTranscriptResponse> generateTranscript(@PathVariable("sessionId") UUID sessionId) {
         log.info("Received session transcript generation request sessionId={}", sessionId);
         return ResponseEntity.ok(recordingTranscriptService.generateSessionTranscript(sessionId));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<SessionTranscriptSearchResponse> searchTranscript(
+            @PathVariable("sessionId") UUID sessionId,
+            @RequestParam("q") String query) {
+        log.info("Received session transcript search request sessionId={} queryLength={}", sessionId, query.length());
+        return ResponseEntity.ok(recordingTranscriptService.searchSessionTranscript(sessionId, query));
     }
 
     @GetMapping(path = "/subtitles.vtt", produces = "text/vtt")

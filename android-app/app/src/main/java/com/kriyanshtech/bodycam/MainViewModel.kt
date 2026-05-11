@@ -51,9 +51,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             captureService = boundService
             isBound = true
             previewView?.let { preview ->
-                previewLifecycleOwner?.let { owner ->
-                    boundService.captureManager?.bindPreview(preview, owner)
-                }
+                boundService.captureManager?.bindPreview(preview)
             }
 
             stateCollectionJob?.cancel()
@@ -64,6 +62,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         isStreaming = runtime.isStreaming,
                         streamStatus = runtime.streamStatus,
                         syncStatus = runtime.syncStatus,
+                        uploadQueueSummary = runtime.uploadQueueSummary,
+                        pendingUploadCount = runtime.pendingUploadCount,
+                        queuedUploadCount = runtime.queuedUploadCount,
+                        uploadingUploadCount = runtime.uploadingUploadCount,
                         message = runtime.lastError ?: _uiState.value.message,
                         usingFrontCamera = runtime.usingFrontCamera,
                         canFlipCamera = runtime.canFlipCamera,
@@ -95,16 +97,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun bindPreview(previewView: PreviewView, lifecycleOwner: LifecycleOwner) {
+    fun bindPreview(previewView: PreviewView) {
         this.previewView = previewView
-        this.previewLifecycleOwner = lifecycleOwner
-        viewModelScope.launch {
-            // Wait for service to be bound if it's not yet
-            while (captureService == null) {
-                kotlinx.coroutines.delay(100)
-            }
-            captureService?.captureManager?.bindPreview(previewView, lifecycleOwner)
-        }
+        captureService?.captureManager?.bindPreview(previewView)
+    }
+
+    fun unbindPreview() {
+        this.previewView = null
+        captureService?.captureManager?.unbindPreview()
     }
 
     fun setHighQualityMode(highQuality: Boolean) {
@@ -183,9 +183,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 previewView?.let { preview ->
-                    previewLifecycleOwner?.let { owner ->
-                        service.captureManager?.bindPreview(preview, owner)
-                    }
+                    service.captureManager?.bindPreview(preview)
                 }
 
                 service.captureManager?.start(config, _uiState.value.highQualityMode)

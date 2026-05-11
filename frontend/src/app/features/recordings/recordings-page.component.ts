@@ -8,10 +8,12 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { OperatorApiService } from '@features/operations/operator-api.service';
 import {
   RecordingResponse,
+  SessionRecordingIntegrityStatus,
   RecordingTranscriptSegmentResponse,
   RecordingTranscriptStatus,
   SessionRecordingTimelineResponse,
   SessionRecordingTimelineSegmentResponse,
+  SessionTranscriptSegmentResponse,
   SessionTranscriptResponse
 } from '@features/operations/operator.models';
 
@@ -146,6 +148,10 @@ interface RecordingSessionCard {
                 <mat-icon>schedule</mat-icon>
                 <span>{{ formatDurationMs(selectedTimeline()?.totalDurationMs) }}</span>
               </div>
+              <div class="timeline-summary-pill" [class]="integrityPillClass(selectedTimeline()?.integrityStatus)">
+                <mat-icon>{{ integrityIcon(selectedTimeline()?.integrityStatus) }}</mat-icon>
+                <span>{{ integrityLabel(selectedTimeline()?.integrityStatus) }}</span>
+              </div>
               <div class="timeline-summary-pill">
                 <mat-icon>queue_play_next</mat-icon>
                 <span>Segment {{ selectedTimelineSegmentOrdinal() }} of {{ selectedTimeline()?.segments?.length || 0 }}</span>
@@ -178,6 +184,7 @@ interface RecordingSessionCard {
                   preload="metadata"
                   (ended)="handlePlaybackEnded()"
                   (loadedmetadata)="handleVideoMetadataLoaded()"
+                  (timeupdate)="handleVideoTimeUpdate()"
                   style="width: 100%; display: block;"
                 >
                   @if (selectedSubtitleUrl()) {
@@ -285,6 +292,34 @@ interface RecordingSessionCard {
               }
             </div>
 
+            @if (selectedSessionTranscript()?.segments?.length) {
+              <div class="transcript-search-row">
+                <input
+                  type="search"
+                  class="transcript-search-input"
+                  placeholder="Search within this session transcript"
+                  [value]="transcriptSearchQuery()"
+                  (input)="updateTranscriptSearch(($any($event.target)).value)"
+                />
+                @if (transcriptSearchQuery()) {
+                  <button
+                    mat-button
+                    type="button"
+                    class="transcript-search-clear"
+                    (click)="clearTranscriptSearch()"
+                  >
+                    Clear
+                  </button>
+                }
+              </div>
+
+              @if (transcriptSearchQuery()) {
+                <div class="subtle-text transcript-search-meta">
+                  {{ filteredTranscriptSegments().length }} match{{ filteredTranscriptSegments().length === 1 ? '' : 'es' }}
+                </div>
+              }
+            }
+
             @switch (selectedSessionTranscript()?.status) {
               @case ('NOT_REQUESTED') {
                 <div class="empty-state transcript-empty">
@@ -305,14 +340,26 @@ interface RecordingSessionCard {
                 }
 
                 @if (selectedSessionTranscript()?.segments?.length) {
-                  <div class="transcript-segments">
-                    @for (segment of selectedSessionTranscript()?.segments || []; track segment.id || segment.segmentIndex) {
-                      <div class="transcript-segment">
-                        <span class="segment-time">{{ formatSegmentTime(segment) }}</span>
-                        <span class="segment-text">{{ segment.text }}</span>
-                      </div>
-                    }
-                  </div>
+                  @if (filteredTranscriptSegments().length) {
+                    <div class="transcript-segments">
+                      @for (segment of filteredTranscriptSegments(); track segment.id || segment.segmentIndex) {
+                        <button
+                          type="button"
+                          class="transcript-segment transcript-segment-button"
+                          [class.transcript-segment-active]="segment.id === activeTranscriptSegmentId()"
+                          (click)="seekToTranscriptSegment(segment)"
+                        >
+                          <span class="segment-time">{{ formatSegmentTime(segment) }}</span>
+                          <span class="segment-text">{{ segment.text }}</span>
+                        </button>
+                      }
+                    </div>
+                  } @else if (transcriptSearchQuery()) {
+                    <div class="empty-state transcript-empty">
+                      <strong>No transcript matches</strong>
+                      <span>Try a different search term for this session.</span>
+                    </div>
+                  }
                 } @else if (selectedSessionTranscript()?.status === 'PROCESSING' || selectedSessionTranscript()?.status === 'PENDING') {
                   <div class="empty-state transcript-empty">
                     <strong>Transcript request accepted</strong>
@@ -347,6 +394,8 @@ export class RecordingsPageComponent {
   readonly selectedPlaybackUrl = signal<string | null>(null);
   readonly selectedSubtitleUrl = signal<string | null>(null);
   readonly selectedSessionTranscript = signal<SessionTranscriptResponse | null>(null);
+  readonly activeTranscriptSegmentId = signal<string | null>(null);
+  readonly transcriptSearchQuery = signal('');
   readonly isLoading = signal(false);
   readonly isPlaybackLoading = signal(false);
   readonly isTranscriptLoading = signal(false);
@@ -356,6 +405,7 @@ export class RecordingsPageComponent {
   readonly transcriptError = signal<string | null>(null);
 
   private pendingAutoplay = false;
+  private pendingSeekSecondsWithinSegment: number | null = null;
 
   constructor() {
     void this.loadRecordings();
@@ -441,6 +491,48 @@ export class RecordingsPageComponent {
     return segment.sessionElapsedStartMs == null || segment.sessionElapsedEndMs == null;
   }
 
+  integrityLabel(status?: SessionRecordingIntegrityStatus | null): string {
+    switch (status) {
+      case 'COMPLETE':
+        return 'Complete Timeline';
+      case 'PROCESSING_UPLOADS':
+        return 'Uploads In Progress';
+      case 'PARTIAL':
+        return 'Partial Timeline';
+      case 'HAS_GAPS':
+      default:
+        return 'Timeline Needs Review';
+    }
+  }
+
+  integrityIcon(status?: SessionRecordingIntegrityStatus | null): string {
+    switch (status) {
+      case 'COMPLETE':
+        return 'verified';
+      case 'PROCESSING_UPLOADS':
+        return 'cloud_upload';
+      case 'PARTIAL':
+        return 'pending';
+      case 'HAS_GAPS':
+      default:
+        return 'warning_amber';
+    }
+  }
+
+  integrityPillClass(status?: SessionRecordingIntegrityStatus | null): string {
+    switch (status) {
+      case 'COMPLETE':
+        return 'timeline-summary-pill-success';
+      case 'PROCESSING_UPLOADS':
+        return 'timeline-summary-pill-info';
+      case 'PARTIAL':
+        return 'timeline-summary-pill-neutral';
+      case 'HAS_GAPS':
+      default:
+        return 'timeline-summary-pill-warning';
+    }
+  }
+
   transcriptLabel(status?: RecordingTranscriptStatus | null): string {
     switch (status) {
       case 'READY':
@@ -494,6 +586,23 @@ export class RecordingsPageComponent {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
+  filteredTranscriptSegments(): SessionTranscriptSegmentResponse[] {
+    const segments = this.selectedSessionTranscript()?.segments ?? [];
+    const query = this.transcriptSearchQuery().trim().toLocaleLowerCase();
+    if (!query) {
+      return segments;
+    }
+    return segments.filter((segment) => segment.text.toLocaleLowerCase().includes(query));
+  }
+
+  updateTranscriptSearch(query: string): void {
+    this.transcriptSearchQuery.set(query);
+  }
+
+  clearTranscriptSearch(): void {
+    this.transcriptSearchQuery.set('');
+  }
+
   async loadRecordings(): Promise<void> {
     this.isLoading.set(true);
     this.pageError.set(null);
@@ -520,6 +629,8 @@ export class RecordingsPageComponent {
         this.selectedRecordingId.set(null);
         this.selectedPlaybackUrl.set(null);
         this.selectedSessionTranscript.set(null);
+        this.activeTranscriptSegmentId.set(null);
+        this.transcriptSearchQuery.set('');
         this.revokeSubtitleUrl();
       }
     } catch (error) {
@@ -536,6 +647,8 @@ export class RecordingsPageComponent {
     this.selectedRecordingId.set(null);
     this.selectedPlaybackUrl.set(null);
     this.selectedSessionTranscript.set(null);
+    this.activeTranscriptSegmentId.set(null);
+    this.transcriptSearchQuery.set('');
     this.playbackError.set(null);
     this.transcriptError.set(null);
     this.revokeSubtitleUrl();
@@ -592,15 +705,48 @@ export class RecordingsPageComponent {
   }
 
   handleVideoMetadataLoaded(): void {
+    const player = this.timelinePlayer?.nativeElement;
+    if (!player) {
+      return;
+    }
+
+    if (this.pendingSeekSecondsWithinSegment != null) {
+      player.currentTime = Math.max(0, this.pendingSeekSecondsWithinSegment);
+      this.pendingSeekSecondsWithinSegment = null;
+    }
+
     if (!this.pendingAutoplay) {
+      this.handleVideoTimeUpdate();
       return;
     }
 
     this.pendingAutoplay = false;
+    void player.play().catch(() => undefined);
+    this.handleVideoTimeUpdate();
+  }
+
+  handleVideoTimeUpdate(): void {
     const player = this.timelinePlayer?.nativeElement;
-    if (player) {
-      void player.play().catch(() => undefined);
+    const activeSegment = this.activeTimelineSegment();
+    const transcript = this.selectedSessionTranscript();
+    if (!player || !activeSegment || !transcript?.segments.length) {
+      this.activeTranscriptSegmentId.set(null);
+      return;
     }
+
+    const segmentSessionStartSeconds = this.segmentSessionStartSeconds(activeSegment);
+    const currentSessionSecond = segmentSessionStartSeconds + player.currentTime;
+    let fallbackTranscriptSegment: SessionTranscriptSegmentResponse | null = null;
+    const activeTranscriptSegment = transcript.segments.find((segment) => {
+      const start = Number.parseFloat(segment.startSeconds ?? '0');
+      const end = Number.parseFloat(segment.endSeconds ?? '0');
+      if (start <= currentSessionSecond) {
+        fallbackTranscriptSegment = segment;
+      }
+      return currentSessionSecond >= start && currentSessionSecond <= end;
+    }) ?? fallbackTranscriptSegment;
+
+    this.activeTranscriptSegmentId.set(activeTranscriptSegment?.id ?? null);
   }
 
   async generateTranscript(): Promise<void> {
@@ -622,6 +768,7 @@ export class RecordingsPageComponent {
         this.selectedSessionTranscript.set(sessionTranscript);
         this.selectedTimeline.set(timeline);
         this.syncTimelineStatuses(timeline);
+        this.handleVideoTimeUpdate();
         const activeSegment = this.activeTimelineSegment();
         if (activeSegment) {
           await this.loadSubtitleTrackIfAvailable(activeSegment.recordingId, activeSegment.transcriptStatus);
@@ -657,11 +804,34 @@ export class RecordingsPageComponent {
 
     try {
       await this.loadSubtitleTrackIfAvailable(segment.recordingId, segment.transcriptStatus);
+      this.handleVideoTimeUpdate();
     } catch (error) {
       if (this.selectedRecordingId() === segment.recordingId) {
         this.transcriptError.set(this.api.explainError(error));
       }
     }
+  }
+
+  async seekToTranscriptSegment(segment: SessionTranscriptSegmentResponse): Promise<void> {
+    const targetSessionSecond = Number.parseFloat(segment.startSeconds ?? '0');
+    const target = this.findTimelineSegmentForSessionSecond(targetSessionSecond);
+    if (!target) {
+      return;
+    }
+
+    const currentSegment = this.activeTimelineSegment();
+    if (currentSegment && target.index === this.selectedTimelineSegmentIndex()) {
+      const player = this.timelinePlayer?.nativeElement;
+      if (player) {
+        player.currentTime = Math.max(0, target.segmentSeekSeconds);
+        void player.play().catch(() => undefined);
+        this.handleVideoTimeUpdate();
+      }
+      return;
+    }
+
+    this.pendingSeekSecondsWithinSegment = target.segmentSeekSeconds;
+    await this.activateTimelineSegment(target.index, true);
   }
 
   private async loadSubtitleTrackIfAvailable(recordingId: string, status?: RecordingTranscriptStatus | null): Promise<void> {
@@ -690,6 +860,56 @@ export class RecordingsPageComponent {
       URL.revokeObjectURL(subtitleUrl);
     }
     this.selectedSubtitleUrl.set(null);
+  }
+
+  private findTimelineSegmentForSessionSecond(targetSessionSecond: number): { index: number; segmentSeekSeconds: number } | null {
+    const timeline = this.selectedTimeline();
+    if (!timeline?.segments.length) {
+      return null;
+    }
+
+    for (let index = 0; index < timeline.segments.length; index++) {
+      const segment = timeline.segments[index];
+      const startSeconds = this.segmentSessionStartSeconds(segment);
+      const endSeconds = this.segmentSessionEndSeconds(segment);
+      if (targetSessionSecond >= startSeconds && targetSessionSecond <= endSeconds) {
+        return {
+          index,
+          segmentSeekSeconds: Math.max(0, targetSessionSecond - startSeconds)
+        };
+      }
+    }
+
+    const lastIndex = timeline.segments.length - 1;
+    return {
+      index: lastIndex,
+      segmentSeekSeconds: 0
+    };
+  }
+
+  private segmentSessionStartSeconds(segment: SessionRecordingTimelineSegmentResponse): number {
+    if (segment.sessionElapsedStartMs != null) {
+      return segment.sessionElapsedStartMs / 1000;
+    }
+
+    const timeline = this.selectedTimeline();
+    if (!timeline) {
+      return 0;
+    }
+
+    const segmentIndex = timeline.segments.findIndex((entry) => entry.recordingId === segment.recordingId);
+    let offsetSeconds = 0;
+    for (let index = 0; index < segmentIndex; index++) {
+      offsetSeconds += timeline.segments[index].durationSeconds ?? 0;
+    }
+    return offsetSeconds;
+  }
+
+  private segmentSessionEndSeconds(segment: SessionRecordingTimelineSegmentResponse): number {
+    if (segment.sessionElapsedEndMs != null) {
+      return segment.sessionElapsedEndMs / 1000;
+    }
+    return this.segmentSessionStartSeconds(segment) + (segment.durationSeconds ?? 0);
   }
 
   private syncTimelineStatuses(timeline: SessionRecordingTimelineResponse): void {
