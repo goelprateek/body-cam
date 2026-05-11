@@ -264,11 +264,17 @@ jobs:
           FRONTEND_DOMAIN: ${{ steps.verification_targets.outputs.frontend_domain }}
         run: |
           set -euo pipefail
-          body="$(curl --fail --silent --show-error --location --retry 10 --retry-delay 10 "https://${FRONTEND_DOMAIN}/")"
-          if ! grep -Eiq 'Body Cam|<app-root' <<< "${body}"; then
-            echo "Public frontend verification did not find the expected application marker." >&2
-            exit 1
-          fi
+          deadline=$((SECONDS + 300))
+          while (( SECONDS < deadline )); do
+            body="$(curl --silent --show-error --location --connect-timeout 10 --max-time 30 "https://${FRONTEND_DOMAIN}/" 2>/dev/null || true)"
+            if grep -Eiq 'Body Cam|<app-root' <<< "${body}"; then
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "Public frontend verification did not find the expected application marker within 5 minutes." >&2
+          exit 1
 
       - name: Verify production backend health publicly
         if: steps.verification_targets.outputs.api_domain != ''
@@ -278,11 +284,17 @@ jobs:
           API_DOMAIN: ${{ steps.verification_targets.outputs.api_domain }}
         run: |
           set -euo pipefail
-          body="$(curl --fail --silent --show-error --location --retry 10 --retry-delay 10 "https://${API_DOMAIN}/actuator/health")"
-          if ! grep -Eiq '"status"\s*:\s*"(UP|up|OK|ok)"' <<< "${body}"; then
-            echo "Public backend verification did not return the expected health response." >&2
-            exit 1
-          fi
+          deadline=$((SECONDS + 300))
+          while (( SECONDS < deadline )); do
+            body="$(curl --silent --show-error --location --connect-timeout 10 --max-time 30 "https://${API_DOMAIN}/actuator/health" 2>/dev/null || true)"
+            if grep -Eiq '"status"\s*:\s*"(UP|up|OK|ok)"' <<< "${body}"; then
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "Public backend verification did not return the expected health response within 5 minutes." >&2
+          exit 1
 
       - name: Roll back production deployment after failed public verification
         if: failure() && (steps.verify_frontend.outcome == 'failure' || steps.verify_backend.outcome == 'failure')

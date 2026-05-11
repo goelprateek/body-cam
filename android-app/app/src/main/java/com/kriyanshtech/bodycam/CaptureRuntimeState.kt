@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 data class CaptureRuntimeState(
     val isStreaming: Boolean = false,

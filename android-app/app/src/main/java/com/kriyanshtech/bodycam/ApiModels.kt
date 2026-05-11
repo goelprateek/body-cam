@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import com.squareup.moshi.JsonClass
 
@@ -17,7 +17,8 @@ data class LoginResponse(
 
 data class CreateSessionRequest(
     val workerId: String,
-    val workerName: String
+    val workerName: String,
+    val referenceNumber: String
 )
 
 data class SessionResponse(

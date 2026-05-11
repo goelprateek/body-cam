@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
@@ -38,14 +38,32 @@ import { RecordingResponse } from '@features/operations/operator.models';
               appearance="outlined"
               [class.recording-card-selected]="recording.id === selectedRecordingId()"
             >
-              <button class="recording-card-button" type="button" (click)="selectRecording(recording.id)">
-                <div class="recording-card-info" style="display: flex; align-items: flex-start; gap: 0.5rem; width: 100%;">
-                  <mat-icon style="flex-shrink: 0;">videocam</mat-icon>
-                  <strong style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; text-align: left;">{{ recording.roomName }}</strong>
+              <button class="recording-card-button recording-card-button-rich" type="button" (click)="selectRecording(recording.id)">
+                <div class="recording-card-top">
+                  <div class="recording-card-info">
+                    <div class="session-avatar recording-avatar">
+                      <mat-icon>person</mat-icon>
+                    </div>
+                    <div class="recording-card-copy">
+                      <strong>{{ recording.workerName }}</strong>
+                      <span class="recording-room">{{ recording.roomName }}</span>
+                    </div>
+                  </div>
+                  <span class="recording-chip">REC</span>
                 </div>
-                <div class="recording-card-time" style="display: flex; align-items: center; gap: 0.5rem; width: 100%;">
-                  <mat-icon style="flex-shrink: 0;">schedule</mat-icon>
-                  <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; text-align: left;">{{ recording.createdAt | date: 'medium' }}</span>
+
+                <div class="recording-card-meta">
+                  <div class="recording-card-meta-row">
+                    <mat-icon>schedule</mat-icon>
+                    <span>{{ recording.createdAt | date: 'medium' }}</span>
+                  </div>
+
+                  @if (recording.metadata?.latitude && recording.metadata?.longitude) {
+                    <div class="recording-card-meta-row">
+                      <mat-icon>place</mat-icon>
+                      <span>{{ formatCoordinates(recording) }}</span>
+                    </div>
+                  }
                 </div>
               </button>
             </mat-card>
@@ -65,7 +83,8 @@ import { RecordingResponse } from '@features/operations/operator.models';
         <mat-card class="panel viewer-panel glass-panel" appearance="outlined">
           <div class="section-head premium-head viewer-head">
             <div class="viewer-head-copy">
-              <h2>Playback</h2>
+              <h2>{{ selectedRecording()?.workerName || 'Playback' }}</h2>
+              <p class="viewer-caption">{{ selectedRecording()?.roomName || 'Select a recording to play' }}</p>
             </div>
             <div class="viewer-status">
               <span class="status-pill premium-status-pill">
@@ -116,6 +135,20 @@ export class RecordingsPageComponent implements OnInit {
   readonly isPlaybackLoading = signal(false);
   readonly pageError = signal<string | null>(null);
   readonly playbackError = signal<string | null>(null);
+
+  selectedRecording(): RecordingResponse | null {
+    const selectedRecordingId = this.selectedRecordingId();
+    return this.recordings().find((recording) => recording.id === selectedRecordingId) ?? null;
+  }
+
+  formatCoordinates(recording: RecordingResponse): string {
+    const latitude = recording.metadata?.latitude;
+    const longitude = recording.metadata?.longitude;
+    if (!latitude || !longitude) {
+      return 'Location unavailable';
+    }
+    return `${latitude}, ${longitude}`;
+  }
 
   ngOnInit(): void {
     void this.loadRecordings();

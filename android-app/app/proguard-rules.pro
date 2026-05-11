@@ -5,7 +5,7 @@
 -dontwarn io.livekit.android.**
 
 # ViewBinding (Sometimes stripped in release)
--keep class com.company.bodycam.databinding.** { *; }
+-keep class com.kriyanshtech.bodycam.databinding.** { *; }
 
 # Retrofit & OkHttp
 -keepattributes Signature, InnerClasses, AnnotationDefault
@@ -24,8 +24,8 @@
 }
 
 # Your Data & Model classes
--keep class com.company.bodycam.** { *; }
--keepnames class com.company.bodycam.** { *; }
+-keep class com.kriyanshtech.bodycam.** { *; }
+-keepnames class com.kriyanshtech.bodycam.** { *; }
 
 # AndroidX Lifecycle
 -keep class androidx.lifecycle.** { *; }

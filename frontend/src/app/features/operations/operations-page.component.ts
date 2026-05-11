@@ -72,7 +72,11 @@ import { SessionResponse } from './operator.models';
                   </div>
                   <div class="session-details">
                     <p class="session-worker">{{ session.workerName }}</p>
+                    <p class="session-room">Ref {{ session.referenceNumber }}</p>
                     <p class="session-room">{{ session.roomName }}</p>
+                    <p class="session-room">
+                      Ref Datetime {{ session.createdAt | date: 'medium' }}
+                    </p>
                   </div>
                 </div>
                 <span class="status-pill premium-status-pill" [class.status-live]="session.status === 'ACTIVE'">
@@ -127,6 +131,9 @@ import { SessionResponse } from './operator.models';
           <div class="section-head premium-head viewer-head">
             <div class="viewer-head-copy">
               <h2>{{ selectedSession()?.workerName || 'Live Viewer' }}</h2>
+              @if (selectedSession(); as session) {
+                <p class="viewer-caption">Ref {{ session.referenceNumber }} · {{ session.createdAt | date: 'medium' }}</p>
+              }
               <p class="viewer-caption">
                 {{ liveRoom.lastEvent() }}
               </p>

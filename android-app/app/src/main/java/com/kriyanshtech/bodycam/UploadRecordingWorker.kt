@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import android.content.Context
 import androidx.work.CoroutineWorker
@@ -81,10 +81,20 @@ class UploadRecordingWorker(
     }
 
     private fun parseBackendErrorMessage(errorBody: ResponseBody?): String? {
-        val rawBody = errorBody?.string()?.takeIf(String::isNotBlank) ?: return null
-        return runCatching {
-            JSONObject(rawBody).optString("message").takeIf { it.isNotBlank() } ?: rawBody
-        }.getOrDefault(rawBody)
+        return errorBody?.use { body ->
+            runCatching {
+                val source = body.source()
+                source.request(16384) // Buffer up to 16KB
+                val buffer = source.buffer.clone()
+                val rawBody = buffer.readUtf8(16384L.coerceAtMost(buffer.size))
+                if (rawBody.isBlank()) return null
+                
+                // Try to parse as JSON to get the 'message' field
+                runCatching {
+                    JSONObject(rawBody).optString("message").takeIf { it.isNotBlank() }
+                }.getOrNull() ?: rawBody.take(256) // Fallback to raw snippet
+            }.getOrNull()
+        }
     }
 
     companion object {

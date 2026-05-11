@@ -9,6 +9,7 @@ compose_file="${repo_root}/infra/docker-compose.prod.yml"
 env_file_path="${repo_root}/${production_env_file}"
 backend_env_path="${repo_root}/${backend_env_file}"
 livekit_render_script="${repo_root}/scripts/deploy/render-livekit-config.sh"
+livekit_validate_script="${repo_root}/scripts/deploy/validate-livekit-config.sh"
 deploy_action="${DEPLOY_ACTION:-deploy}"
 release_label="${RELEASE_LABEL:-}"
 state_file="${repo_root}/.deploy-state.env"
@@ -147,8 +148,10 @@ login_registry() {
 
 apply_compose_stack() {
   local services=()
+  local rendered_livekit_config="${repo_root}/infra/livekit.prod.generated.yaml"
 
-  bash "${livekit_render_script}" "${repo_root}" "${production_env_file}" "${backend_env_file}" "${repo_root}/infra/livekit.prod.generated.yaml"
+  bash "${livekit_render_script}" "${repo_root}" "${production_env_file}" "${backend_env_file}" "${rendered_livekit_config}"
+  bash "${livekit_validate_script}" "${repo_root}" "${production_env_file}" "${backend_env_file}" "${rendered_livekit_config}"
 
   mapfile -t services < <(
     docker compose --env-file "${production_env_file}" -f "${compose_file}" config --services
@@ -192,6 +195,11 @@ fi
 
 if [[ ! -f "${livekit_render_script}" ]]; then
   echo "Missing LiveKit render script: ${livekit_render_script}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${livekit_validate_script}" ]]; then
+  echo "Missing LiveKit validation script: ${livekit_validate_script}" >&2
   exit 1
 fi
 

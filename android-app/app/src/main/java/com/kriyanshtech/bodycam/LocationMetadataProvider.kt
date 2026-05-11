@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import android.Manifest
 import android.content.Context

@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import android.app.Application
 import android.content.ComponentName
@@ -56,6 +56,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             stateCollectionJob?.cancel()
             stateCollectionJob = viewModelScope.launch {
                 boundService.captureManager?.state?.collectLatest { runtime ->
+                    val referenceSummary = _uiState.value.referenceNumber.trim()
                     _uiState.value = _uiState.value.copy(
                         isStreaming = runtime.isStreaming,
                         streamStatus = runtime.streamStatus,
@@ -65,7 +66,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         canFlipCamera = runtime.canFlipCamera,
                         cameraSwitchInFlight = runtime.cameraSwitchInFlight,
                         thermalThrottling = runtime.thermalThrottling,
-                        sessionSummary = runtime.sessionId?.let { "Session: $it" } ?: "",
+                        sessionSummary = runtime.sessionId?.let {
+                            if (referenceSummary.isBlank()) {
+                                "Session: $it"
+                            } else {
+                                "Ref: $referenceSummary  Session: $it"
+                            }
+                        } ?: "",
                         activeSessionId = runtime.sessionId
                     )
                 }
@@ -101,6 +108,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(highQualityMode = highQuality)
     }
 
+    fun updateReferenceNumber(referenceNumber: String) {
+        val error = if (referenceNumber.isBlank()) "Reference number is required" else null
+        _uiState.value = _uiState.value.copy(
+            referenceNumber = referenceNumber,
+            referenceError = error
+        )
+    }
+
     fun flipCamera() {
         captureService?.captureManager?.flipCamera()
     }
@@ -128,15 +143,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startSession() {
+        if (_uiState.value.actionInFlight || _uiState.value.isStreaming) return
+
         val token = authToken ?: return
         val user = _uiState.value.user ?: return
         val url = _uiState.value.backendUrl
+        val referenceNumber = _uiState.value.referenceNumber.trim()
 
-        _uiState.value = _uiState.value.copy(actionInFlight = true)
+        if (referenceNumber.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                referenceError = "Reference number is required before starting a session"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(actionInFlight = true, referenceError = null)
 
         viewModelScope.launch {
             try {
-                val sessionResp = repository.createWorkerSession(url, token, user)
+                val sessionResp = repository.createWorkerSession(url, token, user, referenceNumber)
                 val liveKitResp = repository.joinWorkerSession(url, token, sessionResp, user)
                 
                 val context = getApplication<Application>()
@@ -165,7 +190,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 captureService?.captureManager?.start(config, _uiState.value.highQualityMode)
                 _uiState.value = _uiState.value.copy(
                     actionInFlight = false,
-                    activeSessionId = sessionResp.id
+                    activeSessionId = sessionResp.id,
+                    sessionSummary = "Ref: $referenceNumber  Session: ${sessionResp.id}"
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -177,10 +203,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopSession() {
+        if (_uiState.value.actionInFlight || !_uiState.value.isStreaming) return
         stopCaptureAndEndSession(clearAuthAfter = false)
     }
 
     fun logout() {
+        if (_uiState.value.actionInFlight) return
         stopCaptureAndEndSession(clearAuthAfter = true)
     }
 

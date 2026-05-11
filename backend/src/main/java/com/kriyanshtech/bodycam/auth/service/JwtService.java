@@ -3,6 +3,8 @@ package com.kriyanshtech.bodycam.auth.service;
 import com.kriyanshtech.bodycam.auth.entity.AppUser;
 import com.kriyanshtech.bodycam.config.AppProperties;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,6 +26,7 @@ import java.util.UUID;
 @Service
 public class JwtService {
     private static final int MIN_SECRET_BYTES = 32;
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
 
     private final AppProperties appProperties;
     private final JwtEncoder jwtEncoder;
@@ -46,6 +49,14 @@ public class JwtService {
     public String generateAccessToken(AppUser user) {
         Instant now = Instant.now();
         Instant expiry = now.plus(appProperties.jwt().accessTokenMinutes(), ChronoUnit.MINUTES);
+        log.info(
+                "Generating access token userId={} username={} role={} issuer={} expiresAt={}",
+                user.getId(),
+                user.getUsername(),
+                user.getRole(),
+                appProperties.jwt().issuer(),
+                expiry
+        );
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(appProperties.jwt().issuer())
@@ -58,18 +69,34 @@ public class JwtService {
                 .build();
 
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        String tokenValue = jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        log.info(
+                "Generated access token userId={} username={} tokenLength={}",
+                user.getId(),
+                user.getUsername(),
+                tokenValue.length()
+        );
+        return tokenValue;
     }
 
     public AuthenticatedUser parse(String token) {
         Jwt jwt = jwtDecoder.decode(token);
-
-        return new AuthenticatedUser(
+        AuthenticatedUser user = new AuthenticatedUser(
                 UUID.fromString(jwt.getSubject()),
                 jwt.getClaimAsString("username"),
                 jwt.getClaimAsString("displayName"),
                 jwt.getClaimAsString("role")
         );
+        log.info(
+                "Parsed access token userId={} username={} role={} issuedAt={} expiresAt={}",
+                user.userId(),
+                user.username(),
+                user.role(),
+                jwt.getIssuedAt(),
+                jwt.getExpiresAt()
+        );
+
+        return user;
     }
 
     public record AuthenticatedUser(

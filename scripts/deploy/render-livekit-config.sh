@@ -34,6 +34,7 @@ set +a
 
 required_vars=(
   LIVEKIT_USE_EXTERNAL_IP
+  LIVEKIT_UDP_PORT_RANGE
   TURN_HOST
   TURN_USERNAME
   TURN_PASSWORD
@@ -48,12 +49,27 @@ for var_name in "${required_vars[@]}"; do
   fi
 done
 
+if [[ ! "${LIVEKIT_UDP_PORT_RANGE}" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+  echo "LIVEKIT_UDP_PORT_RANGE must be in <start>-<end> format, got: ${LIVEKIT_UDP_PORT_RANGE}" >&2
+  exit 1
+fi
+
+livekit_udp_port_start="${BASH_REMATCH[1]}"
+livekit_udp_port_end="${BASH_REMATCH[2]}"
+
+if (( livekit_udp_port_start > livekit_udp_port_end )); then
+  echo "LIVEKIT_UDP_PORT_RANGE start must be <= end, got: ${LIVEKIT_UDP_PORT_RANGE}" >&2
+  exit 1
+fi
+
 node_ip_block=""
 if [[ -n "${LIVEKIT_NODE_IP:-}" ]]; then
   node_ip_block="  node_ip: ${LIVEKIT_NODE_IP}"
 fi
 
 template_content="$(<"${template_file}")"
+template_content="${template_content//'${LIVEKIT_UDP_PORT_START}'/${livekit_udp_port_start}}"
+template_content="${template_content//'${LIVEKIT_UDP_PORT_END}'/${livekit_udp_port_end}}"
 template_content="${template_content//'${LIVEKIT_USE_EXTERNAL_IP}'/${LIVEKIT_USE_EXTERNAL_IP}}"
 template_content="${template_content//'${LIVEKIT_NODE_IP_BLOCK}'/${node_ip_block}}"
 template_content="${template_content//'${TURN_HOST}'/${TURN_HOST}}"

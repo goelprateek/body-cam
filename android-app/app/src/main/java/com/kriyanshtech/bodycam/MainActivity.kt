@@ -1,15 +1,19 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
 import android.view.animation.AlphaAnimation
 import android.view.animation.Animation
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import android.widget.Toast
+import androidx.core.widget.doAfterTextChanged
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -17,7 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.company.bodycam.databinding.ActivityMainBinding
+import com.kriyanshtech.bodycam.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -73,6 +77,11 @@ class MainActivity : ComponentActivity() {
         }
 
         binding.startSessionButton.setOnClickListener {
+            if (binding.referenceNumberInput.text.isNullOrBlank()) {
+                viewModel.updateReferenceNumber("") // Trigger error display
+                binding.referenceNumberInput.requestFocus()
+                return@setOnClickListener
+            }
             if (!hasAllPermissions()) {
                 requestNeededPermissions()
                 return@setOnClickListener
@@ -90,6 +99,29 @@ class MainActivity : ComponentActivity() {
 
         binding.highQualityToggle.setOnCheckedChangeListener { _, isChecked ->
             viewModel.setHighQualityMode(isChecked)
+        }
+
+        binding.referenceNumberInput.doAfterTextChanged { editable ->
+            val text = editable?.toString().orEmpty()
+            if (viewModel.uiState.value.referenceNumber != text) {
+                viewModel.updateReferenceNumber(text)
+            }
+        }
+
+        binding.referenceNumberInput.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
+            ) {
+                if (binding.startSessionButton.isEnabled) {
+                    hideKeyboard()
+                    binding.startSessionButton.performClick()
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
         }
 
         binding.flipCameraIcon.setOnClickListener {
@@ -113,6 +145,10 @@ class MainActivity : ComponentActivity() {
         }
         if (binding.passwordInput.text?.toString() != state.password) {
             binding.passwordInput.setText(state.password)
+        }
+        if (binding.referenceNumberInput.text?.toString() != state.referenceNumber) {
+            binding.referenceNumberInput.setText(state.referenceNumber)
+            binding.referenceNumberInput.setSelection(binding.referenceNumberInput.text?.length ?: 0)
         }
 
         binding.environmentValue.text = if (state.backendUrl.isBlank()) {
@@ -181,18 +217,21 @@ class MainActivity : ComponentActivity() {
             isEnabled = !state.isStreaming && !state.actionInFlight
         }
 
+        binding.referenceNumberInput.isEnabled = !state.isStreaming && !state.actionInFlight
+        binding.referenceNumberLayout.isEnabled = !state.isStreaming && !state.actionInFlight
+        binding.referenceNumberLayout.error = state.referenceError
+
         binding.flipCameraIcon.apply {
             visibility = if (state.isStreaming && state.canFlipCamera) View.VISIBLE else View.GONE
             isEnabled = !state.cameraSwitchInFlight
             alpha = if (state.cameraSwitchInFlight) 0.5f else 1.0f
         }
 
-        binding.loginLayout.visibility = if (state.user == null) View.VISIBLE else View.GONE
-        binding.sessionLayout.visibility = if (state.user != null) View.VISIBLE else View.GONE
-
-        if (state.user != null) {
-            val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-            imm.hideSoftInputFromWindow(binding.root.windowToken, 0)
+        if (binding.loginLayout.visibility != (if (state.user == null) View.VISIBLE else View.GONE)) {
+            binding.loginLayout.visibility = if (state.user == null) View.VISIBLE else View.GONE
+        }
+        if (binding.sessionLayout.visibility != (if (state.user != null) View.VISIBLE else View.GONE)) {
+            binding.sessionLayout.visibility = if (state.user != null) View.VISIBLE else View.GONE
         }
     }
 
@@ -214,6 +253,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.hideSoftInputFromWindow(binding.referenceNumberInput.windowToken, 0)
     }
 
     private fun hasAllPermissions(): Boolean {

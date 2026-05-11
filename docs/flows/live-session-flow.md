@@ -6,42 +6,43 @@
 Field Worker App
   |
   | 1. login
+  | 2. capture reference number before stream start
   v
 Spring Boot Auth API
   |
-  | 2. create or resume session metadata
+  | 3. create or resume session metadata with reference number
   v
 PostgreSQL
   |
-  | 3. request worker join token
+  | 4. request worker join token
   v
 Spring Boot Session API
   |
-  | 4. return LiveKit token + room name + URL
+  | 5. return LiveKit token + room name + URL
   v
 Android App
   |
-  | 5. publish camera and microphone
+  | 6. publish camera and microphone
   v
 LiveKit Room
   |
-  | 6. operator login
+  | 7. operator login
   v
 Angular Operator Console
   |
-  | 7. operator requests join token
+  | 8. operator requests join token
   v
 Spring Boot Session API
   |
-  | 8. return operator join token
+  | 9. return operator join token
   v
 Angular Operator Console
   |
-  | 9. connect to LiveKit room
+  | 10. connect to LiveKit room
   v
 LiveKit Room
   |
-  | 10. subscribe to remote audio and video tracks
+  | 11. subscribe to remote audio and video tracks
   v
 Operator sees and hears worker stream
 ```
@@ -50,6 +51,8 @@ Operator sees and hears worker stream
 
 - The backend is the trust boundary for room admission.
 - The operator console never mints LiveKit tokens directly.
+- Each live session is now anchored to a required worker-supplied `referenceNumber`.
+- The operator console should display the reference number together with the session creation timestamp as the reference datetime.
 - Near real-time updates are a combination of:
   - immediate LiveKit media subscription for audio/video
   - short-interval REST refresh for session and recording metadata

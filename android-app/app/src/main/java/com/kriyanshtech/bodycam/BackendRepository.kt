@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -43,12 +43,14 @@ class BackendRepository(
     suspend fun createWorkerSession(
         backendUrl: String,
         token: String,
-        user: StoredUser
+        user: StoredUser,
+        referenceNumber: String
     ): SessionResponse {
         return api(backendUrl, token).createSession(
             CreateSessionRequest(
                 workerId = user.userId,
-                workerName = user.displayName
+                workerName = user.displayName,
+                referenceNumber = referenceNumber
             )
         )
     }

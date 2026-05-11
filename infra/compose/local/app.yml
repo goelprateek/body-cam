@@ -1,10 +1,15 @@
 services:
   backend:
+    profiles: ["app"]
     build:
       context: ../../../backend
       dockerfile: Dockerfile
     env_file:
-      - ../../../backend/.env.docker.local
+      - ../../../backend/.env.local
+    environment:
+      DB_HOST: postgres
+      LIVEKIT_URL: ws://livekit:7880
+      MINIO_ENDPOINT: http://minio:9000
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -29,6 +34,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    profiles: ["app"]
     build:
       context: ../../../frontend
       dockerfile: Dockerfile

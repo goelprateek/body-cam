@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import android.app.Notification
 import android.app.NotificationChannel

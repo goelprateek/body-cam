@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.suspendCancellableCoroutine

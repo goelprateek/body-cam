@@ -370,6 +370,26 @@
                         android:textColor="@color/text_primary"
                         android:textSize="14sp" />
 
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/referenceNumberLayout"
+                        style="@style/Widget.BodyCam.TextInputLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:hint="@string/hint_reference_number"
+                        app:endIconMode="clear_text"
+                        app:errorEnabled="true"
+                        app:helperText="@string/helper_reference_number">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/referenceNumberInput"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:imeOptions="actionDone"
+                            android:inputType="textCapCharacters|textNoSuggestions"
+                            android:maxLines="1" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
                     <FrameLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

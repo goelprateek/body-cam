@@ -1,10 +1,12 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 data class MainUiState(
     val backendUrl: String = BuildConfig.DEFAULT_BACKEND_URL,
     val username: String = "worker1",
     val password: String = "worker123",
     val user: StoredUser? = null,
+    val referenceNumber: String = "",
+    val referenceError: String? = null,
     val loginInFlight: Boolean = false,
     val actionInFlight: Boolean = false,
     val isStreaming: Boolean = false,

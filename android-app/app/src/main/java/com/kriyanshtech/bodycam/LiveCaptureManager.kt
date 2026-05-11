@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import android.content.Context
 import android.os.Environment
@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.time.Instant
 import java.util.UUID
@@ -63,6 +65,7 @@ class LiveCaptureManager(
     private val captureScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val operationMutex = Mutex()
     private val workManager = WorkManager.getInstance(appContext)
     private val _state = MutableStateFlow(CaptureRuntimeState())
     private val pendingUploadIds = linkedSetOf<UUID>()
@@ -112,26 +115,31 @@ class LiveCaptureManager(
     }
 
     fun stopSession() {
-        stopRequested = true
-        isTrackStarted = false
-        mainHandler.removeCallbacks(segmentStopper)
-        _state.value = _state.value.copy(
-            isStreaming = false,
-            streamStatus = "Stopping",
-            syncStatus = if (activeRecording != null) {
-                "Finalizing current segment"
-            } else {
-                "Capture stopped; waiting for queued uploads"
-            },
-            cameraSwitchInFlight = false
-        )
+        captureScope.launch {
+            operationMutex.withLock {
+                if (stopRequested) return@withLock
+                stopRequested = true
+                isTrackStarted = false
+                mainHandler.removeCallbacks(segmentStopper)
+                _state.value = _state.value.copy(
+                    isStreaming = false,
+                    streamStatus = "Stopping",
+                    syncStatus = if (activeRecording != null) {
+                        "Finalizing current segment"
+                    } else {
+                        "Capture stopped; waiting for queued uploads"
+                    },
+                    cameraSwitchInFlight = false
+                )
 
-        val recording = activeRecording
-        if (recording != null) {
-            stopActiveRecordingSafely()
-        } else {
-            teardownCapturePipeline()
-            notifyStopSafeToReleaseIfIdle()
+                val recording = activeRecording
+                if (recording != null) {
+                    stopActiveRecordingSafely()
+                } else {
+                    teardownCapturePipeline()
+                    notifyStopSafeToReleaseIfIdle()
+                }
+            }
         }
     }
 
@@ -174,62 +182,94 @@ class LiveCaptureManager(
     fun start(config: ActiveSessionConfig, highQuality: Boolean = false) {
         val owner = lifecycleOwner ?: throw IllegalStateException("Preview not bound")
         val preview = previewView ?: throw IllegalStateException("Preview view not bound")
-        activeConfig = config
-        currentHighQuality = highQuality
-        pendingCameraFacing = null
-        isSwitchingCamera = false
-        stopRequested = false
+        
         captureScope.launch {
-            try {
-                _state.value = CaptureRuntimeState(
-                    isStreaming = false,
-                    streamStatus = "Connecting to LiveKit",
-                    syncStatus = "Preparing capture pipeline",
-                    sessionId = config.sessionId
-                )
-                val currentRoom = LiveKit.create(appContext)
-                room = currentRoom
-                launchRoomEvents(currentRoom)
-                currentRoom.connect(config.liveKitUrl, config.token)
+            operationMutex.withLock {
+                if (_state.value.isStreaming || stopRequested) return@withLock
+                
+                activeConfig = config
+                currentHighQuality = highQuality
+                pendingCameraFacing = null
+                isSwitchingCamera = false
+                stopRequested = false
+                
+                try {
+                    _state.value = CaptureRuntimeState(
+                        isStreaming = false,
+                        streamStatus = "Starting",
+                        syncStatus = "Initializing local camera...",
+                        sessionId = config.sessionId
+                    )
 
-                val localParticipant = currentRoom.localParticipant
-                val frameCapturer = BitmapFrameCapturer()
-                videoCapturer = frameCapturer
-                val track = localParticipant.createVideoTrack(
-                    name = "bodycam-camera",
-                    capturer = frameCapturer
-                )
-                track.startCapture()
-                localVideoTrack = track
-                isTrackStarted = true
-                android.util.Log.d("LiveCaptureManager", "Video track started and capturer active")
+                    // 1. Initialize local camera and recording FIRST
+                    bindCamera(owner, preview, highQuality)
+                    startSegmentRecording()
+                    
+                    _state.value = _state.value.copy(
+                        syncStatus = "Local recording started; connecting to server..."
+                    )
 
-                val published = localParticipant.publishVideoTrack(track)
-                if (!published) {
-                    throw IllegalStateException("LiveKit rejected video track publish")
+                    // 2. Initialize LiveKit Room
+                    val currentRoom = LiveKit.create(appContext)
+                    room = currentRoom
+                    launchRoomEvents(currentRoom)
+
+                    // 3. Connect to server
+                    _state.value = _state.value.copy(streamStatus = "Connecting")
+                    val wsUrl = if (config.liveKitUrl.startsWith("ws")) config.liveKitUrl 
+                                else "wss://${config.liveKitUrl}"
+                    currentRoom.connect(wsUrl, config.token)
+
+                    // 4. Setup and publish video track
+                    val localParticipant = currentRoom.localParticipant
+                    val frameCapturer = BitmapFrameCapturer()
+                    videoCapturer = frameCapturer
+                    
+                    _state.value = _state.value.copy(streamStatus = "Publishing")
+                    val track = localParticipant.createVideoTrack(
+                        name = "bodycam-camera",
+                        capturer = frameCapturer
+                    )
+                    track.startCapture()
+                    localVideoTrack = track
+                    isTrackStarted = true
+                    
+                    localParticipant.publishVideoTrack(track)
+                    
+                    try {
+                        localParticipant.setMicrophoneEnabled(true)
+                    } catch (e: Exception) {
+                        android.util.Log.e("LiveCaptureManager", "Failed to enable microphone", e)
+                    }
+
+                    _state.value = _state.value.copy(
+                        isStreaming = true,
+                        streamStatus = "Live and publishing",
+                        syncStatus = "Streaming + Local recording",
+                        usingFrontCamera = currentCameraFacing == CameraFacing.FRONT,
+                        canFlipCamera = hasAlternateCamera(),
+                        cameraSwitchInFlight = false,
+                        sessionId = config.sessionId
+                    )
+                } catch (exception: Exception) {
+                    android.util.Log.e("LiveCaptureManager", "Failed to start capture pipeline", exception)
+                    
+                    if (activeRecording != null) {
+                        _state.value = _state.value.copy(
+                            isStreaming = false,
+                            streamStatus = "Streaming Failed",
+                            syncStatus = "Recording Locally ONLY",
+                            lastError = exception.message ?: "Network or LiveKit failure"
+                        )
+                    } else {
+                        stopImmediateInternal()
+                        _state.value = CaptureRuntimeState(
+                            streamStatus = "Failed",
+                            syncStatus = "Capture stopped",
+                            lastError = exception.message ?: "Unknown start failure"
+                        )
+                    }
                 }
-                android.util.Log.d("LiveCaptureManager", "Video track published successfully")
-                localParticipant.setMicrophoneEnabled(true)
-
-                bindCamera(owner, preview, highQuality)
-                startSegmentRecording()
-
-                _state.value = _state.value.copy(
-                    isStreaming = true,
-                    streamStatus = "Live and publishing",
-                    syncStatus = "Recording local 30s clips and syncing after finalize",
-                    usingFrontCamera = currentCameraFacing == CameraFacing.FRONT,
-                    canFlipCamera = hasAlternateCamera(),
-                    cameraSwitchInFlight = false,
-                    sessionId = config.sessionId
-                )
-            } catch (exception: Exception) {
-                stopImmediate()
-                _state.value = CaptureRuntimeState(
-                    streamStatus = "Failed to start stream",
-                    syncStatus = "Capture not started",
-                    lastError = exception.message ?: "Unknown start failure"
-                )
             }
         }
     }
@@ -313,7 +353,8 @@ class LiveCaptureManager(
         videoCapture = capture
         
         // Also adjust streaming analysis resolution to match bandwidth expectations
-        val analysisResolution = if (highQuality) Size(1280, 720) else Size(640, 480)
+        // We use a fixed 480p for analysis as Bitmap-based streaming is CPU intensive
+        val analysisResolution = Size(640, 480)
         val analysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setResolutionSelector(
@@ -331,47 +372,45 @@ class LiveCaptureManager(
         var lastFrameTime = 0L
         analysis.setAnalyzer(cameraExecutor) { imageProxy ->
             val currentTime = System.currentTimeMillis()
-            // Throttle to ~15 FPS (approx 66ms between frames) to ensure VideoCapture has enough bandwidth/resources
-            if (currentTime - lastFrameTime < 66) {
+            // Throttle to ~10 FPS (100ms) to prevent OOM and CPU exhaustion during YUV->Bitmap conversion
+            if (currentTime - lastFrameTime < 100) {
                 imageProxy.close()
                 return@setAnalyzer
             }
             lastFrameTime = currentTime
 
             imageProxy.use { proxy ->
-                // Capture current state into local variables to avoid races during stop()
                 val currentCapturer = videoCapturer
-                val isStreaming = _state.value.isStreaming
-                
-                if (currentCapturer == null || !isTrackStarted || !isStreaming) {
-                    return@setAnalyzer
+                // Use isTrackStarted as the primary guard for pushing frames
+                if (currentCapturer == null || !isTrackStarted) {
+                    return@use
                 }
 
                 try {
-                    // toBitmap() converts the ImageProxy (usually YUV) to a Bitmap for LiveKit
-                    var bitmap = proxy.toBitmap()
+                    val bitmap = proxy.toBitmap()
                     val rotationDegrees = proxy.imageInfo.rotationDegrees
 
-                    // Front camera frames from ImageAnalysis are typically mirrored; flip them back for the remote viewer
-                    if (currentCameraFacing == CameraFacing.FRONT) {
+                    val finalBitmap = if (currentCameraFacing == CameraFacing.FRONT) {
                         val matrix = android.graphics.Matrix().apply { postScale(-1f, 1f) }
-                        val flippedBitmap = android.graphics.Bitmap.createBitmap(
+                        val flipped = android.graphics.Bitmap.createBitmap(
                             bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
                         )
-                        bitmap.recycle()
-                        bitmap = flippedBitmap
+                        if (flipped != bitmap) {
+                            bitmap.recycle()
+                        }
+                        flipped
+                    } else {
+                        bitmap
                     }
                     
-                    // Final check of volatility-guarded flags before pushing to SDK
-                    if (isTrackStarted && _state.value.isStreaming) {
-                        currentCapturer.pushBitmap(bitmap, rotationDegrees)
+                    if (isTrackStarted) {
+                        currentCapturer.pushBitmap(finalBitmap, rotationDegrees)
                     }
-                } catch (e: IllegalStateException) {
-                    // LiveKit's BitmapFrameCapturer throws ISE if the internal track/executor is not yet initialized or already stopped.
-                    // This is expected during transition phases (start/stop) and should be handled gracefully.
-                    android.util.Log.v("LiveCaptureManager", "BitmapFrameCapturer rejected frame (not ready or stopped): ${e.message}")
+                    if (finalBitmap != null && !finalBitmap.isRecycled) {
+                        finalBitmap.recycle()
+                    }
                 } catch (e: Exception) {
-                    android.util.Log.e("LiveCaptureManager", "Failed to process or push frame to LiveKit", e)
+                    android.util.Log.v("LiveCaptureManager", "Frame push failed: ${e.message}")
                 }
             }
         }
@@ -389,8 +428,9 @@ class LiveCaptureManager(
                 cameraSelector,
                 useCaseGroup
             )
+            android.util.Log.i("LiveCaptureManager", "Successfully bound camera use cases (Preview + VideoCapture + ImageAnalysis)")
         } catch (e: Exception) {
-            android.util.Log.e("LiveCaptureManager", "Failed to bind UseCaseGroup, attempting without ImageAnalysis", e)
+            android.util.Log.e("LiveCaptureManager", "Failed to bind UseCaseGroup (full pipeline), attempting fallback without ImageAnalysis", e)
             try {
                 val fallbackGroup = UseCaseGroup.Builder()
                     .addUseCase(preview)
@@ -402,6 +442,7 @@ class LiveCaptureManager(
                     cameraSelector,
                     fallbackGroup
                 )
+                android.util.Log.i("LiveCaptureManager", "Successfully bound fallback camera use cases (Preview + VideoCapture)")
                 _state.value = _state.value.copy(
                     isStreaming = false,
                     streamStatus = "Streaming disabled (HW limit)",
@@ -473,6 +514,7 @@ class LiveCaptureManager(
         activeRecording = pendingRecording.start(ContextCompat.getMainExecutor(appContext)) { event ->
             handleRecordingEvent(config, outputFile, event)
         }
+        android.util.Log.d("LiveCaptureManager", "Local segment recording started: ${outputFile.name}")
         activeSegmentStartedAtMs = SystemClock.elapsedRealtime()
         activeSegmentHasData = false
         delayedStopPending = false

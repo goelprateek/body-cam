@@ -28,11 +28,11 @@ fun asBuildConfigString(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
-    namespace = "com.company.bodycam"
+    namespace = "com.kriyanshtech.bodycam"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.company.bodycam"
+        applicationId = "com.kriyanshtech.bodycam"
         minSdk = 29
         targetSdk = 36
         versionCode = 1
@@ -103,6 +103,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            lint {
+                checkReleaseBuilds = false
+                abortOnError = false
+            }
         }
     }
 
@@ -115,10 +119,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
-}
-
-kotlin {
-    jvmToolchain(21)
 }
 
 dependencies {

@@ -7,6 +7,8 @@ import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -17,6 +19,7 @@ import java.util.UUID;
 
 @Service
 public class LiveKitTokenService {
+    private static final Logger log = LoggerFactory.getLogger(LiveKitTokenService.class);
 
     private final AppProperties appProperties;
 
@@ -29,6 +32,14 @@ public class LiveKitTokenService {
         Instant now = Instant.now();
         Instant expiry = now.plus(8, ChronoUnit.HOURS);
         boolean canPublish = "WORKER".equals(participantRole);
+        log.info(
+                "Preparing LiveKit token claims roomName={} participantName={} participantRole={} canPublish={} expiresAt={}",
+                roomName,
+                participantName,
+                participantRole,
+                canPublish,
+                expiry
+        );
 
         JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
                 .issuer(appProperties.livekit().apiKey())
@@ -49,8 +60,22 @@ public class LiveKitTokenService {
 
         try {
             signedJwt.sign(new MACSigner(appProperties.livekit().apiSecret().getBytes(StandardCharsets.UTF_8)));
+            log.info(
+                    "Signed LiveKit token roomName={} participantName={} participantRole={} issuer={}",
+                    roomName,
+                    participantName,
+                    participantRole,
+                    appProperties.livekit().apiKey()
+            );
             return signedJwt.serialize();
         } catch (JOSEException exception) {
+            log.error(
+                    "Failed to sign LiveKit token roomName={} participantName={} participantRole={}",
+                    roomName,
+                    participantName,
+                    participantRole,
+                    exception
+            );
             throw new IllegalStateException("Failed to sign LiveKit token", exception);
         }
     }

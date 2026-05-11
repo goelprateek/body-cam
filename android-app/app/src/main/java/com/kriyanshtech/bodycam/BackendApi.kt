@@ -1,4 +1,4 @@
-package com.company.bodycam
+package com.kriyanshtech.bodycam
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -48,7 +48,12 @@ object BackendApiFactory {
         .build()
 
     private fun createClient(tokenProvider: () -> String?): OkHttpClient {
+        val dispatcher = okhttp3.Dispatcher().apply {
+            maxRequestsPerHost = 4
+            maxRequests = 8
+        }
         return OkHttpClient.Builder()
+            .dispatcher(dispatcher)
             .addInterceptor { chain ->
                 val token = tokenProvider()
                 val request = if (token.isNullOrBlank()) {

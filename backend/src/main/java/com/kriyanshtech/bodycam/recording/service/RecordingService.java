@@ -209,6 +209,8 @@ public class RecordingService {
         return new RecordingResponse(
                 asset.getId(),
                 asset.getSession().getId(),
+                asset.getSession().getWorkerId(),
+                asset.getSession().getWorkerName(),
                 asset.getSession().getRoomName(),
                 asset.getObjectKey(),
                 null,

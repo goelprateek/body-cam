@@ -40,16 +40,25 @@ public class RecordingController {
 
     @GetMapping
     public ResponseEntity<List<RecordingResponse>> listRecordings() {
+        log.info("Received request to list recordings");
         return ResponseEntity.ok(recordingService.listRecordings());
     }
 
     @GetMapping("/{recordingId}/playback-url")
     public ResponseEntity<RecordingPlaybackResponse> playbackUrl(@PathVariable("recordingId") UUID recordingId) {
+        log.info("Received request to create recording playback URL recordingId={}", recordingId);
         return ResponseEntity.ok(recordingService.playbackUrl(recordingId));
     }
 
     @PostMapping
     public ResponseEntity<RecordingResponse> createRecording(@Valid @RequestBody CreateRecordingRequest request) {
+        log.info(
+                "Received create recording request sessionId={} objectKey={} durationSeconds={} metadataPresent={}",
+                request.sessionId(),
+                request.objectKey(),
+                request.durationSeconds(),
+                request.metadata() != null
+        );
         return ResponseEntity.ok(recordingService.createRecording(request));
     }
 
@@ -119,8 +128,10 @@ public class RecordingController {
         try {
             JsonNode node = objectMapper.readTree(metadataJson);
             if (node.isTextual()) {
+                log.info("Parsed textual recording metadata payload");
                 return objectMapper.readValue(node.asText(), RecordingMetadataRequest.class);
             }
+            log.info("Parsed structured recording metadata payload");
             return objectMapper.treeToValue(node, RecordingMetadataRequest.class);
         } catch (Exception exception) {
             log.warn("Failed to parse recording metadata JSON payload. Proceeding without metadata.", exception);
