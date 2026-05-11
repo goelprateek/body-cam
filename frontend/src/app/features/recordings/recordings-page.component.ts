@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -124,7 +124,17 @@ import {
                   controls
                   preload="metadata"
                   style="width: 100%; display: block;"
-                ></video>
+                >
+                  @if (selectedSubtitleUrl()) {
+                    <track
+                      kind="subtitles"
+                      label="Transcript Subtitles"
+                      srclang="en"
+                      [attr.src]="selectedSubtitleUrl()"
+                      default
+                    />
+                  }
+                </video>
               } @else {
                 <div class="viewer-empty premium-empty-viewer">
                   <div class="radar-scan" style="opacity: 0.2; background: conic-gradient(from 0deg at 50% 50%, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 80%, rgba(255, 255, 255, 0.2) 100%);"></div>
@@ -141,9 +151,7 @@ import {
             <div class="viewer-head-copy">
               <h2>Transcript</h2>
               <p class="viewer-caption">
-                {{ selectedTranscript()?.engine === 'stub'
-                  ? 'Stub transcript for flow validation until a real speech engine is added.'
-                  : 'Read what was captured in this recording.' }}
+                Real transcript and subtitles are generated from the uploaded recording audio.
               </p>
             </div>
             @if (selectedRecording()) {
@@ -154,7 +162,11 @@ import {
                 (click)="generateTranscript()"
                 [disabled]="isTranscriptGenerating() || isTranscriptLoading()"
               >
-                {{ selectedTranscript()?.status === 'FAILED' ? 'Retry Transcript' : 'Generate Transcript' }}
+                {{ selectedTranscript()?.status === 'FAILED'
+                  ? 'Retry Transcript'
+                  : selectedTranscript()?.status === 'READY'
+                    ? 'Regenerate Transcript'
+                    : 'Generate Transcript' }}
               </button>
             }
           </div>
@@ -227,12 +239,13 @@ import {
     </section>
   `
 })
-export class RecordingsPageComponent implements OnInit {
+export class RecordingsPageComponent implements OnInit, OnDestroy {
   readonly api = inject(OperatorApiService);
 
   readonly recordings = signal<RecordingResponse[]>([]);
   readonly selectedRecordingId = signal<string | null>(null);
   readonly selectedPlaybackUrl = signal<string | null>(null);
+  readonly selectedSubtitleUrl = signal<string | null>(null);
   readonly selectedTranscript = signal<RecordingTranscriptResponse | null>(null);
   readonly isLoading = signal(false);
   readonly isPlaybackLoading = signal(false);
@@ -241,6 +254,10 @@ export class RecordingsPageComponent implements OnInit {
   readonly pageError = signal<string | null>(null);
   readonly playbackError = signal<string | null>(null);
   readonly transcriptError = signal<string | null>(null);
+
+  ngOnDestroy(): void {
+    this.revokeSubtitleUrl();
+  }
 
   selectedRecording(): RecordingResponse | null {
     const selectedRecordingId = this.selectedRecordingId();
@@ -323,6 +340,7 @@ export class RecordingsPageComponent implements OnInit {
     this.selectedTranscript.set(null);
     this.playbackError.set(null);
     this.transcriptError.set(null);
+    this.revokeSubtitleUrl();
     this.isPlaybackLoading.set(true);
     this.isTranscriptLoading.set(true);
 
@@ -344,6 +362,7 @@ export class RecordingsPageComponent implements OnInit {
     if (transcriptResult.status === 'fulfilled') {
       this.selectedTranscript.set(transcriptResult.value);
       this.patchRecordingTranscriptStatus(id, transcriptResult.value.status);
+      await this.loadSubtitleTrackIfAvailable(id, transcriptResult.value.status);
     } else {
       this.transcriptError.set(this.api.explainError(transcriptResult.reason));
     }
@@ -360,12 +379,14 @@ export class RecordingsPageComponent implements OnInit {
 
     this.isTranscriptGenerating.set(true);
     this.transcriptError.set(null);
+    this.revokeSubtitleUrl();
 
     try {
       const transcript = await this.api.generateRecordingTranscript(recording.id);
       if (this.selectedRecordingId() === recording.id) {
         this.selectedTranscript.set(transcript);
         this.patchRecordingTranscriptStatus(recording.id, transcript.status);
+        await this.loadSubtitleTrackIfAvailable(recording.id, transcript.status);
       }
     } catch (error) {
       if (this.selectedRecordingId() === recording.id) {
@@ -374,6 +395,34 @@ export class RecordingsPageComponent implements OnInit {
     } finally {
       this.isTranscriptGenerating.set(false);
     }
+  }
+
+  private async loadSubtitleTrackIfAvailable(recordingId: string, status?: RecordingTranscriptStatus | null): Promise<void> {
+    if (status !== 'READY') {
+      this.selectedSubtitleUrl.set(null);
+      return;
+    }
+
+    try {
+      const subtitleVtt = await this.api.getRecordingTranscriptSubtitles(recordingId);
+      if (this.selectedRecordingId() !== recordingId) {
+        return;
+      }
+      const subtitleUrl = URL.createObjectURL(new Blob([subtitleVtt], { type: 'text/vtt' }));
+      this.selectedSubtitleUrl.set(subtitleUrl);
+    } catch (error) {
+      if (this.selectedRecordingId() === recordingId) {
+        this.transcriptError.set(this.api.explainError(error));
+      }
+    }
+  }
+
+  private revokeSubtitleUrl(): void {
+    const subtitleUrl = this.selectedSubtitleUrl();
+    if (subtitleUrl) {
+      URL.revokeObjectURL(subtitleUrl);
+    }
+    this.selectedSubtitleUrl.set(null);
   }
 
   private patchRecordingTranscriptStatus(recordingId: string, status: RecordingTranscriptStatus): void {

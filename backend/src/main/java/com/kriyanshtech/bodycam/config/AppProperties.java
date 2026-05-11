@@ -6,7 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record AppProperties(
         Jwt jwt,
         LiveKit livekit,
-        Storage storage
+        Storage storage,
+        Transcript transcript
 ) {
 
     public record Jwt(
@@ -31,6 +32,14 @@ public record AppProperties(
             String bucket,
             String accessKey,
             String secretKey
+    ) {
+    }
+
+    public record Transcript(
+            boolean enabled,
+            String voskUrl,
+            String ffmpegCommand,
+            String languageCode
     ) {
     }
 }

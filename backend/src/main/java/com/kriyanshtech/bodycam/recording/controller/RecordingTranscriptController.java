@@ -2,6 +2,7 @@ package com.kriyanshtech.bodycam.recording.controller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,8 +33,17 @@ public class RecordingTranscriptController {
     }
 
     @PostMapping("/generate")
-    public ResponseEntity<RecordingTranscriptResponse> generateTranscript(@PathVariable("recordingId") UUID recordingId) {
+    public ResponseEntity<RecordingTranscriptResponse> generateTranscript(
+            @PathVariable("recordingId") UUID recordingId) {
         log.info("Received transcript generation request recordingId={}", recordingId);
         return ResponseEntity.ok(recordingTranscriptService.generateTranscript(recordingId));
+    }
+
+    @GetMapping(path = "/subtitles.vtt", produces = "text/vtt")
+    public ResponseEntity<String> subtitles(@PathVariable("recordingId") UUID recordingId) {
+        log.info("Received transcript subtitle request recordingId={}", recordingId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/vtt"))
+                .body(recordingTranscriptService.buildSubtitleVtt(recordingId));
     }
 }

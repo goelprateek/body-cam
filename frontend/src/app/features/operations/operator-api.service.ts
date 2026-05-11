@@ -128,6 +128,15 @@ export class OperatorApiService {
     );
   }
 
+  async getRecordingTranscriptSubtitles(recordingId: string): Promise<string> {
+    return firstValueFrom(
+      this.http.get(this.url(`/recordings/${recordingId}/transcript/subtitles.vtt`), {
+        headers: this.authHeaders(),
+        responseType: 'text'
+      })
+    );
+  }
+
   async createJoinToken(
     sessionId: string,
     participantName: string

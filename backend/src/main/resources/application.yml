@@ -49,3 +49,8 @@ app:
     bucket: ${MINIO_BUCKET:recordings}
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  transcript:
+    enabled: ${APP_TRANSCRIPT_ENABLED:true}
+    vosk-url: ${TRANSCRIPT_VOSK_URL:ws://localhost:2700}
+    ffmpeg-command: ${APP_TRANSCRIPT_FFMPEG_COMMAND:ffmpeg}
+    language-code: ${APP_TRANSCRIPT_LANGUAGE_CODE:en-ZA}

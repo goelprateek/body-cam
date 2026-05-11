@@ -6,6 +6,7 @@ The stack now uses the same split pattern as MeterManagement, but kept under `in
 - `docker-compose.prod.yml` for production
 - `compose/local/db.yml` and `compose/prod/db.yml` for data-layer services like PostgreSQL and Redis
 - `compose/local/infra.yml` and `compose/prod/infra.yml` for infrastructure services like MinIO, LiveKit, LiveKit config rendering, and coturn
+  - transcript infrastructure such as the Vosk transcription service also lives in these `infra.yml` files
 - `compose/local/app.yml` and `compose/prod/app.yml` for backend and frontend services
 
 Backend runtime config:
@@ -14,10 +15,12 @@ Backend runtime config:
 - production backend container env comes from `backend/.env.prod`
 - `backend/.env.local` is for direct backend runs outside Compose, such as IDE launches or local host execution
 - `infra/.env.local` is only for local Compose infrastructure services like PostgreSQL, Redis, MinIO, LiveKit, and coturn
+  - plus local transcription service publishing such as `TRANSCRIPT_PORT`
 
 Local runs:
 
 - infrastructure only: `docker compose --env-file .env.local -f docker-compose.yml up -d`
+  - this now starts the local Vosk transcription service as well, exposed on `localhost:${TRANSCRIPT_PORT}`
 - backend on host: run from `backend/` using `backend/.env.local`
 - frontend on host: run from `frontend/` against the host-run backend
 - optional full local compose app stack remains defined in `compose/local/app.yml` under the `app` profile and can be started with `docker compose --env-file .env.local -f docker-compose.yml --profile app up -d`

@@ -16,6 +16,8 @@ services:
         condition: service_started
       livekit:
         condition: service_started
+      transcription:
+        condition: service_started
     networks:
       - private
       - proxy

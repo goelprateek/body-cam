@@ -1,6 +1,7 @@
 package com.kriyanshtech.bodycam.recording.service;
 
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -101,6 +102,30 @@ public class ObjectStorageService {
                     exception
             );
             throw new IllegalStateException("Failed to create recording playback URL", exception);
+        }
+    }
+
+    public InputStream download(String objectKey) {
+        try {
+            log.info(
+                    "Downloading recording object from bucket={} key={}",
+                    appProperties.storage().bucket(),
+                    objectKey
+            );
+            return internalMinioClient.getObject(
+                    GetObjectArgs.builder()
+                            .bucket(appProperties.storage().bucket())
+                            .object(objectKey)
+                            .build()
+            );
+        } catch (Exception exception) {
+            log.error(
+                    "Failed to download recording object from bucket={} key={}",
+                    appProperties.storage().bucket(),
+                    objectKey,
+                    exception
+            );
+            throw new IllegalStateException("Failed to download recording segment", exception);
         }
     }
 
