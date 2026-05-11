@@ -21,9 +21,9 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.lifecycle.LifecycleOwner
 import android.util.Size
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleOwner
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.Data
@@ -55,7 +55,8 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class LiveCaptureManager(
-    private val appContext: Context
+    private val appContext: Context,
+    private val captureLifecycleOwner: LifecycleOwner
 ) {
     private enum class CameraFacing(val lensFacing: Int) {
         BACK(CameraSelector.LENS_FACING_BACK),
@@ -71,7 +72,6 @@ class LiveCaptureManager(
     private val pendingUploadIds = linkedSetOf<UUID>()
 
     private var previewView: PreviewView? = null
-    private var lifecycleOwner: LifecycleOwner? = null
     private var room: Room? = null
     private var cameraProvider: ProcessCameraProvider? = null
     private var videoCapture: VideoCapture<Recorder>? = null
@@ -105,7 +105,6 @@ class LiveCaptureManager(
 
     fun bindPreview(previewView: PreviewView, lifecycleOwner: LifecycleOwner) {
         this.previewView = previewView
-        this.lifecycleOwner = lifecycleOwner
     }
 
     fun release() {
@@ -144,6 +143,14 @@ class LiveCaptureManager(
     }
 
     fun stopImmediate() {
+        captureScope.launch {
+            operationMutex.withLock {
+                stopImmediateInternal()
+            }
+        }
+    }
+
+    private fun stopImmediateInternal() {
         stopRequested = false
         isTrackStarted = false
         mainHandler.removeCallbacks(segmentStopper)
@@ -180,7 +187,6 @@ class LiveCaptureManager(
     }
 
     fun start(config: ActiveSessionConfig, highQuality: Boolean = false) {
-        val owner = lifecycleOwner ?: throw IllegalStateException("Preview not bound")
         val preview = previewView ?: throw IllegalStateException("Preview view not bound")
         
         captureScope.launch {
@@ -202,7 +208,7 @@ class LiveCaptureManager(
                     )
 
                     // 1. Initialize local camera and recording FIRST
-                    bindCamera(owner, preview, highQuality)
+                    bindCamera(captureLifecycleOwner, preview, highQuality)
                     startSegmentRecording()
                     
                     _state.value = _state.value.copy(
@@ -686,7 +692,6 @@ class LiveCaptureManager(
     }
 
     private fun switchCameraAndResume(targetFacing: CameraFacing) {
-        val owner = lifecycleOwner ?: return
         val preview = previewView ?: return
         
         if (!_state.value.isStreaming) {
@@ -698,7 +703,7 @@ class LiveCaptureManager(
         pendingCameraFacing = targetFacing
         captureScope.launch {
             runCatching {
-                bindCamera(owner, preview, currentHighQuality)
+                bindCamera(captureLifecycleOwner, preview, currentHighQuality)
             }.onSuccess {
                 isSwitchingCamera = false
                 _state.value = _state.value.copy(

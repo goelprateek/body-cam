@@ -3,13 +3,14 @@ import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { OperatorApiService } from '@features/operations/operator-api.service';
 import { RecordingResponse } from '@features/operations/operator.models';
 
 @Component({
   selector: 'app-recordings-page',
   standalone: true,
-  imports: [CommonModule, MatCardModule, MatIconModule, MatProgressBarModule],
+  imports: [CommonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatTooltipModule],
   template: `
     <section class="page workspace-grid">
       <mat-card class="panel section-panel glass-panel" appearance="outlined">
@@ -34,38 +35,42 @@ import { RecordingResponse } from '@features/operations/operator.models';
         <div class="recording-list session-list-scroll premium-scroll">
           @for (recording of recordings(); track recording.id) {
             <mat-card
-              class="recording-card premium-card"
+              class="archive-card premium-card"
               appearance="outlined"
-              [class.recording-card-selected]="recording.id === selectedRecordingId()"
+              [class.archive-card-selected]="recording.id === selectedRecordingId()"
+              (click)="selectRecording(recording.id)"
             >
-              <button class="recording-card-button recording-card-button-rich" type="button" (click)="selectRecording(recording.id)">
-                <div class="recording-card-top">
-                  <div class="recording-card-info">
-                    <div class="session-avatar recording-avatar">
-                      <mat-icon>person</mat-icon>
-                    </div>
-                    <div class="recording-card-copy">
-                      <strong>{{ recording.workerName }}</strong>
-                      <span class="recording-room">{{ recording.roomName }}</span>
-                    </div>
+              <div class="archive-card-inner">
+                <div class="archive-thumb">
+                  <div class="thumb-overlay">
+                    <mat-icon class="play-icon">play_arrow</mat-icon>
                   </div>
-                  <span class="recording-chip">REC</span>
-                </div>
-
-                <div class="recording-card-meta">
-                  <div class="recording-card-meta-row">
-                    <mat-icon>schedule</mat-icon>
-                    <span>{{ recording.createdAt | date: 'medium' }}</span>
+                  <div class="thumb-placeholder">
+                     <mat-icon>videocam</mat-icon>
                   </div>
-
-                  @if (recording.metadata?.latitude && recording.metadata?.longitude) {
-                    <div class="recording-card-meta-row">
-                      <mat-icon>place</mat-icon>
-                      <span>{{ formatCoordinates(recording) }}</span>
-                    </div>
-                  }
+                  <div class="duration-pill">REC</div>
                 </div>
-              </button>
+                
+                <div class="archive-details">
+                  <div class="archive-header">
+                    <strong class="archive-worker">{{ recording.workerName }}</strong>
+                  </div>
+                  <span class="archive-room">{{ recording.roomName }}</span>
+                  
+                  <div class="archive-meta">
+                    <div class="meta-item">
+                      <mat-icon>schedule</mat-icon>
+                      <span>{{ recording.createdAt | date: 'MMM d, h:mm a' }}</span>
+                    </div>
+                    @if (recording.metadata?.latitude && recording.metadata?.longitude) {
+                      <div class="meta-item">
+                        <mat-icon>place</mat-icon>
+                        <span class="meta-truncate" [matTooltip]="formatCoordinates(recording)">{{ formatCoordinates(recording) }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </div>
             </mat-card>
           } @empty {
             <div class="empty-state premium-empty">

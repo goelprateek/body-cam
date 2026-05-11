@@ -10,6 +10,7 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 
@@ -18,6 +19,8 @@ class CaptureService : LifecycleService() {
     private val binder = LocalBinder()
     var captureManager: LiveCaptureManager? = null
         private set
+    @Volatile
+    private var lastStartError: String? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): CaptureService = this@CaptureService
@@ -30,7 +33,10 @@ class CaptureService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
-        captureManager = LiveCaptureManager(applicationContext).apply {
+        captureManager = LiveCaptureManager(
+            appContext = applicationContext,
+            captureLifecycleOwner = this
+        ).apply {
             onStopSafeToRelease = {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -47,20 +53,27 @@ class CaptureService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        
-        val notification = createNotification("BodyCam is recording...")
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
 
-        return START_STICKY
+        return try {
+            val notification = createNotification("BodyCam is recording...")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            lastStartError = null
+            START_STICKY
+        } catch (exception: Exception) {
+            lastStartError = exception.message ?: "Unable to start foreground capture service"
+            Log.e("CaptureService", "Failed to enter foreground mode", exception)
+            captureManager?.stopImmediate()
+            stopSelf()
+            START_NOT_STICKY
+        }
     }
 
     fun stopCaptureGracefully() {
@@ -71,6 +84,20 @@ class CaptureService : LifecycleService() {
             return
         }
         manager.stopSession()
+    }
+
+    fun startForegroundCaptureService() {
+        lastStartError = null
+        ContextCompat.startForegroundService(
+            this,
+            Intent(this, CaptureService::class.java)
+        )
+    }
+
+    fun consumeLastStartError(): String? {
+        val error = lastStartError
+        lastStartError = null
+        return error
     }
 
     private fun createNotificationChannel() {

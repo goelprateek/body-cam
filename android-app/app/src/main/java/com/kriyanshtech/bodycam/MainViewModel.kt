@@ -12,11 +12,14 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -163,10 +166,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val sessionResp = repository.createWorkerSession(url, token, user, referenceNumber)
                 val liveKitResp = repository.joinWorkerSession(url, token, sessionResp, user)
-                
-                val context = getApplication<Application>()
-                val serviceIntent = Intent(context, CaptureService::class.java)
-                context.startForegroundService(serviceIntent)
 
                 val config = ActiveSessionConfig(
                     backendUrl = url,
@@ -175,19 +174,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     authToken = token,
                     sessionId = sessionResp.id
                 )
-                
-                // Ensure service is bound before calling start
-                while (captureService == null) {
-                    kotlinx.coroutines.delay(50)
+
+                val service = awaitCaptureService()
+                service.startForegroundCaptureService()
+                delay(150)
+                service.consumeLastStartError()?.let { error ->
+                    throw IllegalStateException(error)
                 }
 
                 previewView?.let { preview ->
                     previewLifecycleOwner?.let { owner ->
-                        captureService?.captureManager?.bindPreview(preview, owner)
+                        service.captureManager?.bindPreview(preview, owner)
                     }
                 }
 
-                captureService?.captureManager?.start(config, _uiState.value.highQualityMode)
+                service.captureManager?.start(config, _uiState.value.highQualityMode)
                 _uiState.value = _uiState.value.copy(
                     actionInFlight = false,
                     activeSessionId = sessionResp.id,
@@ -199,6 +200,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     message = "Start session error: ${e.message}"
                 )
             }
+        }
+    }
+
+    private suspend fun awaitCaptureService(): CaptureService {
+        try {
+            return withTimeout(5_000) {
+                while (captureService == null) {
+                    delay(50)
+                }
+                captureService ?: throw IllegalStateException("Capture service unavailable")
+            }
+        } catch (_: TimeoutCancellationException) {
+            throw IllegalStateException("Capture service did not become ready in time")
         }
     }
 
