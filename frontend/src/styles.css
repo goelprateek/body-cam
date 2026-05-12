@@ -1075,6 +1075,83 @@ button:not(:disabled):hover {
   margin-bottom: 0.9rem;
 }
 
+.archive-search-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.investigation-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  max-height: 14rem;
+}
+
+.investigation-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid var(--surface-border);
+  background: rgba(255, 255, 255, 0.56);
+  padding: 0.85rem 0.95rem;
+  cursor: pointer;
+}
+
+.investigation-hit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.investigation-hit-meta {
+  color: var(--subtle);
+  font-size: 0.82rem;
+}
+
+.investigation-hit-snippet {
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.transcript-action-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.premium-btn-secondary {
+  background: transparent;
+}
+
+.transcript-filter-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.transcript-filter-chip {
+  border: 1px solid var(--surface-border);
+  background: rgba(255, 255, 255, 0.56);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.transcript-filter-chip-active {
+  border-color: rgba(53, 123, 166, 0.35);
+  background: rgba(53, 123, 166, 0.12);
+}
+
 .transcript-search-input {
   flex: 1 1 auto;
   min-width: 0;
@@ -1141,9 +1218,20 @@ button:not(:disabled):hover {
   background: rgba(97, 183, 72, 0.16);
 }
 
+.transcript-segment-low-confidence {
+  border-color: rgba(203, 82, 57, 0.28);
+}
+
 .segment-time {
   font-weight: 800;
   color: var(--brand-dark);
+}
+
+.segment-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .segment-text {
@@ -1151,10 +1239,83 @@ button:not(:disabled):hover {
   line-height: 1.5;
 }
 
+.segment-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.segment-confidence,
+.segment-recording-ref {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.segment-confidence {
+  background: rgba(53, 123, 166, 0.12);
+  color: var(--brand-dark);
+}
+
+.segment-confidence-low {
+  background: rgba(203, 82, 57, 0.12);
+  color: var(--danger);
+}
+
+.segment-recording-ref {
+  background: rgba(31, 41, 55, 0.08);
+  color: var(--subtle);
+}
+
 .transcript-empty {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+}
+
+.transcript-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.transcript-review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--surface-border);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.transcript-review-card-warning {
+  border-color: rgba(203, 82, 57, 0.24);
+}
+
+.transcript-review-head,
+.transcript-review-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.transcript-review-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.transcript-review-error {
+  color: var(--danger);
+  font-size: 0.9rem;
 }
 
 .hud-overlay {

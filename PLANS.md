@@ -6,6 +6,18 @@
 ```md id="p3hv9v"
 # MVP Delivery Plan
 
+## Phase Status Table
+
+| Phase | Area | Status | Notes |
+| --- | --- | --- | --- |
+| 1 | Infrastructure | `Implemented` | Compose split, LiveKit, MinIO, PostgreSQL, and production readiness wiring are in place. |
+| 2 | Backend | `Implemented` | Auth, session APIs, recording APIs, LiveKit token generation, and transcript backend foundations are implemented. |
+| 3 | Android | `Implemented` | Login, session start/stop, local recording, LiveKit publishing, and queued upload flow are implemented. |
+| 4 | Frontend | `Implemented` | Operator login, dashboard, live session join, archive playback, and transcript review are implemented. |
+| 5 | Stabilization | `In Progress` | Reliability hardening is ongoing through later recording and transcript phases. |
+| 6 | Continuous Session Recording | `Implemented` first slice | Session timeline metadata, backend timeline APIs, continuous playback, and async export packaging are implemented. Merged session artifacts remain optional future work. |
+| 7 | Recording And Transcript Robustness | `Partially Implemented` | Async transcript jobs, idempotent ingest, integrity states, queue visibility, session transcript search, and `10s` segments are implemented. A dedicated transcript assembly stage still remains to be added. |
+
 # Phase 1 - Infrastructure
 
 - setup Docker Compose
@@ -86,11 +98,14 @@ Planned slices:
 - Phase 6.3: add frontend continuous session playback over ordered segments
 - Phase 6.4: add optional async merged export for evidence/download workflows
 
-Current implementation status:
-- Phase 6.1 is implemented
-- Phase 6.2 is implemented with `GET /api/sessions/{sessionId}/recordings/timeline`
-- Phase 6.3 is implemented with session-based frontend playback and session transcript aggregation
-- Phase 6.4 remains pending
+Phase status:
+
+| Slice | Status | Notes |
+| --- | --- | --- |
+| 6.1 Timeline metadata foundation | `Implemented` | Android upload metadata and backend persistence are in place. |
+| 6.2 Session timeline model | `Implemented` | `GET /api/sessions/{sessionId}/recordings/timeline` is live. |
+| 6.3 Continuous frontend playback | `Implemented` | Session-based playback, transcript aggregation, and transcript-driven seek are live. |
+| 6.4 Optional async merge/export | `Implemented` first slice | Async export packaging is implemented. Merged session artifacts remain future work. |
 
 Success Criteria:
 - Android can keep recording and queue uploads in poor connectivity
@@ -112,23 +127,30 @@ Objective:
 - remove synchronous transcript execution from the request path
 - make uploads safe under retries, partial connectivity, and out-of-order arrivals
 - prepare the system for higher-quality engines like `whisper.cpp` without redesigning the API contract
+- ensure stored transcripts come from a post-STT assembly pipeline instead of near-direct engine output
 
 Planned slices:
 - Phase 7.1: async transcript job model
+- Phase 7.1b: transcript assembly pipeline
 - Phase 7.2: idempotent segment ingest and duplicate protection
 - Phase 7.3: session integrity states and recovery UX
 - Phase 7.4: smaller Android recording segments
 - Phase 7.5: richer session transcript review and search
 
-Current status:
-- Phase 7.1 is implemented with queued transcript requests and a backend scheduled worker
-- Phase 7.2 is implemented with idempotent segment upload reuse on `sessionId + segmentSequence`
-- Phase 7.3 is implemented at the first slice with session integrity states in the timeline response
-- Phase 7.5 is partially implemented with Android upload queue visibility and session transcript search
-- Phase 7.4 remains pending
+Phase status:
+
+| Slice | Status | Notes |
+| --- | --- | --- |
+| 7.1 Async transcript job model | `Implemented` | Transcript requests queue `PENDING` work and a scheduled backend poller processes jobs. |
+| 7.1b Transcript assembly pipeline | `Pending` | Raw STT output still needs a first-class assembly stage for overlap merge, dedupe, sentence building, punctuation restoration, and timeline generation. |
+| 7.2 Idempotent segment ingest | `Implemented` | Upload reuse is keyed by `sessionId + segmentSequence`. |
+| 7.3 Session integrity states and recovery UX | `Implemented` first slice | Timeline now returns `COMPLETE`, `PROCESSING_UPLOADS`, `PARTIAL`, and `HAS_GAPS`. Richer recovery UX is still future work. |
+| 7.4 Smaller Android recording segments | `Implemented` | Android recording segments now roll every `10s`. |
+| 7.5 Richer session transcript review and search | `Implemented` | Backend session search, timestamp jump, active transcript highlighting, low-confidence indicators, failed-interval review, and selective retry are implemented. |
 
 Success Criteria:
 - transcript generation returns quickly and completes in the background
+- transcript pipeline is `queue -> audio extractor -> STT -> transcript assembler -> transcript DB`
 - duplicate segment uploads do not corrupt session ordering
 - operators can distinguish complete sessions from partial or gap-filled sessions
 - the system is ready for a production engine swap without changing the user-facing transcript model

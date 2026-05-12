@@ -9,7 +9,7 @@
 - `android-app/`
   Field worker app. Captures audio and video, stores media locally first, publishes to LiveKit for near real-time viewing, and uploads finalized recording files to the backend recording API. During an active session it can switch between front and back cameras, but all generated clips still remain under the same session.
 - `backend/`
-  Spring Boot API. Owns operator authentication, session metadata, recording metadata, LiveKit join token generation, and the current recording upload handoff into MinIO. The backend groups uploaded clips by `sessionId`, stores each uploaded segment as a recording row for that session, and supports an extensible per-clip metadata model for location, camera-facing, thermal, and future sensor data.
+  Spring Boot API. Owns operator authentication, session metadata, recording metadata, LiveKit join token generation, recording upload handoff into MinIO, and the post-recording transcript pipeline. The backend groups uploaded clips by `sessionId`, stores each uploaded segment as a recording row for that session, supports an extensible per-clip metadata model for location, camera-facing, thermal, and future sensor data, and should treat STT output as intermediate data that must pass through transcript assembly before becoming the stored transcript artifact.
 - `frontend/`
   Angular backoffice console. Operators sign in, inspect sessions, join live rooms, and review recordings.
 - `infra/`
@@ -66,7 +66,40 @@
                                           +--------------+
                                           | MinIO / S3   |
                                           | recordings   |
+                                          +------+-------+
+                                                 |
+                                                 | queued transcript work
+                                                 v
                                           +--------------+
+                                          | Transcript   |
+                                          | Queue        |
+                                          +------+-------+
+                                                 |
+                                                 v
+                                          +--------------+
+                                          | Audio        |
+                                          | Extractor    |
+                                          +------+-------+
+                                                 |
+                                                 v
+                                          +--------------+
+                                          | Vosk STT     |
+                                          | raw output   |
+                                          +------+-------+
+                                                 |
+                                                 v
+                                          +--------------+
+                                          | Transcript   |
+                                          | Assembler    |
+                                          +------+-------+
+                                                 |
+                                   persist final | assembled transcript
+                                   transcript    | and timeline
+                                                 v
+                                          +-----------+
+                                          | PostgreSQL|
+                                          | transcript|
+                                          +-----------+
 ```
 
 ## MVP Boundaries
@@ -75,6 +108,7 @@
 - Recording objects belong to object storage.
 - Session and recording metadata belong to Spring Boot plus PostgreSQL.
 - The backend currently brokers recording file uploads into object storage, but it does not handle live media transport.
+- Raw STT output is not the final evidence artifact. The backend should persist transcript data only after a transcript assembly stage merges overlaps, removes duplicates, restores punctuation, and aligns the timeline.
 - Camera flips happen inside one live session. The app may finalize one clip and start the next on the other lens, but all resulting clips still belong to the same backend session.
 - Per-clip metadata is the extension point for future device context such as GPS and thermal measurements; new fields should attach to the clip, not create a new session type.
 - The frontend should stay service-based and operationally simple.

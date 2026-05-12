@@ -80,10 +80,14 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - `GET /api/recordings`
 - `GET /api/recordings/{id}/playback-url`
 - `GET /api/sessions/{id}/recordings/timeline`
+- `GET /api/sessions/{id}/recordings/export-package`
+- `POST /api/sessions/{id}/recordings/export-package`
 - `GET /api/sessions/{id}/transcript`
 - `GET /api/sessions/{id}/transcript/search?q=...`
 - `GET /api/sessions/{id}/transcript/subtitles.vtt`
 - `POST /api/sessions/{id}/transcript/generate`
+- `POST /api/sessions/{id}/transcript/retry-failed`
+- `GET /api/recordings/investigation-search?q=...`
 - `GET /api/recordings/{id}/transcript`
 - `GET /api/recordings/{id}/transcript/subtitles.vtt`
 - `POST /api/recordings/{id}/transcript/generate`

@@ -39,6 +39,12 @@ public class SessionRecordingTranscriptController {
         return ResponseEntity.ok(recordingTranscriptService.generateSessionTranscript(sessionId));
     }
 
+    @PostMapping("/retry-failed")
+    public ResponseEntity<SessionTranscriptResponse> retryFailedTranscript(@PathVariable("sessionId") UUID sessionId) {
+        log.info("Received failed session transcript retry request sessionId={}", sessionId);
+        return ResponseEntity.ok(recordingTranscriptService.retryFailedSessionTranscript(sessionId));
+    }
+
     @GetMapping("/search")
     public ResponseEntity<SessionTranscriptSearchResponse> searchTranscript(
             @PathVariable("sessionId") UUID sessionId,

@@ -87,6 +87,11 @@ done
 APP_BASE_NAME=${0##*/}
 # Discard cd standard output in case $CDPATH is set (https://github.com/gradle/gradle/issues/25036)
 APP_HOME=$( cd -P "${APP_HOME:-./}" > /dev/null && printf '%s\n' "$PWD" ) || exit
+REPO_HOME=$( cd "$APP_HOME/.." > /dev/null && pwd -P ) || exit
+
+# Keep this repo on its local Gradle cache to avoid workstation-wide lock conflicts.
+GRADLE_USER_HOME="$REPO_HOME/.gradle-user-home"
+export GRADLE_USER_HOME
 
 # Use the maximum available, or set MAX_FD != -1 to use that value.
 MAX_FD=maximum

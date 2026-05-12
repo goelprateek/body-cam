@@ -69,9 +69,13 @@ public class ObjectStorageService {
     }
 
     public String presignedPlaybackUrl(String objectKey, int expirySeconds) {
+        return presignedDownloadUrl(objectKey, expirySeconds);
+    }
+
+    public String presignedDownloadUrl(String objectKey, int expirySeconds) {
         try {
             log.info(
-                    "Generating playback URL via public storage endpoint={} bucket={} key={} expirySeconds={} region={}",
+                    "Generating download URL via public storage endpoint={} bucket={} key={} expirySeconds={} region={}",
                     appProperties.storage().publicUrl(),
                     appProperties.storage().bucket(),
                     objectKey,
@@ -87,21 +91,21 @@ public class ObjectStorageService {
                             .build()
             );
             log.info(
-                    "Generated playback URL for recording key={} expirySeconds={}",
+                    "Generated download URL for recording key={} expirySeconds={}",
                     objectKey,
                     expirySeconds
             );
             return playbackUrl;
         } catch (Exception exception) {
             log.error(
-                    "Failed to generate playback URL for endpoint={} bucket={} key={} region={}",
+                    "Failed to generate download URL for endpoint={} bucket={} key={} region={}",
                     appProperties.storage().publicUrl(),
                     appProperties.storage().bucket(),
                     objectKey,
                     appProperties.storage().region(),
                     exception
             );
-            throw new IllegalStateException("Failed to create recording playback URL", exception);
+            throw new IllegalStateException("Failed to create recording download URL", exception);
         }
     }
 

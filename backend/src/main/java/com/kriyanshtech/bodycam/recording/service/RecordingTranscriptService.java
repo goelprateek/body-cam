@@ -4,6 +4,7 @@ import com.kriyanshtech.bodycam.common.NotFoundException;
 import com.kriyanshtech.bodycam.config.AppProperties;
 import com.kriyanshtech.bodycam.recording.dto.RecordingTranscriptResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingTranscriptSegmentResponse;
+import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptRecordingResponse;
 import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptResponse;
 import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSearchResponse;
 import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSegmentResponse;
@@ -111,6 +112,25 @@ public class RecordingTranscriptService {
         }
 
         log.info("Session transcript generation request completed sessionId={} queuedRecordings={}", sessionId, queuedCount);
+        return aggregateSessionTranscript(sessionId, orderedSessionRecordings(sessionId));
+    }
+
+    @Transactional
+    public SessionTranscriptResponse retryFailedSessionTranscript(UUID sessionId) {
+        assertTranscriptEnabled();
+        List<RecordingAsset> recordings = orderedSessionRecordings(sessionId);
+        int retriedCount = 0;
+        log.info("Retrying failed or missing session transcript work sessionId={} recordingCount={}", sessionId, recordings.size());
+
+        for (RecordingAsset recording : recordings) {
+            RecordingTranscript transcript = recording.getTranscript();
+            if (transcript == null || transcript.getStatus() == RecordingTranscriptStatus.FAILED) {
+                enqueueTranscript(recording, true);
+                retriedCount++;
+            }
+        }
+
+        log.info("Retry failed session transcript request completed sessionId={} retriedRecordings={}", sessionId, retriedCount);
         return aggregateSessionTranscript(sessionId, orderedSessionRecordings(sessionId));
     }
 
@@ -347,6 +367,7 @@ public class RecordingTranscriptService {
         int failedRecordings = 0;
         int processingRecordings = 0;
         int pendingRecordings = 0;
+        int notRequestedRecordings = 0;
 
         Instant startedAt = null;
         Instant completedAt = null;
@@ -356,6 +377,7 @@ public class RecordingTranscriptService {
         String model = null;
         String languageCode = null;
         List<SessionTranscriptSegmentResponse> aggregateSegments = new ArrayList<>();
+        List<SessionTranscriptRecordingResponse> aggregateRecordings = new ArrayList<>();
         long fallbackOffsetMs = 0L;
 
         for (RecordingAsset recording : recordings) {
@@ -365,6 +387,8 @@ public class RecordingTranscriptService {
 
             RecordingTranscript transcript = recording.getTranscript();
             if (transcript == null) {
+                notRequestedRecordings++;
+                aggregateRecordings.add(mapSessionRecording(recording, null, recordingOffsetMs, nextFallbackOffsetMs));
                 continue;
             }
 
@@ -379,14 +403,26 @@ public class RecordingTranscriptService {
             switch (transcript.getStatus()) {
                 case READY -> {
                     readyRecordings++;
+                    aggregateRecordings.add(mapSessionRecording(recording, transcript, recordingOffsetMs, nextFallbackOffsetMs));
                     aggregateSegments.addAll(transcript.getSegments().stream()
                             .map(segment -> mapSessionSegment(segment, recording, recordingOffsetMs))
                             .toList());
                 }
-                case FAILED -> failedRecordings++;
-                case PROCESSING -> processingRecordings++;
-                case PENDING -> pendingRecordings++;
+                case FAILED -> {
+                    failedRecordings++;
+                    aggregateRecordings.add(mapSessionRecording(recording, transcript, recordingOffsetMs, nextFallbackOffsetMs));
+                }
+                case PROCESSING -> {
+                    processingRecordings++;
+                    aggregateRecordings.add(mapSessionRecording(recording, transcript, recordingOffsetMs, nextFallbackOffsetMs));
+                }
+                case PENDING -> {
+                    pendingRecordings++;
+                    aggregateRecordings.add(mapSessionRecording(recording, transcript, recordingOffsetMs, nextFallbackOffsetMs));
+                }
                 case NOT_REQUESTED -> {
+                    notRequestedRecordings++;
+                    aggregateRecordings.add(mapSessionRecording(recording, transcript, recordingOffsetMs, nextFallbackOffsetMs));
                 }
             }
         }
@@ -442,7 +478,35 @@ public class RecordingTranscriptService {
                 failedRecordings,
                 processingRecordings,
                 pendingRecordings,
-                aggregateSegments
+                notRequestedRecordings,
+                aggregateSegments,
+                aggregateRecordings
+        );
+    }
+
+    private SessionTranscriptRecordingResponse mapSessionRecording(
+            RecordingAsset recording,
+            RecordingTranscript transcript,
+            long recordingOffsetMs,
+            long nextFallbackOffsetMs) {
+        RecordingTranscriptStatus status = transcript != null ? transcript.getStatus() : RecordingTranscriptStatus.NOT_REQUESTED;
+        Long sessionElapsedStartMs = recording.getMetadata() != null ? recording.getMetadata().getSessionElapsedStartMs() : null;
+        Long sessionElapsedEndMs = recording.getMetadata() != null ? recording.getMetadata().getSessionElapsedEndMs() : null;
+        long effectiveStartMs = sessionElapsedStartMs != null ? sessionElapsedStartMs : recordingOffsetMs;
+        long effectiveEndMs = sessionElapsedEndMs != null ? sessionElapsedEndMs : nextFallbackOffsetMs;
+        return new SessionTranscriptRecordingResponse(
+                recording.getId(),
+                RecordingTimelineSupport.segmentSequence(recording),
+                status,
+                transcript != null ? transcript.getErrorMessage() : null,
+                transcript != null ? transcript.getStartedAt() : null,
+                transcript != null ? transcript.getCompletedAt() : null,
+                transcript != null ? transcript.getCreatedAt() : null,
+                transcript != null ? transcript.getUpdatedAt() : null,
+                effectiveStartMs,
+                effectiveEndMs,
+                recording.getDurationSeconds(),
+                transcript != null ? transcript.getSegments().size() : 0
         );
     }
 

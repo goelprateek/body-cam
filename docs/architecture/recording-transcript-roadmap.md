@@ -32,6 +32,26 @@ The repo already supports:
 
 This is a strong MVP baseline, but it is not yet the final robust operating shape.
 
+One important remaining correction is transcript post-processing shape:
+
+- today the pipeline is still too close to `segment audio -> STT output -> DB`
+- the target shape should be `Transcription Queue -> Audio Extractor -> Vosk STT -> Transcript Assembler -> Transcript DB`
+- the stored transcript should come from assembly output, not directly from raw STT fragments
+
+## Phase Status Table
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| 7.1 Async transcript job model | `Implemented` | Transcript requests queue work and a scheduled backend poller processes jobs. |
+| 7.2 Idempotent segment ingest | `Implemented` | Upload reuse is keyed by `sessionId + segmentSequence`. |
+| 7.3 Session integrity and recovery UX | `Implemented` first slice | Integrity states are returned in the timeline response. |
+| 7.4 Smaller segment duration rollout | `Implemented` | Android now records `10s` segments for lower retry cost in weak-network conditions. |
+| 7.5 Session-level transcript review UX | `Implemented` | Backend-backed search, timestamp jump, active highlighting, low-confidence indicators, failed-interval review, selective retry, and queue visibility are implemented. |
+| 8.1 Whisper-ready execution path | `Partially Implemented` | Engine abstraction and `faster-whisper` are in place; `whisper.cpp` itself is not yet implemented. |
+| 8.2 Export and evidence packaging | `Implemented` | Async session export packaging is implemented with downloadable evidence bundles. |
+| 8.3 Recording search and investigation UX | `Implemented` | Cross-session investigation search, jump-to-match review, and archive investigation UX are implemented. |
+| 8.4 Operational observability | `Partially Implemented` | Logging and basic prod readiness exist; deeper metrics and alerts remain future work. |
+
 ## Design Guardrails
 
 Keep these constraints while extending the system:
@@ -54,6 +74,7 @@ Current gap:
 
 - the request path is now asynchronous, but transcript execution is still single-runner and intentionally simple
 - failed intervals still need a more targeted retry model
+- post-STT assembly is still too lightweight and not yet modeled as a first-class pipeline stage
 
 Required direction:
 
@@ -61,12 +82,14 @@ Required direction:
 - keep request APIs as orchestration only
 - track per-segment and per-session progress
 - support retry of failed segments without regenerating the whole session
+- add a transcript assembly stage between STT output and persisted transcript rows
 
 Target outcomes:
 
 - `POST /api/sessions/{id}/transcript/generate` returns quickly
 - transcript work continues in the background
 - UI can show `PENDING`, `PROCESSING`, partial progress, and `FAILED` details cleanly
+- operator-facing transcript rows come from assembled, deduplicated, sentence-safe output
 
 ### Priority 0 - Upload Idempotency And Duplicate Protection
 
@@ -113,6 +136,7 @@ Scope:
 - claim and process segment transcripts in the background
 - aggregate session progress from segment-level jobs
 - preserve the existing pluggable engine interface
+- add transcript assembly as a first-class backend stage
 
 Suggested additions:
 
@@ -121,16 +145,19 @@ Suggested additions:
 - last failure code and message
 - worker concurrency limits
 - retry endpoint for failed work
+- assembly metrics such as overlap merges, dedupe corrections, and punctuation pass completion
 
 Why this matters:
 
 - this is the single most important step for long-session reliability
 - it also prepares the system for `whisper.cpp` or `faster-whisper` workloads
+- it prevents noisy raw STT fragments from becoming the stored session transcript contract
 
 Current status:
 
 - implemented with a backend scheduled poller and queued transcript requests
 - still intentionally single-runner and simple
+- transcript assembly is still an architecture gap and should be introduced before treating the transcript model as final
 
 ### Phase 7.2 - Idempotent Segment Ingest
 
@@ -178,10 +205,10 @@ Scope:
 - move Android from `30s` segments toward `5s` to `10s`
 - validate storage, upload frequency, and battery tradeoffs
 
-Why later and not first:
+Current status:
 
-- the timeline model is already in place
-- idempotent ingest and async transcript execution should land first so the system can absorb higher segment counts safely
+- implemented at `10s` segment duration to reduce retry size and improve weak-network resilience
+- additional battery and upload-frequency tuning can still happen later if field testing suggests `5s` or another value is better
 
 ### Phase 7.5 - Session-Level Transcript Review UX
 
@@ -200,9 +227,9 @@ Suggested additions:
 
 Current status:
 
-- transcript search within a session is implemented
-- playback-timestamp transcript navigation and active highlighting are already in place
-- richer filtering and confidence UX remain future work
+- transcript search within a session is implemented through the backend search endpoint
+- playback-timestamp transcript navigation, active highlighting, and low-confidence indicators are in place
+- failed and missing transcript intervals can now be reviewed and retried from the operator console
 
 ## Mid-Term Roadmap
 
@@ -220,6 +247,7 @@ Required shape:
 - engine capability metadata
 - model name and language tracking
 - consistent session transcript output regardless of engine
+- a stable transcript assembly contract that sits between engine output and persisted transcript artifacts
 
 ### Phase 8.2 - Export And Evidence Packaging
 
@@ -240,6 +268,12 @@ Important guardrail:
 
 - export must stay asynchronous and separate from ingest
 
+Current status:
+
+- async session export packaging is implemented
+- downloadable evidence bundles now include session summary, recording timeline, transcript JSON, transcript text, and subtitles when available
+- merged MP4 export remains optional future work rather than a dependency for this phase
+
 ### Phase 8.3 - Recording Search And Investigation UX
 
 Scope:
@@ -253,6 +287,12 @@ Suggested additions:
 - speaker or event markers later if engines support them
 - timeline bookmarks
 - important-event tagging
+
+Current status:
+
+- investigation search now works across sessions for references, worker names, room names, and transcript text
+- operators can jump from a search hit directly into the matching session playback and transcript context
+- deeper investigation features like bookmarks and event tagging remain future work
 
 ### Phase 8.4 - Operational Observability
 

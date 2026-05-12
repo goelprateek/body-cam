@@ -39,7 +39,7 @@ This keeps the ingest path cheap and reliable while still delivering a continuou
 
 ## Implemented So Far
 
-The current codebase now covers the Phase 6.1 foundation and part of Phase 6.2:
+The current codebase now covers the full functional path through Phase 6.3:
 
 - Android uploads segment timeline metadata with each recording chunk
 - backend persists segment ordering and session-relative timing
@@ -48,6 +48,15 @@ The current codebase now covers the Phase 6.1 foundation and part of Phase 6.2:
 - backend now exposes session transcript aggregation and session-wide transcript generation
 
 This means the system can now describe a session as an ordered timeline, present it as a session-based playback experience, and aggregate transcript state across that same session. Subtitle tracks remain segment-specific during active playback, which is acceptable for the current player architecture.
+
+## Phase Status Table
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| 6.1 Timeline metadata foundation | `Implemented` | Android uploads ordered segment metadata and backend persists it. |
+| 6.2 Session recording timeline model | `Implemented` | Session timeline API is live and includes integrity-oriented indicators. |
+| 6.3 Continuous frontend playback | `Implemented` | Session grouping, auto-advance playback, transcript aggregation, and transcript timestamp seeking are live. |
+| 6.4 Optional async merge/export | `Implemented` first slice | Async export packaging is implemented. Merged session artifacts are still future work. |
 
 ## Why This Is The Right Fit
 
@@ -138,10 +147,7 @@ Success criteria:
 - every uploaded clip can be placed deterministically within a session timeline
 - uploads remain backward compatible for older app behavior
 
-Current status:
-
-- implemented in Android upload metadata
-- implemented in backend persistence and API DTOs
+Current status: `Implemented`
 
 ## Phase 6.2 - Session Recording Timeline Model
 
@@ -173,10 +179,12 @@ Success criteria:
 - backend can describe one session as one ordered timeline
 - backend can do so without merging media files
 
-Current status:
+Current status: `Implemented`
+
+Implementation notes:
 
 - `GET /api/sessions/{sessionId}/recordings/timeline` is implemented
-- the response includes ordered segments, total duration, and a gap indicator
+- the response includes ordered segments, total duration, and integrity or gap indicators
 - a distinct playback manifest format remains optional future work
 
 ## Phase 6.3 - Continuous Frontend Playback
@@ -196,12 +204,15 @@ Success criteria:
 - operator sees one session playback experience
 - clip boundaries are operationally hidden as much as possible
 
-Current status:
+Current status: `Implemented`
+
+Implementation notes:
 
 - the recordings page now groups archive items by session instead of by uploaded clip
 - the frontend loads `GET /api/sessions/{sessionId}/recordings/timeline`
 - playback auto-advances across ordered segments
 - transcript actions now target the session as a whole while subtitles still follow the active segment
+- transcript rows can jump playback to the matching session timestamp
 
 ## Phase 6.4 - Optional Async Merge Or Export
 
@@ -226,6 +237,8 @@ Success criteria:
 
 - merged download is available when explicitly requested
 - ingest and ordinary playback do not depend on merge completion
+
+Current status: `Pending`
 
 ## Recommended Technical Direction
 

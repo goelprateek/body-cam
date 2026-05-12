@@ -11,15 +11,15 @@ import java.util.UUID;
 
 public interface RecordingAssetRepository extends JpaRepository<RecordingAsset, UUID> {
 
-    @EntityGraph(attributePaths = {"session", "metadata", "transcript"})
+    @EntityGraph(attributePaths = {"session", "metadata", "transcript", "transcript.segments"})
     List<RecordingAsset> findAllByOrderByCreatedAtDesc();
 
-    @EntityGraph(attributePaths = {"session", "metadata", "transcript"})
+    @EntityGraph(attributePaths = {"session", "metadata", "transcript", "transcript.segments"})
     Optional<RecordingAsset> findById(UUID id);
 
-    @EntityGraph(attributePaths = {"session", "metadata", "transcript"})
+    @EntityGraph(attributePaths = {"session", "metadata", "transcript", "transcript.segments"})
     List<RecordingAsset> findBySession_IdOrderByCreatedAtAsc(UUID sessionId);
 
-    @EntityGraph(attributePaths = {"session", "metadata", "transcript"})
+    @EntityGraph(attributePaths = {"session", "metadata", "transcript", "transcript.segments"})
     Optional<RecordingAsset> findByIdempotencyKey(String idempotencyKey);
 }

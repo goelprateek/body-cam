@@ -12,6 +12,7 @@ The transcript capability should:
 - minimize server CPU and memory usage
 - avoid blocking recording upload
 - stay easy to upgrade to higher-quality transcription later
+- treat raw STT output as intermediate data, not as the final stored transcript
 
 ## Recommended MVP Direction
 
@@ -41,8 +42,10 @@ Instead, we should keep stable internal abstractions around:
 
 - transcript job lifecycle
 - transcript engine identity
-- transcript text
-- transcript segments with timestamps
+- raw STT segment output
+- assembled transcript text
+- assembled transcript segments with timestamps
+- sentence and punctuation normalization
 - engine metadata such as `engine`, `model`, and `languageCode`
 
 If those pieces are designed cleanly now, moving from `Vosk` to `whisper.cpp` later becomes an engine swap, not a schema or frontend rewrite.
@@ -65,6 +68,18 @@ That means:
 - do not move media processing into the Spring Boot request thread
 - do not introduce Kafka, workflow engines, or other heavy async infrastructure for MVP
 
+The correct backend-owned transcript pipeline is:
+
+```text
+Transcription Queue
+  -> Audio Extractor
+  -> Vosk STT
+  -> Transcript Assembler
+  -> Transcript DB
+```
+
+The important correction is that `Vosk` output is not the final transcript artifact. It is only the raw recognition stage. The stored transcript should be the result of a transcript assembly service that cleans and aligns post-STT output for operator review and session playback.
+
 ## Guiding Principles
 
 - resource efficiency first
@@ -80,6 +95,17 @@ Practical implications:
 - transcript storage should already support timestamped segments
 
 ## Phased Rollout
+
+## Phase Status Table
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| 1 Transcript data model and read APIs | `Implemented` | Transcript tables, status model, and read APIs exist. |
+| 2 Operator-initiated transcript requests | `Implemented` | Recording and session transcript generate endpoints are live. |
+| 3 Low-resource engine integration | `Implemented` with extension | Vosk is implemented, a pluggable engine seam exists, and `faster-whisper` support is also present. |
+| 4 Operator console transcript UX | `Implemented` | Transcript panel, status handling, subtitles, timestamp jumps, and session transcript review are live. |
+| 5 Upgrade path to `whisper.cpp` | `Partially Implemented` | Engine abstraction and `faster-whisper` path exist; `whisper.cpp` itself is not implemented yet. |
+| 6 Operational hardening | `Partially Implemented` | Async transcript poller and session transcript search are in place. Retry flow, concurrency controls, and deeper metrics remain future work. |
 
 ### Phase 1: Transcript Data Model And Read APIs
 
@@ -144,6 +170,8 @@ Success criteria:
 - operator console can read transcript status and transcript payload shape
 - no speech engine is required yet
 
+Current status: `Implemented`
+
 ### Phase 2: Operator-Initiated Transcript Requests
 
 Objective:
@@ -179,6 +207,8 @@ Success criteria:
 - no automatic compute cost is incurred for every upload
 - transcript state is visible in the UI
 
+Current status: `Implemented`
+
 ### Phase 3: Low-Resource Engine Integration With Vosk
 
 Objective:
@@ -188,8 +218,8 @@ Scope:
 
 - add a transcript engine adapter interface in backend
 - implement a `VoskTranscriptEngine`
-- extract audio from video with `ffmpeg`
-- store transcript text and segments
+- extract audio from video
+- assemble transcript text and segments after STT output is returned
 
 Recommended processing flow:
 
@@ -198,11 +228,20 @@ Recommended processing flow:
 3. A scheduled backend worker picks pending transcripts.
 4. Worker marks transcript `PROCESSING`.
 5. Worker downloads or streams media from object storage.
-6. Worker extracts mono audio with `ffmpeg`.
+6. Worker extracts mono audio with the backend audio extraction layer.
 7. Worker sends audio to the local Vosk-based transcription service.
-8. Worker normalizes the result into the repo transcript model.
-9. Worker stores transcript text and segments.
-10. Worker marks transcript `READY` or `FAILED`.
+8. Worker stores or passes forward the raw STT segments as intermediate output.
+9. Transcript assembly service merges overlaps, removes duplicate words, builds sentences, restores punctuation, and aligns a clean timeline.
+10. Worker stores the assembled transcript text and assembled timeline segments.
+11. Worker marks transcript `READY` or `FAILED`.
+
+Transcript assembly service responsibilities:
+
+- merge overlapping transcript fragments from adjacent recording chunks
+- remove duplicated words introduced by segment overlap or STT instability
+- build readable sentence boundaries from chunked STT phrases
+- restore punctuation for operator-readable transcript output
+- generate one session-aligned timeline for transcript review, seek, subtitle export, and search
 
 Why Vosk first:
 
@@ -219,7 +258,17 @@ Success criteria:
 
 - transcript generation works on modest server resources
 - operator can get usable transcripts when needed
-- engine output is normalized into backend-owned transcript structures
+- engine output is treated as intermediate data and assembled into backend-owned transcript structures
+
+Current status: `Implemented`
+
+Implementation notes:
+
+- `Vosk` is implemented as the first production engine
+- a pluggable engine boundary is in place
+- audio extraction now uses embedded JavaCV bindings instead of an external shell `ffmpeg` dependency
+- the backend now processes transcript jobs asynchronously through a scheduled poller
+- the remaining architecture gap is a dedicated transcript assembly stage instead of persisting near-direct STT output
 
 ### Phase 4: Operator Console Transcript UX
 
@@ -259,6 +308,8 @@ Success criteria:
 - operator can jump playback by transcript timestamp
 - transcript failure does not break playback
 
+Current status: `Implemented`
+
 ### Phase 5: Upgrade Path To `whisper.cpp`
 
 Objective:
@@ -281,10 +332,16 @@ Recommended engine interface shape:
 Recommended normalized result shape:
 
 - detected language
-- full text
-- ordered segments
+- raw segments from the engine
+- assembled full text
+- assembled ordered timeline segments
 - optional confidence
 - engine metadata
+
+The normalized contract should distinguish between:
+
+- engine output, which is recognition-oriented and may contain overlap noise
+- assembled output, which is operator-facing and timeline-safe
 
 Suggested upgrade path:
 
@@ -298,6 +355,14 @@ Success criteria:
 - backend storage and APIs do not change
 - operator console does not care which engine produced the transcript
 - higher quality can be adopted incrementally
+
+Current status: `Partially Implemented`
+
+Implementation notes:
+
+- engine abstraction is in place
+- `faster-whisper` is already implemented as a second engine option
+- `whisper.cpp` remains future work
 
 ### Phase 6: Operational Hardening
 
@@ -324,6 +389,16 @@ Success criteria:
 - transcript processing remains stable under repeated operator use
 - failures are diagnosable
 - the system can safely scale from low-resource MVP usage
+
+Current status: `Partially Implemented`
+
+Implementation notes:
+
+- queued transcript processing is implemented
+- session transcript search is implemented
+- operator transcript review now exposes low-confidence transcript indicators
+- session transcript review now exposes failed or missing clip intervals with selective retry
+- explicit worker concurrency controls and richer metrics remain future work
 
 ## Open-Source Technology Recommendation
 
@@ -390,13 +465,21 @@ Suggested responsibilities:
 - transcript worker:
   - poll pending rows
   - claim work
-  - call `ffmpeg`
+  - extract audio
   - call transcript engine
-  - persist normalized results
+  - hand engine output to transcript assembly
+  - persist assembled transcript results
+
+- transcript assembly service:
+  - merge overlapping transcript fragments
+  - remove duplicate words
+  - build sentence-oriented transcript output
+  - restore punctuation
+  - generate the persisted timeline used by search, subtitles, and session review
 
 - transcript engine adapter:
   - hide Vosk-specific and `whisper.cpp`-specific details
-  - return a backend-owned normalized transcript model
+  - return engine-native or lightly normalized STT output for assembly
 
 Avoid putting transcription logic directly into recording controller methods.
 

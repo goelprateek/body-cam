@@ -1,6 +1,7 @@
 package com.kriyanshtech.bodycam
 
 import android.content.Context
+import android.net.Uri
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -248,8 +249,11 @@ class LiveCaptureManager(
 
                     // 3. Connect to server
                     _state.value = _state.value.copy(streamStatus = "Connecting")
-                    val wsUrl = if (config.liveKitUrl.startsWith("ws")) config.liveKitUrl 
-                                else "wss://${config.liveKitUrl}"
+                    val wsUrl = normalizeLiveKitUrl(config.liveKitUrl, config.backendUrl)
+                    android.util.Log.i(
+                        "LiveCaptureManager",
+                        "Connecting to LiveKit rawUrl=${config.liveKitUrl} normalizedUrl=$wsUrl backendUrl=${config.backendUrl}"
+                    )
                     currentRoom.connect(wsUrl, config.token)
 
                     // 4. Setup and publish video track
@@ -437,10 +441,9 @@ class LiveCaptureManager(
                     }
                     
                     if (isTrackStarted) {
+                        // LiveKit may still consume the bitmap after pushBitmap returns.
+                        // Recycling it immediately can crash the native capture pipeline.
                         currentCapturer.pushBitmap(finalBitmap, rotationDegrees)
-                    }
-                    if (!finalBitmap.isRecycled) {
-                        finalBitmap.recycle()
                     }
                 } catch (e: Exception) {
                     android.util.Log.v("LiveCaptureManager", "Frame push failed: ${e.message}")
@@ -793,6 +796,60 @@ class LiveCaptureManager(
         }
     }
 
+    private fun normalizeLiveKitUrl(liveKitUrl: String, backendUrl: String): String {
+        val trimmedLiveKitUrl = liveKitUrl.trim()
+        if (trimmedLiveKitUrl.isBlank()) {
+            throw IllegalStateException("LiveKit URL is blank")
+        }
+
+        val liveKitUri = trimmedLiveKitUrl.toUriOrNull()
+        val backendUri = backendUrl.trim().toUriOrNull()
+        val fallbackHost = backendUri?.host?.takeIf { it.isNotBlank() }
+        val liveKitHost = liveKitUri?.host?.lowercase()
+        val liveKitScheme = liveKitUri?.scheme?.lowercase()
+        val needsHostRewrite = liveKitHost in LOOPBACK_HOSTS && !fallbackHost.isNullOrBlank()
+
+        val normalizedScheme = when (liveKitScheme) {
+            "ws", "wss" -> liveKitScheme
+            "http" -> "ws"
+            "https" -> "wss"
+            null -> if (backendUri?.scheme.equals("https", ignoreCase = true)) "wss" else "ws"
+            else -> liveKitScheme
+        }
+
+        return if (liveKitUri != null) {
+            val builder = liveKitUri.buildUpon().scheme(normalizedScheme)
+            if (needsHostRewrite) {
+                val rewrittenHost = requireNotNull(fallbackHost)
+                builder.encodedAuthority(
+                    buildAuthority(
+                        host = rewrittenHost,
+                        port = liveKitUri.port,
+                        userInfo = liveKitUri.encodedUserInfo
+                    )
+                )
+            }
+            builder.build().toString()
+        } else {
+            val rawAuthority = trimmedLiveKitUrl.removePrefix("//").removePrefix("/")
+            val rewrittenAuthority = if (!fallbackHost.isNullOrBlank()) {
+                LOOPBACK_PREFIX_REGEX.replaceFirst(rawAuthority, fallbackHost)
+            } else {
+                rawAuthority
+            }
+            "$normalizedScheme://$rewrittenAuthority"
+        }
+    }
+
+    private fun String.toUriOrNull(): Uri? =
+        runCatching { Uri.parse(this) }.getOrNull()?.takeIf { !it.toString().isBlank() }
+
+    private fun buildAuthority(host: String, port: Int, userInfo: String?): String {
+        val authorityHost = if (':' in host && !host.startsWith("[")) "[$host]" else host
+        val hostWithPort = if (port >= 0) "$authorityHost:$port" else authorityHost
+        return if (userInfo.isNullOrBlank()) hostWithPort else "$userInfo@$hostWithPort"
+    }
+
     private fun switchCameraAndResume(targetFacing: CameraFacing) {
         val preview = previewView ?: return
         
@@ -885,8 +942,10 @@ class LiveCaptureManager(
     }
 
     companion object {
-        private const val SEGMENT_DURATION_MS = 30_000L
+        private const val SEGMENT_DURATION_MS = 10_000L
         private const val MIN_UPLOAD_DURATION_SEC = 2
         private const val MIN_SEGMENT_STOP_DELAY_MS = 1200L
+        private val LOOPBACK_HOSTS = setOf("localhost", "127.0.0.1", "10.0.2.2")
+        private val LOOPBACK_PREFIX_REGEX = Regex("^(localhost|127\\.0\\.0\\.1|10\\.0\\.2\\.2)")
     }
 }

@@ -23,6 +23,8 @@ public record SessionTranscriptResponse(
         Integer failedRecordings,
         Integer processingRecordings,
         Integer pendingRecordings,
-        List<SessionTranscriptSegmentResponse> segments
+        Integer notRequestedRecordings,
+        List<SessionTranscriptSegmentResponse> segments,
+        List<SessionTranscriptRecordingResponse> recordings
 ) {
 }

@@ -150,6 +150,28 @@ export interface SessionRecordingTimelineResponse {
   segments: SessionRecordingTimelineSegmentResponse[];
 }
 
+export type SessionRecordingExportStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'READY'
+  | 'FAILED';
+
+export interface SessionRecordingExportResponse {
+  id: string | null;
+  sessionId: string;
+  status: SessionRecordingExportStatus | null;
+  objectKey: string | null;
+  downloadUrl: string | null;
+  expiresInSeconds: number | null;
+  packageSizeBytes: number | null;
+  artifactCount: number | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 export interface SessionTranscriptSegmentResponse {
   id: string;
   recordingId: string;
@@ -159,6 +181,21 @@ export interface SessionTranscriptSegmentResponse {
   endSeconds: string;
   text: string;
   confidence: string | null;
+}
+
+export interface SessionTranscriptRecordingResponse {
+  recordingId: string;
+  recordingSequence: number | null;
+  status: RecordingTranscriptStatus;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  sessionElapsedStartMs: number | null;
+  sessionElapsedEndMs: number | null;
+  durationSeconds: number | null;
+  transcriptSegmentCount: number;
 }
 
 export interface SessionTranscriptResponse {
@@ -178,5 +215,35 @@ export interface SessionTranscriptResponse {
   failedRecordings: number;
   processingRecordings: number;
   pendingRecordings: number;
+  notRequestedRecordings: number;
   segments: SessionTranscriptSegmentResponse[];
+  recordings: SessionTranscriptRecordingResponse[];
+}
+
+export interface SessionTranscriptSearchResponse {
+  sessionId: string;
+  query: string;
+  status: RecordingTranscriptStatus;
+  totalMatches: number;
+  matches: SessionTranscriptSegmentResponse[];
+}
+
+export interface RecordingInvestigationSearchHitResponse {
+  sessionId: string;
+  recordingId: string;
+  recordingSequence: number | null;
+  workerId: string;
+  workerName: string;
+  roomName: string;
+  referenceNumber: string;
+  matchedField: string;
+  snippet: string;
+  transcriptStartSeconds: string | null;
+  createdAt: string;
+}
+
+export interface RecordingInvestigationSearchResponse {
+  query: string;
+  totalMatches: number;
+  hits: RecordingInvestigationSearchHitResponse[];
 }

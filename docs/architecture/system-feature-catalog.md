@@ -185,6 +185,18 @@ Future security features:
 
 ## Suggested Priority Buckets
 
+## Near-Term Status Table
+
+| Feature | Status | Notes |
+| --- | --- | --- |
+| Async transcript jobs | `Implemented` | Backend scheduled poller and queued transcript requests are in place. |
+| Idempotent recording ingest | `Implemented` | Duplicate upload reuse is keyed by `sessionId + segmentSequence`. |
+| Session integrity states | `Implemented` | Timeline returns integrity status and gap-related indicators. |
+| Gap-aware playback | `Partially Implemented` | Timeline gap state is surfaced, but richer recovery and visualization remain future work. |
+| Upload queue visibility on Android | `Implemented` | Android worker UI shows queue summary and pending upload counts. |
+| Transcript search within a session | `Implemented` | Backend session transcript search API and frontend session transcript filtering are live. |
+| Production transcript smoke checks | `Pending` | Prod readiness is improved, but transcript smoke verification is not yet part of the deploy gate. |
+
 ### Near-Term
 
 Features with the best MVP hardening value:

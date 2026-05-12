@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import android.util.Log
 import androidx.camera.view.PreviewView
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LifecycleOwner
@@ -164,8 +165,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
+                Log.i("MainViewModel", "Starting worker session for reference=$referenceNumber backendUrl=$url")
+                _uiState.value = _uiState.value.copy(syncStatus = "Creating backend session")
                 val sessionResp = repository.createWorkerSession(url, token, user, referenceNumber)
+                Log.i("MainViewModel", "Backend session created sessionId=${sessionResp.id}")
+                _uiState.value = _uiState.value.copy(syncStatus = "Fetching LiveKit join token")
                 val liveKitResp = repository.joinWorkerSession(url, token, sessionResp, user)
+                Log.i(
+                    "MainViewModel",
+                    "LiveKit join token received sessionId=${sessionResp.id} room=${liveKitResp.roomName} liveKitUrl=${liveKitResp.liveKitUrl}"
+                )
 
                 val config = ActiveSessionConfig(
                     backendUrl = url,
@@ -175,6 +184,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sessionId = sessionResp.id
                 )
 
+                _uiState.value = _uiState.value.copy(syncStatus = "Starting capture service")
                 val service = awaitCaptureService()
                 service.startForegroundCaptureService()
                 delay(150)
@@ -186,6 +196,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     service.captureManager?.bindPreview(preview)
                 }
 
+                _uiState.value = _uiState.value.copy(syncStatus = "Connecting capture pipeline")
                 service.captureManager?.start(config, _uiState.value.highQualityMode)
                 _uiState.value = _uiState.value.copy(
                     actionInFlight = false,
@@ -193,6 +204,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sessionSummary = "Ref: $referenceNumber  Session: ${sessionResp.id}"
                 )
             } catch (e: Exception) {
+                Log.e("MainViewModel", "Failed to start worker session", e)
                 _uiState.value = _uiState.value.copy(
                     actionInFlight = false,
                     message = "Start session error: ${e.message}"

@@ -7,9 +7,12 @@ import {
   LiveKitTokenResponse,
   LoginResponse,
   PageResponse,
+  RecordingInvestigationSearchResponse,
   RecordingPlaybackResponse,
   RecordingResponse,
+  SessionRecordingExportResponse,
   SessionRecordingTimelineResponse,
+  SessionTranscriptSearchResponse,
   SessionTranscriptResponse,
   RecordingTranscriptResponse,
   SessionResponse
@@ -118,6 +121,26 @@ export class OperatorApiService {
     );
   }
 
+  async getSessionRecordingExport(sessionId: string): Promise<SessionRecordingExportResponse> {
+    return firstValueFrom(
+      this.http.get<SessionRecordingExportResponse>(this.url(`/sessions/${sessionId}/recordings/export-package`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async requestSessionRecordingExport(sessionId: string): Promise<SessionRecordingExportResponse> {
+    return firstValueFrom(
+      this.http.post<SessionRecordingExportResponse>(
+        this.url(`/sessions/${sessionId}/recordings/export-package`),
+        {},
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
   async getSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
     return firstValueFrom(
       this.http.get<SessionTranscriptResponse>(this.url(`/sessions/${sessionId}/transcript`), {
@@ -135,6 +158,36 @@ export class OperatorApiService {
           headers: this.authHeaders()
         }
       )
+    );
+  }
+
+  async retryFailedSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
+    return firstValueFrom(
+      this.http.post<SessionTranscriptResponse>(
+        this.url(`/sessions/${sessionId}/transcript/retry-failed`),
+        {},
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async searchSessionTranscript(sessionId: string, query: string): Promise<SessionTranscriptSearchResponse> {
+    return firstValueFrom(
+      this.http.get<SessionTranscriptSearchResponse>(this.url(`/sessions/${sessionId}/transcript/search`), {
+        headers: this.authHeaders(),
+        params: { q: query }
+      })
+    );
+  }
+
+  async searchRecordingsForInvestigation(query: string): Promise<RecordingInvestigationSearchResponse> {
+    return firstValueFrom(
+      this.http.get<RecordingInvestigationSearchResponse>(this.url('/recordings/investigation-search'), {
+        headers: this.authHeaders(),
+        params: { q: query }
+      })
     );
   }
 
