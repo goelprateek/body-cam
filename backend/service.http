@@ -1,0 +1,261 @@
+### Body Cam Backend API Test Collection
+### Use with VS Code REST Client or IntelliJ HTTP client.
+### Note: some clients do not support post-response scripting, so copy the
+### `accessToken` from the login response into `@authToken` manually when needed.
+### Suggested flow:
+### 1. Run Login
+### 2. Run Current User
+### 3. Create or list a session
+### 4. Create or upload a recording
+### 5. Test timeline, transcript, investigation, export, and diagnostics
+
+@baseUrl = http://localhost:8080
+@username = operator1
+@password = operator123
+@authToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyMjIyMjIyMi0yMjIyLTIyMjItMjIyMi0yMjIyMjIyMjIyMjIiLCJyb2xlIjoiT1BFUkFUT1IiLCJkaXNwbGF5TmFtZSI6Ik9wZXJhdG9yIDEiLCJpc3MiOiJib2R5Y2FtLWJhY2tlbmQiLCJleHAiOjE3Nzg2ODEyNDQsImlhdCI6MTc3ODY1MjQ0NCwidXNlcm5hbWUiOiJvcGVyYXRvcjEifQ.81R1QNYM9G-vuowCu6eDjDzPfyriWPAvp1aMSYS7CdU
+@workerId = 11111111-1111-1111-1111-111111111111
+@sessionId = 626499fb-8e0c-450c-b72a-48f224b08957
+@recordingId = 33333333-3333-3333-3333-333333333333
+@recordingFile = C:/tmp/sample.mp4
+
+### =========================
+### Auth
+### =========================
+
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+###
+
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{authToken}}
+
+###
+### =========================
+### Sessions
+### =========================
+
+GET {{baseUrl}}/api/sessions
+Authorization: Bearer {{authToken}}
+
+###
+
+GET {{baseUrl}}/api/sessions/active?page=0&size=10
+Authorization: Bearer {{authToken}}
+
+###
+
+GET {{baseUrl}}/api/sessions/active-cursor?size=10
+Authorization: Bearer {{authToken}}
+
+###
+
+POST {{baseUrl}}/api/sessions
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "workerId": "{{workerId}}",
+  "workerName": "Officer Demo",
+  "referenceNumber": "REF-2026-0001"
+}
+
+###
+
+GET {{baseUrl}}/api/sessions/{{sessionId}}
+Authorization: Bearer {{authToken}}
+
+###
+
+POST {{baseUrl}}/api/sessions/{{sessionId}}/join-token
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "participantName": "Backoffice Operator",
+  "participantRole": "OPERATOR"
+}
+
+###
+
+POST {{baseUrl}}/api/sessions/{{sessionId}}/end
+Authorization: Bearer {{authToken}}
+
+###
+### =========================
+### Recordings
+### =========================
+
+GET {{baseUrl}}/api/recordings?size=20
+Authorization: Bearer {{authToken}}
+
+###
+
+GET {{baseUrl}}/api/recordings/{{recordingId}}/playback-url
+Authorization: Bearer {{authToken}}
+
+###
+
+POST {{baseUrl}}/api/recordings
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "sessionId": "{{sessionId}}",
+  "objectKey": "sessions/{{sessionId}}/trailer.mp4",
+  "playbackUrl": null,
+  "durationSeconds": 10,
+  "metadata": {
+    "capturedAt": "2026-05-13T10:00:00Z",
+    "segmentSequence": 0,
+    "segmentStartedAt": "2026-05-13T10:00:00Z",
+    "segmentEndedAt": "2026-05-13T10:00:10Z",
+    "sessionElapsedStartMs": 0,
+    "sessionElapsedEndMs": 10000,
+    "latitude": 28.6139,
+    "longitude": 77.2090,
+    "altitudeMeters": 215.5,
+    "locationAccuracyMeters": 6.4,
+    "cameraFacing": "BACK",
+    "thermalEnabled": false,
+    "thermalMinC": null,
+    "thermalMaxC": null,
+    "thermalAvgC": null,
+    "sensorPayload": {
+      "batteryPercent": 78,
+      "networkType": "LTE"
+    }
+  }
+}
+
+###
+
+POST {{baseUrl}}/api/recordings/upload
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=BodyCamUpload
+
+--BodyCamUpload
+Content-Disposition: form-data; name="sessionId"
+
+{{sessionId}}
+--BodyCamUpload
+Content-Disposition: form-data; name="durationSeconds"
+
+10
+--BodyCamUpload
+Content-Disposition: form-data; name="metadata"
+Content-Type: application/json
+
+{
+  "capturedAt": "2026-05-13T10:00:00Z",
+  "segmentSequence": 0,
+  "segmentStartedAt": "2026-05-13T10:00:00Z",
+  "segmentEndedAt": "2026-05-13T10:00:10Z",
+  "sessionElapsedStartMs": 0,
+  "sessionElapsedEndMs": 10000,
+  "latitude": 28.6139,
+  "longitude": 77.2090,
+  "altitudeMeters": 215.5,
+  "locationAccuracyMeters": 6.4,
+  "cameraFacing": "BACK",
+  "thermalEnabled": false,
+  "sensorPayload": {
+    "batteryPercent": 78,
+    "networkType": "LTE"
+  }
+}
+--BodyCamUpload
+Content-Disposition: form-data; name="file"; filename="sample.mp4"
+Content-Type: video/mp4
+
+< {{recordingFile}}
+--BodyCamUpload--
+
+###
+### =========================
+### Recording Timeline
+### =========================
+
+GET {{baseUrl}}/api/sessions/{{sessionId}}/recordings/timeline
+Authorization: Bearer {{authToken}}
+
+###
+### =========================
+### Investigation Search
+### =========================
+
+GET {{baseUrl}}/api/recordings/investigation-search?q=demo
+Authorization: Bearer {{authToken}}
+
+###
+### =========================
+### Recording Transcript
+### =========================
+
+GET {{baseUrl}}/api/recordings/{{recordingId}}/transcript
+Authorization: Bearer {{authToken}}
+
+###
+
+POST {{baseUrl}}/api/recordings/{{recordingId}}/transcript/generate
+Authorization: Bearer {{authToken}}
+
+###
+
+GET {{baseUrl}}/api/recordings/{{recordingId}}/transcript/subtitles.vtt
+Authorization: Bearer {{authToken}}
+
+###
+### =========================
+### Session Transcript
+### =========================
+
+GET {{baseUrl}}/api/sessions/{{sessionId}}/transcript
+Authorization: Bearer {{authToken}}
+
+###
+
+POST {{baseUrl}}/api/sessions/{{sessionId}}/transcript/generate
+Authorization: Bearer {{authToken}}
+
+###
+
+POST {{baseUrl}}/api/sessions/{{sessionId}}/transcript/retry-failed
+Authorization: Bearer {{authToken}}
+
+###
+
+GET {{baseUrl}}/api/sessions/{{sessionId}}/transcript/search?q=demo
+Authorization: Bearer {{authToken}}
+
+###
+
+GET {{baseUrl}}/api/sessions/{{sessionId}}/transcript/subtitles.vtt
+Authorization: Bearer {{authToken}}
+
+###
+### =========================
+### Export Package
+### =========================
+
+GET {{baseUrl}}/api/sessions/{{sessionId}}/recordings/export-package
+Authorization: Bearer {{authToken}}
+
+###
+
+POST {{baseUrl}}/api/sessions/{{sessionId}}/recordings/export-package
+Authorization: Bearer {{authToken}}
+
+###
+### =========================
+### Transcript Diagnostics
+### =========================
+
+GET {{baseUrl}}/api/transcripts/smoke-check
+Authorization: Bearer {{authToken}}

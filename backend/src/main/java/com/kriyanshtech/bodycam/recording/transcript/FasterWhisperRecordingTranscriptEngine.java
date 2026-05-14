@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -35,8 +34,7 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
     public FasterWhisperRecordingTranscriptEngine(
             RecordingTranscriptAudioExtractor audioExtractor,
             AppProperties appProperties,
-            ObjectMapper objectMapper
-    ) {
+            ObjectMapper objectMapper) {
         this.audioExtractor = audioExtractor;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
@@ -49,7 +47,8 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
     }
 
     @Override
-    public RecordingTranscriptGenerationResult generate(Path sourceVideoPath, UUID recordingId, UUID transcriptId) throws Exception {
+    public RecordingTranscriptGenerationResult generate(Path sourceVideoPath, UUID recordingId, UUID transcriptId)
+            throws Exception {
         AppProperties.FasterWhisper config = requiredConfig();
         log.info("Starting transcript engine recordingId={} transcriptId={} engine={} endpoint={} model={} task={}",
                 recordingId, transcriptId, ENGINE_NAME, config.url(), config.model(), config.task());
@@ -69,8 +68,7 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
             ExtractedTranscriptAudio extractedAudio,
             UUID recordingId,
             UUID transcriptId,
-            AppProperties.FasterWhisper config
-    ) throws Exception {
+            AppProperties.FasterWhisper config) throws Exception {
         String boundary = "bodycam-transcript-" + transcriptId;
         log.info("Posting transcript audio to engine recordingId={} transcriptId={} engine={} uri={} timeoutSeconds={}",
                 recordingId, transcriptId, ENGINE_NAME, config.url(), config.timeoutSeconds());
@@ -81,7 +79,8 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
                 .POST(buildMultipartBody(boundary, extractedAudio.wavPath(), config))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> response = httpClient.send(request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IllegalStateException("faster-whisper transcription failed: HTTP " + response.statusCode() + " - "
                     + RecordingTranscriptSupport.trimMessage(response.body()));
@@ -94,7 +93,8 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
                 throw new IllegalStateException("faster-whisper transcription failed: " + errorNode.asText());
             }
             if (errorNode.hasNonNull("message")) {
-                throw new IllegalStateException("faster-whisper transcription failed: " + errorNode.path("message").asText());
+                throw new IllegalStateException(
+                        "faster-whisper transcription failed: " + errorNode.path("message").asText());
             }
         }
 
@@ -113,20 +113,22 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
                 model,
                 languageCode,
                 fullText,
-                segments
-        );
+                segments);
     }
 
     private AppProperties.FasterWhisper requiredConfig() {
         AppProperties.FasterWhisper config = appProperties.transcript().fasterWhisper();
         if (config == null || config.url() == null || config.url().isBlank()) {
-            throw new IllegalStateException("faster-whisper transcript engine is missing TRANSCRIPT_FASTER_WHISPER_URL");
+            throw new IllegalStateException(
+                    "faster-whisper transcript engine is missing TRANSCRIPT_FASTER_WHISPER_URL");
         }
         if (config.model() == null || config.model().isBlank()) {
-            throw new IllegalStateException("faster-whisper transcript engine is missing TRANSCRIPT_FASTER_WHISPER_MODEL");
+            throw new IllegalStateException(
+                    "faster-whisper transcript engine is missing TRANSCRIPT_FASTER_WHISPER_MODEL");
         }
         if (config.task() == null || config.task().isBlank()) {
-            throw new IllegalStateException("faster-whisper transcript engine is missing TRANSCRIPT_FASTER_WHISPER_TASK");
+            throw new IllegalStateException(
+                    "faster-whisper transcript engine is missing TRANSCRIPT_FASTER_WHISPER_TASK");
         }
         if (config.timeoutSeconds() <= 0) {
             throw new IllegalStateException("faster-whisper transcript engine timeout must be positive");
@@ -134,7 +136,8 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
         return config;
     }
 
-    private BodyPublisher buildMultipartBody(String boundary, Path wavPath, AppProperties.FasterWhisper config) throws IOException {
+    private BodyPublisher buildMultipartBody(String boundary, Path wavPath, AppProperties.FasterWhisper config)
+            throws IOException {
         return HttpRequest.BodyPublishers.concat(
                 textPart(boundary, "model", config.model()),
                 textPart(boundary, "language", appProperties.transcript().languageCode()),
@@ -143,8 +146,8 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
                 textPart(boundary, "timestamp_granularities[]", "segment"),
                 fileHeaderPart(boundary),
                 HttpRequest.BodyPublishers.ofFile(wavPath),
-                HttpRequest.BodyPublishers.ofByteArray(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8))
-        );
+                HttpRequest.BodyPublishers
+                        .ofByteArray(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8)));
     }
 
     private BodyPublisher textPart(String boundary, String name, String value) {

@@ -48,6 +48,13 @@ public class RecordingTranscript {
     @Column(name = "error_message", columnDefinition = "text")
     private String errorMessage;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "processing_stage", length = 32)
+    private RecordingTranscriptProcessingStage processingStage;
+
+    @Column(name = "last_stage_at")
+    private Instant lastStageAt;
+
     @Column(name = "started_at")
     private Instant startedAt;
 
@@ -126,6 +133,22 @@ public class RecordingTranscript {
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public RecordingTranscriptProcessingStage getProcessingStage() {
+        return processingStage;
+    }
+
+    public void setProcessingStage(RecordingTranscriptProcessingStage processingStage) {
+        this.processingStage = processingStage;
+    }
+
+    public Instant getLastStageAt() {
+        return lastStageAt;
+    }
+
+    public void setLastStageAt(Instant lastStageAt) {
+        this.lastStageAt = lastStageAt;
     }
 
     public Instant getStartedAt() {

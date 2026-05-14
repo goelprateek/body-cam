@@ -3,10 +3,13 @@ package com.kriyanshtech.bodycam.recording.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,10 +25,10 @@ import com.kriyanshtech.bodycam.recording.dto.RecordingPlaybackResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingResponse;
 import com.kriyanshtech.bodycam.recording.service.RecordingService;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
+@Validated
 @RequestMapping("/api/recordings")
 public class RecordingController {
     private static final Logger log = LoggerFactory.getLogger(RecordingController.class);
@@ -39,9 +42,11 @@ public class RecordingController {
     }
 
     @GetMapping
-    public ResponseEntity<List<RecordingResponse>> listRecordings() {
-        log.info("Received request to list recordings");
-        return ResponseEntity.ok(recordingService.listRecordings());
+    public ResponseEntity<com.kriyanshtech.bodycam.common.CursorPageResponse<RecordingResponse>> listRecordings(
+            @RequestParam(name = "cursor", required = false) String cursor,
+            @RequestParam(name = "size", defaultValue = "50") @Min(1) @Max(200) int size) {
+        log.info("Received request to list recordings cursor={} size={}", cursor != null ? "[HIDDEN]" : "null", size);
+        return ResponseEntity.ok(recordingService.listRecordingsCursor(cursor, size));
     }
 
     @GetMapping("/{recordingId}/playback-url")
@@ -57,8 +62,7 @@ public class RecordingController {
                 request.sessionId(),
                 request.objectKey(),
                 request.durationSeconds(),
-                request.metadata() != null
-        );
+                request.metadata() != null);
         return ResponseEntity.ok(recordingService.createRecording(request));
     }
 
@@ -67,8 +71,7 @@ public class RecordingController {
             @RequestParam("sessionId") String sessionIdValue,
             @RequestParam(value = "durationSeconds", required = false) String durationSecondsValue,
             @RequestParam(value = "metadata", required = false) String metadataJson,
-            @RequestParam("file") MultipartFile file
-    ) {
+            @RequestParam("file") MultipartFile file) {
         UUID sessionId = parseSessionId(sessionIdValue);
         Integer durationSeconds = parseDurationSeconds(durationSecondsValue);
         log.info(
@@ -77,8 +80,7 @@ public class RecordingController {
                 durationSeconds,
                 file.getOriginalFilename(),
                 file.getSize(),
-                metadataJson != null && !metadataJson.isBlank()
-        );
+                metadataJson != null && !metadataJson.isBlank());
         RecordingMetadataRequest metadata = parseMetadata(metadataJson);
         return ResponseEntity.ok(recordingService.uploadRecording(sessionId, durationSeconds, metadata, file));
     }

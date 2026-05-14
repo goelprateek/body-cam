@@ -17,7 +17,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -44,8 +43,7 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
     public VoskRecordingTranscriptEngine(
             RecordingTranscriptAudioExtractor audioExtractor,
             AppProperties appProperties,
-            ObjectMapper objectMapper
-    ) {
+            ObjectMapper objectMapper) {
         this.audioExtractor = audioExtractor;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
@@ -60,7 +58,8 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
     }
 
     @Override
-    public RecordingTranscriptGenerationResult generate(Path sourceVideoPath, UUID recordingId, UUID transcriptId) throws Exception {
+    public RecordingTranscriptGenerationResult generate(Path sourceVideoPath, UUID recordingId, UUID transcriptId)
+            throws Exception {
         log.info("Starting transcript engine recordingId={} transcriptId={} engine={} endpoint={}",
                 recordingId, transcriptId, ENGINE_NAME, appProperties.transcript().voskUrl());
         ExtractedTranscriptAudio extractedAudio = audioExtractor.extractMonoPcmAudio(sourceVideoPath, transcriptId);
@@ -78,8 +77,7 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
     private RecordingTranscriptGenerationResult transcribe(
             ExtractedTranscriptAudio extractedAudio,
             UUID recordingId,
-            UUID transcriptId
-    ) throws Exception {
+            UUID transcriptId) throws Exception {
         Path wavPath = extractedAudio.wavPath();
         AudioFileFormat audioFileFormat = AudioSystem.getAudioFileFormat(wavPath.toFile());
         if (audioFileFormat.getType() != AudioFileFormat.Type.WAVE) {
@@ -111,8 +109,7 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
                                     .put("words", 1)
                                     .put("max_alternatives", 0))
                             .toString(),
-                    true
-            ).join();
+                    true).join();
 
             List<TranscriptSegmentPayload> segments = new ArrayList<>();
             byte[] buffer = new byte[AUDIO_CHUNK_SIZE_BYTES];
@@ -140,8 +137,7 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
                     MODEL_NAME,
                     appProperties.transcript().languageCode(),
                     fullText,
-                    segments
-            );
+                    segments);
         }
     }
 
@@ -160,8 +156,7 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
                         RecordingTranscriptSupport.decimal(firstWord.path("start").asDouble()),
                         RecordingTranscriptSupport.decimal(lastWord.path("end").asDouble()),
                         node.path("text").asText(),
-                        confidence
-                ));
+                        confidence));
             } else {
                 int segmentIndex = segments.size();
                 BigDecimal start = RecordingTranscriptSupport.decimal(segmentIndex * 4.0);

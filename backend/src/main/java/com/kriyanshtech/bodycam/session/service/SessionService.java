@@ -7,6 +7,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
+import com.kriyanshtech.bodycam.common.CreatedAtUuidCursor;
+import com.kriyanshtech.bodycam.common.CreatedAtUuidCursorCodec;
+import com.kriyanshtech.bodycam.common.CursorPageResponse;
+import com.kriyanshtech.bodycam.common.CursorPaginationSupport;
 import com.kriyanshtech.bodycam.common.NotFoundException;
 import com.kriyanshtech.bodycam.common.PageResponse;
 import com.kriyanshtech.bodycam.config.AppProperties;
@@ -29,15 +33,18 @@ public class SessionService {
     private final LiveSessionRepository liveSessionRepository;
     private final LiveKitTokenService liveKitTokenService;
     private final AppProperties appProperties;
+    private final CreatedAtUuidCursorCodec cursorCodec;
 
     public SessionService(
             LiveSessionRepository liveSessionRepository,
             LiveKitTokenService liveKitTokenService,
-            AppProperties appProperties
+            AppProperties appProperties,
+            CreatedAtUuidCursorCodec cursorCodec
     ) {
         this.liveSessionRepository = liveSessionRepository;
         this.liveKitTokenService = liveKitTokenService;
         this.appProperties = appProperties;
+        this.cursorCodec = cursorCodec;
     }
 
     @Transactional(readOnly = true)
@@ -75,6 +82,27 @@ public class SessionService {
                 sessionsPage.getTotalPages(),
                 sessionsPage.hasNext()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public CursorPageResponse<SessionResponse> listActiveSessionsCursor(String cursor, int size) {
+        List<LiveSession> sessions;
+        if (cursor == null || cursor.trim().isEmpty()) {
+            sessions = liveSessionRepository.findFirstActiveCursorPage(SessionStatus.ACTIVE, PageRequest.of(0, size + 1));
+        } else {
+            CreatedAtUuidCursor decodedCursor = cursorCodec.decode(cursor);
+            sessions = liveSessionRepository.findNextActiveCursorPage(
+                    SessionStatus.ACTIVE,
+                    decodedCursor.createdAt(),
+                    decodedCursor.id(),
+                    PageRequest.of(0, size + 1));
+        }
+
+        return CursorPaginationSupport.buildPage(
+                sessions,
+                size,
+                this::map,
+                session -> cursorCodec.encode(new CreatedAtUuidCursor(session.getCreatedAt(), session.getId())));
     }
 
     @Transactional(readOnly = true)

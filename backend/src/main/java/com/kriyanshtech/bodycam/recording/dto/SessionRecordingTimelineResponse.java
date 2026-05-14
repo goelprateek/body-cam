@@ -18,6 +18,7 @@ public record SessionRecordingTimelineResponse(
         int duplicateSegmentCount,
         int missingSequenceCount,
         int segmentsMissingTimingCount,
+        List<SessionRecordingTimelineGapResponse> gaps,
         List<SessionRecordingTimelineSegmentResponse> segments
 ) {
 }

@@ -31,7 +31,8 @@ public class ApiExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, exception.getMessage());
     }
 
-    @ExceptionHandler({MethodArgumentNotValidException.class, ConstraintViolationException.class, IllegalArgumentException.class})
+    @ExceptionHandler({ MethodArgumentNotValidException.class, ConstraintViolationException.class,
+            IllegalArgumentException.class })
     ResponseEntity<Map<String, Object>> handleBadRequest(Exception exception) {
         log.warn("API bad request error: {}", exception.getMessage(), exception);
         return build(HttpStatus.BAD_REQUEST, exception.getMessage());
@@ -52,7 +53,7 @@ public class ApiExceptionHandler {
     @ExceptionHandler(MultipartException.class)
     ResponseEntity<Map<String, Object>> handleMultipart(MultipartException exception) {
         log.warn("API multipart error: {}", exception.getMessage(), exception);
-        return build(HttpStatus.PAYLOAD_TOO_LARGE,
+        return build(HttpStatus.CONTENT_TOO_LARGE,
                 "Recording upload exceeds the configured max size. Increase APP_RECORDING_MAX_UPLOAD_SIZE if larger files are expected.");
     }
 
@@ -67,7 +68,6 @@ public class ApiExceptionHandler {
                 "timestamp", Instant.now(),
                 "status", status.value(),
                 "error", status.getReasonPhrase(),
-                "message", message
-        ));
+                "message", message));
     }
 }

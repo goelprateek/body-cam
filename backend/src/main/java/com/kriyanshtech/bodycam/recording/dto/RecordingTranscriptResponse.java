@@ -1,6 +1,7 @@
 package com.kriyanshtech.bodycam.recording.dto;
 
 import com.kriyanshtech.bodycam.recording.entity.RecordingTranscriptStatus;
+import com.kriyanshtech.bodycam.recording.entity.RecordingTranscriptProcessingStage;
 
 import java.time.Instant;
 import java.util.List;
@@ -15,6 +16,8 @@ public record RecordingTranscriptResponse(
         String languageCode,
         String fullText,
         String errorMessage,
+        RecordingTranscriptProcessingStage processingStage,
+        Instant lastStageAt,
         Instant startedAt,
         Instant completedAt,
         Instant createdAt,
