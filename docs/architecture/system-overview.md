@@ -89,12 +89,42 @@
                                                  |
                                                  v
                                           +--------------+
+                                          | Raw Word     |
+                                          | Timeline     |
+                                          +------+-------+
+                                                 |
+                                                 v
+                                          +--------------+
+                                          | Punctuation  |
+                                          | Restoration  |
+                                          +------+-------+
+                                                 |
+                                                 v
+                                          +--------------+
                                           | Transcript   |
-                                          | Assembler    |
+                                          | Finalization |
+                                          +------+-------+
+                                                 |
+                      update summary, search,    | playback-ready transcript
+                      and playback artifacts     | sentences and timeline
+                     +-------------+-------------+-------------------+
+                     |             |                                 |
+                     v             v                                 v
+            +----------------+ +------------------+         +------------------+
+            | AI Summary     | | Transcript Search|         | Playback Sync    |
+            | Artifacts      | | Index            |         | Payloads         |
+            +--------+-------+ +--------+---------+         +---------+--------+
+                     |                  |                             |
+                     +------------------+-------------+---------------+
+                                                    |
+                                                    v
+                                          +--------------+
+                                          | Retry And    |
+                                          | Recovery     |
                                           +------+-------+
                                                  |
                                    persist final | assembled transcript
-                                   transcript    | and timeline
+                                   transcript    | and processing state
                                                  v
                                           +-----------+
                                           | PostgreSQL|
@@ -108,7 +138,7 @@
 - Recording objects belong to object storage.
 - Session and recording metadata belong to Spring Boot plus PostgreSQL.
 - The backend currently brokers recording file uploads into object storage, but it does not handle live media transport.
-- Raw STT output is not the final evidence artifact. The backend should persist transcript data only after a transcript assembly stage merges overlaps, removes duplicates, restores punctuation, and aligns the timeline.
+- Raw STT output is not the final evidence artifact. The backend should persist transcript data only after punctuation restoration, transcript finalization, optional AI summarization, and playback-safe timeline alignment have completed.
 - Camera flips happen inside one live session. The app may finalize one clip and start the next on the other lens, but all resulting clips still belong to the same backend session.
 - Per-clip metadata is the extension point for future device context such as GPS and thermal measurements; new fields should attach to the clip, not create a new session type.
 - The frontend should stay service-based and operationally simple.

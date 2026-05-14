@@ -13,6 +13,12 @@ Support long-running bodycam sessions, for example 20 to 30 minutes, while:
 - allowing operators to view one session as a continuous playback timeline
 - avoiding expensive ingest-time video merging
 
+For system-level feature completion status, use:
+
+- `docs/architecture/system-feature-catalog.md`
+
+This document is a scoped implementation reference for continuous-session recording and should not replace the feature catalog as the authoritative roadmap tracker.
+
 ## Current State
 
 Today the Android app records and uploads fixed MP4 clips, currently around 30 seconds each.
@@ -48,6 +54,22 @@ The current codebase now covers the full functional path through Phase 6.3:
 - backend now exposes session transcript aggregation and session-wide transcript generation
 
 This means the system can now describe a session as an ordered timeline, present it as a session-based playback experience, and aggregate transcript state across that same session. Subtitle tracks remain segment-specific during active playback, which is acceptable for the current player architecture.
+
+Transcript advanced pipeline fit:
+
+```text
+Ordered recording segments
+  -> Transcript queue
+  -> Audio extraction
+  -> Vosk STT
+  -> Raw word timeline
+  -> Punctuation restoration
+  -> Transcript finalization
+  -> Session transcript timeline
+  -> Search and playback synchronization
+```
+
+The key architecture point is that continuous playback and transcript review should bind to the finalized session transcript timeline, not directly to raw chunk-level STT fragments.
 
 ## Phase Status Table
 
@@ -107,6 +129,7 @@ Backend stores:
 
 - the uploaded media object in MinIO
 - an ordered session recording segment record in the database
+- transcript-processing state and finalized transcript artifacts aligned to the same session timeline
 
 Backend should expose:
 
@@ -114,12 +137,15 @@ Backend should expose:
 - session playback manifest or timeline
 - segment playback URLs
 - gap or partial-upload state
+- finalized session transcript timeline
+- transcript search and playback-synchronized transcript responses
 
 ### Frontend
 
 Frontend should render one session recording timeline and play across ordered segments automatically.
 
 The UI should stop presenting every segment as though it were a separate archival video when the operator intent is "play the session."
+The transcript UI should read from a finalized session transcript timeline that supports highlighting, seek, search, and retry visibility.
 
 ## Phased Rollout
 

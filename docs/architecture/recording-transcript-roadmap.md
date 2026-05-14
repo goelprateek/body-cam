@@ -8,6 +8,12 @@ This reference captures:
 - the future roadmap for making the system more robust
 - the larger feature list that can be implemented over time without losing the MVP architecture direction
 
+System-wide implementation status should be treated as authoritative in:
+
+- `docs/architecture/system-feature-catalog.md`
+
+This document can keep recording and transcript-specific status notes for local planning, but completed feature state must be reflected in the system feature catalog.
+
 It should be read together with:
 
 - `docs/architecture/continuous-session-recording-phased.md`
@@ -35,8 +41,24 @@ This is a strong MVP baseline, but it is not yet the final robust operating shap
 One important remaining correction is transcript post-processing shape:
 
 - today the pipeline is still too close to `segment audio -> STT output -> DB`
-- the target shape should be `Transcription Queue -> Audio Extractor -> Vosk STT -> Transcript Assembler -> Transcript DB`
+- the target shape should be `Transcription Queue -> Audio Extractor -> Vosk STT -> Raw Timeline -> Punctuation Restoration -> Transcript Finalization -> Search Index -> Playback Sync -> Retry And Recovery -> Transcript DB`
 - the stored transcript should come from assembly output, not directly from raw STT fragments
+
+Target advanced transcript pipeline:
+
+```text
+Transcription Queue
+  -> Audio Extractor
+  -> Vosk STT
+  -> Raw Word Timeline Storage
+  -> Punctuation Restoration
+  -> Transcript Finalization
+  -> AI Summarization
+  -> Transcript Search Index
+  -> Playback Synchronization
+  -> Retry And Recovery
+  -> Transcript DB
+```
 
 ## Phase Status Table
 
@@ -83,6 +105,7 @@ Required direction:
 - track per-segment and per-session progress
 - support retry of failed segments without regenerating the whole session
 - add a transcript assembly stage between STT output and persisted transcript rows
+- model punctuation restoration, finalization, indexing, playback sync, and recovery as distinct pipeline responsibilities
 
 Target outcomes:
 
@@ -146,6 +169,8 @@ Suggested additions:
 - worker concurrency limits
 - retry endpoint for failed work
 - assembly metrics such as overlap merges, dedupe corrections, and punctuation pass completion
+- explicit processing states such as `TRANSCRIBED`, `PUNCTUATED`, and `FINALIZED`
+- search-index freshness and playback-payload generation metrics
 
 Why this matters:
 
@@ -158,6 +183,15 @@ Current status:
 - implemented with a backend scheduled poller and queued transcript requests
 - still intentionally single-runner and simple
 - transcript assembly is still an architecture gap and should be introduced before treating the transcript model as final
+
+Suggested advanced stage responsibilities:
+
+- punctuation restoration
+- sentence finalization and overlap merge
+- AI summary generation from finalized transcript text
+- transcript sentence indexing
+- playback-synchronized transcript projection
+- stage-aware retry and recovery
 
 ### Phase 7.2 - Idempotent Segment Ingest
 
@@ -248,6 +282,28 @@ Required shape:
 - model name and language tracking
 - consistent session transcript output regardless of engine
 - a stable transcript assembly contract that sits between engine output and persisted transcript artifacts
+- stable post-STT stages so search and playback do not depend on engine-specific raw output
+
+### Phase 8.1b - AI Transcript Summarization
+
+Scope:
+
+- generate concise summaries from finalized session transcript content
+- support long-session review with short summaries and incident summaries
+- keep summarization asynchronous and optional
+
+Required shape:
+
+- summarization reads finalized transcript artifacts, not raw STT output
+- summary generation is backend-owned and pluggable by model or provider
+- failure to summarize does not block transcript readiness, search, subtitles, or playback
+
+Possible outputs:
+
+- short session summary
+- incident summary
+- highlight bullets
+- optional action-item extraction later
 
 ### Phase 8.2 - Export And Evidence Packaging
 

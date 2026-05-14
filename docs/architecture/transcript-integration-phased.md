@@ -4,6 +4,12 @@
 
 Add recording transcript support to the `body-cam` MVP so operators can read what was said in uploaded recordings from the operator console.
 
+For system-level feature completion status, use:
+
+- `docs/architecture/system-feature-catalog.md`
+
+This document is the scoped transcript architecture and rollout reference. It can describe transcript-specific progress, but the authoritative system roadmap state must be updated in the system feature catalog.
+
 The transcript capability should:
 
 - stay open source
@@ -74,11 +80,27 @@ The correct backend-owned transcript pipeline is:
 Transcription Queue
   -> Audio Extractor
   -> Vosk STT
-  -> Transcript Assembler
+  -> Raw Word Timeline Storage
+  -> Punctuation Restoration
+  -> Transcript Finalization
+  -> AI Summarization
+  -> Transcript Search Index
+  -> Playback Synchronization
+  -> Retry And Recovery
   -> Transcript DB
 ```
 
 The important correction is that `Vosk` output is not the final transcript artifact. It is only the raw recognition stage. The stored transcript should be the result of a transcript assembly service that cleans and aligns post-STT output for operator review and session playback.
+
+Advanced pipeline stage summary:
+
+- `Raw Word Timeline Storage` keeps engine-oriented word timing output available for downstream transcript processing.
+- `Punctuation Restoration` converts raw STT text into readable sentence candidates.
+- `Transcript Finalization` merges overlaps, removes duplicates, and builds the final playback timeline.
+- `AI Summarization` creates concise operator-facing summaries from finalized transcript content.
+- `Transcript Search Index` prepares fast keyword and time-aligned lookup.
+- `Playback Synchronization` serves subtitle-style, timeline-safe transcript output to the frontend.
+- `Retry And Recovery` requeues failed work and keeps the async pipeline fault tolerant.
 
 ## Guiding Principles
 
@@ -106,6 +128,7 @@ Practical implications:
 | 4 Operator console transcript UX | `Implemented` | Transcript panel, status handling, subtitles, timestamp jumps, and session transcript review are live. |
 | 5 Upgrade path to `whisper.cpp` | `Partially Implemented` | Engine abstraction and `faster-whisper` path exist; `whisper.cpp` itself is not implemented yet. |
 | 6 Operational hardening | `Partially Implemented` | Async transcript poller and session transcript search are in place. Retry flow, concurrency controls, and deeper metrics remain future work. |
+| 7 Advanced post-STT pipeline | `Partially Implemented` | The repo now has a post-processing seam, heuristic punctuation restoration, per-recording finalization, and a low-quality transcript rejection gate. Session-level merge, richer recovery state, and stronger quality scoring still remain future work. |
 
 ### Phase 1: Transcript Data Model And Read APIs
 
@@ -243,6 +266,22 @@ Transcript assembly service responsibilities:
 - restore punctuation for operator-readable transcript output
 - generate one session-aligned timeline for transcript review, seek, subtitle export, and search
 
+Advanced stage diagram:
+
+```text
+Queued transcript job
+  -> Audio extraction from recording segment
+  -> Vosk STT with word timestamps
+  -> Raw word timeline persistence
+  -> Punctuation restoration
+  -> Transcript finalization
+  -> AI summarization
+  -> Search indexing
+  -> Playback synchronization payload
+  -> Retry or recovery handling on failure
+  -> Persist session-safe transcript artifacts
+```
+
 Why Vosk first:
 
 - smaller models
@@ -269,6 +308,81 @@ Implementation notes:
 - audio extraction now uses embedded JavaCV bindings instead of an external shell `ffmpeg` dependency
 - the backend now processes transcript jobs asynchronously through a scheduled poller
 - the remaining architecture gap is a dedicated transcript assembly stage instead of persisting near-direct STT output
+
+### Phase 3.5: Advanced Post-STT Processing
+
+Objective:
+Turn raw STT output into readable, searchable, playback-safe transcript artifacts.
+
+Scope:
+
+- add punctuation restoration after raw STT output
+- finalize transcript sentences and timeline entries
+- generate AI summaries from finalized transcript artifacts
+- update search indexing from finalized transcript sentences
+- ensure playback reads timestamp-aligned finalized transcript rows
+- introduce retry and recovery semantics per transcript-processing stage
+
+Recommended advanced flow:
+
+1. Persist raw transcript words or segment output after STT.
+2. Restore punctuation and normalize text formatting.
+3. Merge chunk overlaps and remove duplicate words.
+4. Detect sentence boundaries using pauses, chunk boundaries, and transcript length.
+5. Persist finalized sentence timeline entries.
+6. Generate AI summary artifacts from finalized transcript text.
+7. Build or refresh transcript search indexes.
+8. Expose playback-ready transcript entries for subtitle-style synchronization.
+9. Requeue recoverable failures with bounded retries and backoff.
+
+Stage responsibilities:
+
+- `PunctuationRestorationService`
+  - restore punctuation
+  - capitalize sentence starts
+  - normalize spacing and formatting
+
+- `TranscriptFinalizationService`
+  - merge chunk overlap
+  - remove duplicate words
+  - build sentence-oriented timeline rows
+  - produce playback-ready transcript entries
+
+- `TranscriptSummarizationService`
+  - generate short and medium transcript summaries
+  - derive key events, incidents, or action items later if needed
+  - operate only on finalized transcript text, not raw STT fragments
+
+- `TranscriptSearchService`
+  - support keyword search
+  - support session transcript lookup
+  - support time-range aligned search results
+
+- `TranscriptPlaybackService`
+  - return timestamp-aligned transcript output
+  - support active-line highlighting and transcript seek
+  - support subtitle-style playback responses
+
+- `TranscriptRecoveryService`
+  - retry recoverable failures
+  - track chunk or stage processing status
+  - requeue incomplete work with backoff
+
+Success criteria:
+
+- raw STT output is no longer treated as the final operator-facing transcript
+- finalized transcript rows are readable and deduplicated
+- AI summary artifacts are generated from finalized transcript content
+- search and playback read from finalized artifacts
+- recoverable stage failures can be retried without redoing unrelated successful work
+
+Current status: `Partially Implemented`
+
+Implementation notes:
+
+- the repo already has transcript search and playback integration endpoints
+- the remaining work is to model punctuation restoration, transcript finalization, and recovery as first-class backend stages
+- this document is now the primary reference for these later stages
 
 ### Phase 4: Operator Console Transcript UX
 
@@ -383,6 +497,8 @@ Suggested additions:
 - maximum concurrent transcript worker count
 - timeout and retry policy
 - admin-only engine selection later if needed
+- stage-specific retries for punctuation, finalization, indexing, and playback-payload generation
+- explicit processing states such as `TRANSCRIBED`, `PUNCTUATED`, and `FINALIZED`
 
 Success criteria:
 
@@ -399,6 +515,265 @@ Implementation notes:
 - operator transcript review now exposes low-confidence transcript indicators
 - session transcript review now exposes failed or missing clip intervals with selective retry
 - explicit worker concurrency controls and richer metrics remain future work
+- stage-by-stage recovery and first-class punctuation or finalization services remain future work
+
+### Phase 7: Advanced Post-STT Pipeline Integration
+
+Objective:
+Integrate the advanced transcript pipeline into the current codebase in small, compatible slices without replacing the working transcript APIs all at once.
+
+Why this phase needs sub-phases:
+
+- the current backend already has a stable orchestration path in `RecordingTranscriptService`
+- search, subtitle export, session aggregation, and investigation lookup already depend on `recording_transcript` and `recording_transcript_segment`
+- a big-bang rewrite would risk breaking transcript review, subtitles, export, and investigation features together
+
+Phase 7 should therefore be delivered through additive sub-phases that preserve the current contract while moving processing behind better internal stages.
+
+#### Phase 7 Sub-Phase Status Table
+
+| Sub-Phase | Status | Current code fit |
+| --- | --- | --- |
+| 7.1 Post-processing orchestration seam | `Implemented` | `RecordingTranscriptService.processClaimedTranscript(...)` now routes engine output through dedicated post-processing services before persistence. |
+| 7.2 Punctuation restoration layer | `Implemented` | A dedicated punctuation restoration service now normalizes segment text before transcript rows are persisted. |
+| 7.3 Transcript finalization and overlap merge | `Partially Implemented` | Per-recording cleanup, overlap trimming, repeated-word collapse, and degenerate-output rejection are now in place. Session-aware merge in `aggregateSessionTranscript(...)` still remains future work. |
+| 7.4 Search and playback projection hardening | `Partially Implemented` | `searchSessionTranscript(...)`, `buildSubtitleVtt(...)`, `buildSessionSubtitleVtt(...)`, and session DTO mapping already exist. |
+| 7.5 Recovery and stage-aware processing state | `Pending` | The scheduler and retry flow exist, but stage-level status, retry counters, and recoverable requeue logic do not. |
+
+#### Phase 7.1: Post-Processing Orchestration Seam
+
+Objective:
+Create a clean internal seam between engine output and persisted transcript rows.
+
+What to integrate into current code:
+
+- keep `RecordingTranscriptEngine.generate(...)` returning engine-oriented output
+- stop treating `RecordingTranscriptGenerationResult.fullText()` as the final transcript source of truth
+- insert a post-processing step between `engine.generate(...)` and `finalizeTranscriptSuccess(...)`
+
+Best current integration points:
+
+- `RecordingTranscriptService.processClaimedTranscript(...)`
+- `RecordingTranscriptService.finalizeTranscriptSuccess(...)`
+- `RecordingTranscriptService.toSegments(...)`
+
+Recommended implementation shape:
+
+1. Add a new internal service such as `TranscriptPostProcessingService`.
+2. Pass `RecordingTranscriptGenerationResult` plus recording metadata into it.
+3. Return a processed result object that still fits the existing `RecordingTranscript` persistence model.
+4. Keep the current controller and DTO contracts unchanged.
+
+Why this is the first sub-phase:
+
+- it introduces the seam once
+- punctuation, finalization, and future engine normalization can all plug into that seam
+- it minimizes churn in controllers, repositories, and frontend consumers
+
+#### Phase 7.2: Punctuation Restoration Layer
+
+Objective:
+Turn raw STT text into readable sentence-like transcript text before persistence.
+
+What to integrate into current code:
+
+- create a dedicated `PunctuationRestorationService`
+- run it on `TranscriptSegmentPayload` output before `RecordingTranscriptSegment` rows are created
+- keep the result in the same `recording_transcript_segment.text` column initially
+
+Best current integration points:
+
+- `RecordingTranscriptService.finalizeTranscriptSuccess(...)`
+- `RecordingTranscriptService.toSegments(...)`
+- `RecordingTranscriptSupport.joinSegmentText(...)`
+
+Recommended first slice:
+
+1. Add heuristic punctuation restoration with no schema changes.
+2. Restore sentence capitalization and spacing.
+3. Rebuild `fullText` from punctuated segments instead of raw engine text.
+
+Compatibility benefit:
+
+- `RecordingTranscriptResponse`
+- `SessionTranscriptResponse`
+- `buildSubtitleVtt(...)`
+- `buildSessionSubtitleVtt(...)`
+
+all continue to work while transcript readability improves immediately.
+
+#### Phase 7.3: Transcript Finalization And Overlap Merge
+
+Objective:
+Remove duplicate words, merge overlap, and produce timeline-safe transcript segments.
+
+What to integrate into current code:
+
+- add a dedicated `TranscriptFinalizationService`
+- start by finalizing per-recording transcript segments
+- then extend finalization logic to session aggregation where chunk overlap crosses recording boundaries
+
+Best current integration points:
+
+- per-recording stage:
+  - `RecordingTranscriptService.finalizeTranscriptSuccess(...)`
+  - `RecordingTranscriptService.toSegments(...)`
+- session stage:
+  - `RecordingTranscriptService.aggregateSessionTranscript(...)`
+  - `RecordingTranscriptService.mapSessionSegment(...)`
+
+Recommended rollout:
+
+1. Normalize and deduplicate segment text inside one recording first.
+2. Preserve the existing `recording_transcript_segment` table as the persisted output.
+3. Add optional session-level finalization in the aggregation path for overlap between adjacent recording chunks.
+4. Only introduce a new `transcript_sentences` table if the current row model becomes too limiting.
+
+Current implementation note:
+
+- the backend now rejects obviously degenerate long-form STT results, such as repeated single-word output across multiple long segments, instead of marking them `READY`
+
+Why this fits the current repo:
+
+- `aggregateSessionTranscript(...)` already computes session-relative offsets
+- `SessionTranscriptSegmentResponse` already gives us a session timeline DTO
+- investigation search and subtitle generation already read from transcript segments, so we can improve quality without a contract reset
+
+#### Phase 7.4: Search And Playback Projection Hardening
+
+Objective:
+Move search and playback to consume finalized transcript artifacts consistently.
+
+What is already present:
+
+- `searchSessionTranscript(...)`
+- `buildSubtitleVtt(...)`
+- `buildSessionSubtitleVtt(...)`
+- `SessionRecordingTranscriptController`
+- `RecordingInvestigationService` transcript text lookup
+
+What to integrate next:
+
+- make search operate on finalized text rather than raw STT text
+- make subtitle generation rely on finalized segment boundaries
+- keep investigation search aligned to the same finalized transcript content
+
+Best current integration points:
+
+- `RecordingTranscriptService.searchSessionTranscript(...)`
+- `RecordingInvestigationService`
+- `RecordingTranscriptService.buildSubtitleVtt(...)`
+- `RecordingTranscriptService.buildSessionSubtitleVtt(...)`
+
+Recommended rollout:
+
+1. Keep existing APIs and DTOs.
+2. Switch internal text source from raw persisted text to finalized text.
+3. If needed later, add a dedicated sentence projection table or search index without changing the public endpoints first.
+
+#### Phase 7.4b: AI Transcript Summarization
+
+Objective:
+Generate concise operator-facing summaries from finalized session transcript content.
+
+Why this belongs after finalization:
+
+- summarization should read clean sentence-level transcript output
+- raw STT fragments are too noisy for reliable summaries
+- summaries should align with the same transcript version used for search, playback, and export
+
+What to integrate into current code:
+
+- add a `TranscriptSummarizationService`
+- generate summaries from `SessionTranscriptResponse.fullText()` or an equivalent finalized session transcript projection
+- keep summarization asynchronous and optional
+
+Best current integration points:
+
+- `RecordingTranscriptService.getSessionTranscript(...)`
+- `RecordingTranscriptService.aggregateSessionTranscript(...)`
+- `SessionRecordingExportService`
+- future investigation or archive summary views
+
+Recommended first slice:
+
+1. Generate a short session summary after session transcript finalization succeeds.
+2. Store the summary as additive transcript metadata or a companion summary table.
+3. Expose it first through session transcript or export flows, not through a separate orchestration system.
+4. Keep the model pluggable so higher-quality summarizers can be swapped later.
+
+MVP summary outputs can include:
+
+- short summary
+- incident summary
+- optional bullet highlights
+
+Guardrails:
+
+- do not summarize directly from raw STT output
+- do not block recording upload or transcript generation request APIs
+- do not require summarization for search, playback, or subtitle generation to work
+- keep summarization backend-owned and self-hostable by default
+
+#### Phase 7.5: Recovery And Stage-Aware Processing State
+
+Objective:
+Add stage-level retry and clearer processing state without replacing the current queue model.
+
+What is already present:
+
+- `RecordingTranscriptScheduler.processPendingTranscripts()`
+- `RecordingTranscriptService.retryFailedSessionTranscript(...)`
+- `RecordingTranscriptStatus` with `PENDING`, `PROCESSING`, `READY`, and `FAILED`
+
+What is missing:
+
+- stage-specific processing markers like `TRANSCRIBED`, `PUNCTUATED`, and `FINALIZED`
+- retry counters
+- per-stage error capture
+- requeue logic for recoverable failures without discarding all successful work
+
+Best current integration points:
+
+- `RecordingTranscriptScheduler`
+- `RecordingTranscriptService.claimNextPendingTranscript(...)`
+- `RecordingTranscriptService.finalizeTranscriptFailure(...)`
+- `backend/src/main/resources/db/migration/V6__create_recording_transcript_tables.sql`
+
+Recommended rollout:
+
+1. Extend persistence with additive stage-tracking fields or a companion processing-job table.
+2. Keep `RecordingTranscriptStatus` as the external high-level contract for now.
+3. Map detailed internal states back to the existing public statuses until the frontend needs more detail.
+4. Add bounded retry count and recoverable failure classification before introducing worker concurrency.
+
+This avoids breaking:
+
+- recording transcript status badges
+- session transcript aggregate status
+- current retry endpoints and operator flows
+
+#### Recommended Delivery Order Inside Current Code
+
+If we want the safest integration path for the existing repo, Stage 7 should be delivered in this order:
+
+1. Add the orchestration seam in `RecordingTranscriptService`.
+2. Add punctuation restoration with no schema change.
+3. Add per-recording finalization and dedupe.
+4. Switch search, subtitles, and investigation lookup to finalized artifacts.
+5. Add stage-aware recovery metadata and bounded retries.
+6. Add AI summarization on top of finalized transcript artifacts.
+7. Only after that, decide whether a new sentence table or search index table is necessary.
+
+#### Practical First Patch For Implementation
+
+The first code change that best unlocks Phase 7 is:
+
+- create a new post-processing service package under `backend/src/main/java/com/kriyanshtech/bodycam/recording/transcript/`
+- introduce a processed transcript result type
+- call that service from `RecordingTranscriptService.finalizeTranscriptSuccess(...)`
+
+That gives the current codebase a stable integration seam without forcing a controller, DTO, or schema redesign in the same PR.
 
 ## Open-Source Technology Recommendation
 
@@ -418,6 +793,11 @@ Use case fit:
 - good for first operator-visible transcript rollout
 - good for validating whether transcripts help the workflow
 - good when CPU and RAM budgets are tight
+
+Known limitation:
+
+- Vosk can degrade badly on mixed trailer audio, music-heavy soundtracks, overlapping speakers, and noisy field recordings
+- when raw Vosk output collapses into repeated low-information text, the backend should treat it as invalid raw STT and fail finalization instead of persisting misleading transcript text
 
 ### Quality Upgrade Recommendation: `whisper.cpp`
 
@@ -467,7 +847,9 @@ Suggested responsibilities:
   - claim work
   - extract audio
   - call transcript engine
-  - hand engine output to transcript assembly
+  - persist raw STT timeline output
+  - hand engine output to punctuation and finalization stages
+  - update search and playback-facing transcript artifacts
   - persist assembled transcript results
 
 - transcript assembly service:
@@ -476,6 +858,28 @@ Suggested responsibilities:
   - build sentence-oriented transcript output
   - restore punctuation
   - generate the persisted timeline used by search, subtitles, and session review
+
+- punctuation restoration service:
+  - clean raw transcript text
+  - restore sentence punctuation
+  - capitalize transcript output
+
+- transcript search service:
+  - index finalized transcript rows
+  - support keyword and time-aligned search
+
+- transcript summarization service:
+  - generate summary artifacts from finalized transcript content
+  - support short summary and incident summary variants
+  - feed export and investigation views without changing transcript playback contracts
+
+- transcript playback service:
+  - serve playback-synchronized transcript sentences
+  - support subtitle and active-line use cases
+
+- transcript recovery service:
+  - requeue recoverable failures
+  - track retry count and failure reason by stage
 
 - transcript engine adapter:
   - hide Vosk-specific and `whisper.cpp`-specific details
