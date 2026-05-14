@@ -1,0 +1,558 @@
+<section class="page workspace-grid">
+  <!-- Left Panel: Archive List -->
+  <mat-card class="panel section-panel glass-panel" appearance="outlined">
+    <div class="section-head premium-head">
+      <div class="head-title">
+        <h2>Session Archive</h2>
+        <span class="subtle-text live-count">{{ recordingSessions().length }} Sessions</span>
+      </div>
+      <button mat-icon-button class="refresh-btn" (click)="loadRecordings()" [disabled]="isLoading()">
+        <mat-icon>refresh</mat-icon>
+      </button>
+    </div>
+
+    @if (isLoading()) {
+      <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
+    }
+
+    <div class="archive-search-row">
+      <input
+        type="search"
+        class="transcript-search-input"
+        placeholder="Search sessions, references..."
+        [value]="investigationSearchQuery()"
+        (input)="updateInvestigationSearch(($any($event.target)).value)"
+      />
+      @if (investigationSearchQuery()) {
+        <button
+          mat-button
+          type="button"
+          class="transcript-search-clear"
+          (click)="clearInvestigationSearch()"
+        >
+          Clear
+        </button>
+      }
+    </div>
+
+    @if (isInvestigationSearching()) {
+      <div class="subtle-text transcript-search-meta">Searching archive...</div>
+    } @else if (investigationSearchQuery()) {
+      <div class="subtle-text transcript-search-meta">
+        {{ investigationSearchResults()?.totalMatches || 0 }} match{{ (investigationSearchResults()?.totalMatches || 0) === 1 ? '' : 'es' }}
+      </div>
+    }
+
+    @if (investigationSearchResults()?.hits?.length) {
+      <div class="investigation-results premium-scroll">
+        @for (hit of investigationSearchResults()?.hits || []; track hit.sessionId + ':' + hit.recordingId + ':' + (hit.transcriptStartSeconds || hit.matchedField)) {
+          <button type="button" class="investigation-hit" (click)="openInvestigationHit(hit)">
+            <span class="investigation-hit-head">
+              <strong>{{ hit.workerName }}</strong>
+              <span class="subtle-text">{{ investigationFieldLabel(hit.matchedField) }}</span>
+            </span>
+            <span class="investigation-hit-meta">{{ hit.referenceNumber }} | {{ hit.roomName }}</span>
+            <span class="investigation-hit-snippet">{{ hit.snippet }}</span>
+          </button>
+        }
+      </div>
+    } @else if (investigationSearchQuery() && !isInvestigationSearching()) {
+      <div class="empty-state transcript-empty">
+        <strong>No archive matches</strong>
+        <span>Try a different search term.</span>
+      </div>
+    }
+
+    <div class="recording-list session-list-scroll premium-scroll" (scroll)="onScroll($event)">
+      @for (session of visibleRecordingSessions(); track session.sessionId) {
+        <mat-card
+          class="archive-card premium-card"
+          appearance="outlined"
+          [class.archive-card-selected]="session.sessionId === selectedSessionId()"
+          (click)="selectSession(session.sessionId)"
+        >
+          <div class="archive-card-inner">
+            <div class="archive-thumb">
+              <div class="thumb-overlay">
+                <mat-icon class="play-icon">play_arrow</mat-icon>
+              </div>
+              <div class="thumb-placeholder">
+                <mat-icon>video_library</mat-icon>
+              </div>
+              <div class="duration-pill">{{ session.recordingCount }} SEG</div>
+            </div>
+
+            <div class="archive-details">
+              <div class="archive-header-group">
+                <div class="archive-title-stack">
+                  <strong class="archive-worker">{{ session.workerName }}</strong>
+                  <span class="archive-room">{{ session.roomName }}</span>
+                </div>
+                <span
+                  class="transcript-badge"
+                  [class]="transcriptPillClass(session.transcriptStatus)"
+                  [matTooltip]="transcriptLabel(session.transcriptStatus)"
+                >
+                  <mat-icon class="transcript-icon">{{ transcriptIcon(session.transcriptStatus) }}</mat-icon>
+                </span>
+              </div>
+
+              @if (session.referenceNumber) {
+                <div class="archive-reference-line" matTooltip="Reference Number">
+                  <mat-icon>tag</mat-icon>
+                  <span><strong>REF:</strong> {{ session.referenceNumber }}</span>
+                </div>
+              }
+
+              <div class="archive-meta-row">
+                <div class="meta-pill" matTooltip="Session Duration">
+                  <mat-icon>schedule</mat-icon>
+                  <span>{{ formatDurationFromSeconds(session.approxDurationSeconds) }}</span>
+                </div>
+                <div class="meta-pill">
+                  <mat-icon>event</mat-icon>
+                  <span>{{ session.latestCreatedAt | date: 'MMM d, HH:mm' }}</span>
+                </div>
+                @if (session.latitude && session.longitude) {
+                  <div class="meta-pill" [matTooltip]="formatSessionCoordinates(session)">
+                    <mat-icon>place</mat-icon>
+                    <span class="meta-truncate">{{ session.latitude | number:'1.2-2' }}, {{ session.longitude | number:'1.2-2' }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </mat-card>
+      } @empty {
+        <div class="empty-state premium-empty">
+          <div class="empty-icon-wrap">
+            <mat-icon>video_library</mat-icon>
+          </div>
+          <span class="empty-title">Archive Empty</span>
+          <span class="empty-subtitle">No recordings available.</span>
+        </div>
+      }
+    </div>
+  </mat-card>
+
+  <!-- Right Panel: Side-by-Side Evidence Viewer & Transcript -->
+  <section class="workspace-main evidence-main-layout">
+    
+    <!-- Video Player Panel -->
+    <mat-card #viewerPanel class="panel evidence-viewer-panel glass-panel" appearance="outlined">
+      <div class="evidence-header premium-head">
+        <div class="viewer-head-copy">
+          <h2>{{ selectedSession()?.workerName || 'Playback Evidence' }}</h2>
+          @if (selectedSession()?.referenceNumber) {
+            <p class="viewer-ref-caption">
+              <span class="head-ref-badge">REF: {{ selectedSession()?.referenceNumber }}</span>
+            </p>
+          }
+          <p class="viewer-caption">{{ selectedSessionCaption() }}</p>
+        </div>
+        <div class="evidence-actions">
+          @if (selectedTimeline()) {
+            <span class="status-pill premium-status-pill">
+              {{ selectedTimeline()?.segments?.length || 0 }} SEGMENTS
+            </span>
+          }
+          @if (selectedSessionExport()?.status) {
+            <span class="status-pill premium-status-pill">
+              EXPORT {{ selectedSessionExport()?.status }}
+            </span>
+          }
+        </div>
+      </div>
+
+      @if (reviewClipNotice()) {
+        <div class="notice">
+          <strong>{{ reviewClipNotice()?.title }}</strong>
+          <span>{{ reviewClipNotice()?.message }}</span>
+        </div>
+      }
+
+      @if (selectedTimeline()) {
+        <div class="evidence-metadata-bar">
+          <div class="meta-item" matTooltip="Session Duration">
+            <mat-icon>schedule</mat-icon>
+            <span>{{ formatDurationMs(selectedTimeline()?.totalDurationMs) }}</span>
+          </div>
+          <div class="meta-item" [class]="integrityPillClass(selectedTimeline()?.integrityStatus)">
+            <mat-icon>{{ integrityIcon(selectedTimeline()?.integrityStatus) }}</mat-icon>
+            <span>{{ integrityLabel(selectedTimeline()?.integrityStatus) }}</span>
+          </div>
+          <div class="meta-item">
+            <mat-icon>queue_play_next</mat-icon>
+            <span>Seg {{ selectedTimelineSegmentOrdinal() }} of {{ selectedTimeline()?.segments?.length || 0 }}</span>
+          </div>
+          
+          <div class="spacer"></div>
+
+          <!-- Export Actions Moved Here -->
+          <div class="evidence-export-actions">
+            @if (selectedSessionExport()?.artifactCount) {
+              <div class="meta-item" matTooltip="Artifacts">
+                <mat-icon>folder_zip</mat-icon>
+                <span>{{ selectedSessionExport()?.artifactCount }}</span>
+              </div>
+            }
+            @if (selectedSessionExport()?.packageSizeBytes) {
+              <div class="meta-item" matTooltip="Size">
+                <mat-icon>save_alt</mat-icon>
+                <span>{{ formatBytes(selectedSessionExport()?.packageSizeBytes) }}</span>
+              </div>
+            }
+            <button
+              mat-stroked-button
+              class="premium-btn premium-btn-secondary compact-btn"
+              type="button"
+              (click)="requestExportPackage()"
+              [disabled]="isExportRequesting() || isExportLoading()"
+            >
+              {{ selectedSessionExport()?.status === 'READY' ? 'Refresh Export' : isExportRequesting() ? 'Queueing...' : 'Export' }}
+            </button>
+            @if (selectedSessionExport()?.downloadUrl) {
+              <a
+                mat-flat-button
+                class="premium-btn compact-btn"
+                [href]="selectedSessionExport()?.downloadUrl || ''"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Download
+              </a>
+            }
+          </div>
+        </div>
+
+        @if (selectedTimeline()?.hasTimelineGaps || timelineIntegrityDetails().length) {
+          <div class="notice notice-error compact-notice">
+            <mat-icon>warning_amber</mat-icon>
+            <span>Timeline has missing or out-of-order uploads.</span>
+            @if (timelineIntegrityDetails().length) {
+              <span>{{ timelineIntegrityDetails().join(' | ') }}</span>
+            }
+          </div>
+        }
+
+        @if (timelineGaps().length) {
+          <div class="timeline-gap-list">
+            @for (gap of timelineGaps(); track gap.type + ':' + (gap.startMs || 0) + ':' + (gap.endMs || 0) + ':' + (gap.label || '')) {
+              <div class="timeline-gap-item">
+                <span class="timeline-summary-pill timeline-summary-pill-warning">
+                  <mat-icon>warning</mat-icon>
+                  <span>{{ gap.label }}</span>
+                </span>
+                <span class="subtle-text">{{ timelineGapRangeLabel(gap) }}</span>
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <div class="recording-player premium-frame">
+        @if (isPlaybackLoading()) {
+          <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
+        }
+
+        <div class="viewer-stage premium-stage">
+          @if (selectedPlaybackUrl()) {
+            <video
+              #timelinePlayer
+              class="replay-video"
+              [src]="selectedPlaybackUrl() || ''"
+              controls
+              preload="metadata"
+              (ended)="handlePlaybackEnded()"
+              (loadedmetadata)="handleVideoMetadataLoaded()"
+              (timeupdate)="handleVideoTimeUpdate()"
+              style="width: 100%; display: block;"
+            >
+              @if (selectedSubtitleUrl()) {
+                <track
+                  kind="subtitles"
+                  label="Transcript Subtitles"
+                  srclang="en"
+                  [attr.src]="selectedSubtitleUrl()"
+                  default
+                />
+              }
+            </video>
+          } @else {
+            <div class="viewer-empty premium-empty-viewer">
+              <div class="radar-scan" style="opacity: 0.2; background: conic-gradient(from 0deg at 50% 50%, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 80%, rgba(255, 255, 255, 0.2) 100%);"></div>
+              <mat-icon class="huge-icon premium-huge-icon" style="color: rgba(255,255,255,0.2); filter: none;">play_circle_outline</mat-icon>
+              <strong>Select a session to play</strong>
+            </div>
+          }
+        </div>
+
+        @if (selectedTimeline()?.segments?.length) {
+          <div class="timeline-segment-strip premium-scroll">
+            @for (segment of selectedTimeline()?.segments || []; track segment.recordingId; let i = $index) {
+              <button
+                type="button"
+                class="timeline-segment-btn"
+                [class.timeline-segment-btn-active]="i === selectedTimelineSegmentIndex()"
+                [class.timeline-segment-btn-warning]="segmentWarning(segment)"
+                (click)="selectTimelineSegment(i)"
+              >
+                <span class="timeline-segment-label">{{ timelineSegmentLabel(segment, i) }}</span>
+                <span class="timeline-segment-time">{{ formatTimelineSegmentDuration(segment) }}</span>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </mat-card>
+
+    <!-- Transcript Panel -->
+    <mat-card class="panel evidence-transcript-panel glass-panel" appearance="outlined">
+      <div class="evidence-header premium-head">
+          <div class="viewer-head-copy">
+          <div class="transcript-title-row">
+            <h2>Transcript</h2>
+            @if (selectedSessionTranscript()) {
+              <span class="transcript-pill transcript-pill-detail" [class]="transcriptPillClass(selectedSessionTranscript()?.status)">
+                {{ transcriptLabel(selectedSessionTranscript()?.status) }}
+              </span>
+              @if (selectedSessionTranscript()?.processingStage) {
+                <span class="transcript-pill transcript-pill-detail transcript-pill-idle">
+                  {{ transcriptProcessingStageLabel(selectedSessionTranscript()?.processingStage) }}
+                </span>
+              }
+            }
+          </div>
+          @if (selectedSessionTranscript()?.engine || selectedSessionTranscript()?.model) {
+            <p class="viewer-caption">{{ selectedSessionTranscript()?.engine }} {{ selectedSessionTranscript()?.model }}</p>
+          } @else {
+            <p class="viewer-caption">Generated from full session timeline</p>
+          }
+          @if (selectedSessionTranscript()?.lastStageAt) {
+            <p class="viewer-caption">Last transcript stage update {{ selectedSessionTranscript()?.lastStageAt | date: 'MMM d, HH:mm:ss' }}</p>
+          }
+          @if (transcriptSmokeCheck()) {
+            <p class="viewer-caption">
+              {{ transcriptSmokeCheckLabel() }}
+              @if (transcriptSmokeCheck()?.engine) {
+                | {{ transcriptSmokeCheck()?.engine }}
+              }
+            </p>
+          }
+        </div>
+        
+        <div class="evidence-actions">
+          @if (selectedSession()) {
+            @if (hasRetryableTranscriptIntervals()) {
+              <button
+                mat-icon-button
+                class="premium-icon-btn"
+                matTooltip="Retry Failed Intervals"
+                (click)="retryFailedTranscriptIntervals()"
+                [disabled]="isRetryingFailedTranscript() || isTranscriptGenerating() || isTranscriptLoading()"
+              >
+                <mat-icon>replay</mat-icon>
+              </button>
+            }
+            <button
+              mat-icon-button
+              class="premium-icon-btn"
+              [matTooltip]="selectedSessionTranscript()?.status === 'READY' ? 'Regenerate Transcript' : 'Generate Transcript'"
+              (click)="generateTranscript()"
+              [disabled]="isTranscriptGenerating() || isTranscriptLoading() || isRetryingFailedTranscript()"
+            >
+              <mat-icon>article</mat-icon>
+            </button>
+          }
+        </div>
+      </div>
+
+      @if (selectedSessionTranscript()) {
+        <div class="transcript-utility-bar">
+          <div class="transcript-filter-row">
+            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'all'" (click)="setTranscriptReviewFilter('all')">All</button>
+            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'failed'" (click)="setTranscriptReviewFilter('failed')">Failed</button>
+            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'missing'" (click)="setTranscriptReviewFilter('missing')">Missing</button>
+            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'pending'" (click)="setTranscriptReviewFilter('pending')">Pending</button>
+            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'low-confidence'" (click)="setTranscriptReviewFilter('low-confidence')">Low Conf</button>
+          </div>
+          
+          @if (selectedSessionTranscript()?.segments?.length) {
+            <div class="transcript-search-row">
+              <input
+                type="search"
+                class="transcript-search-input compact-search"
+                placeholder="Search transcript..."
+                [value]="transcriptSearchQuery()"
+                (input)="updateTranscriptSearch(($any($event.target)).value)"
+              />
+              @if (transcriptSearchQuery()) {
+                <button mat-icon-button class="clear-search-btn" (click)="clearTranscriptSearch()">
+                  <mat-icon>close</mat-icon>
+                </button>
+              }
+            </div>
+            @if (isTranscriptSearching()) {
+              <div class="subtle-text transcript-search-meta compact-meta">Searching...</div>
+            } @else if (transcriptSearchQuery()) {
+              <div class="subtle-text transcript-search-meta compact-meta">
+                {{ filteredTranscriptSegments().length }} match{{ filteredTranscriptSegments().length === 1 ? '' : 'es' }}
+              </div>
+            }
+          }
+        </div>
+      }
+
+      <div class="transcript-content-area premium-scroll">
+        @if (isTranscriptLoading()) {
+          <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
+        }
+
+        @if (selectedSessionTranscript()) {
+          
+          @if (filteredTranscriptReviewRecordings().length) {
+            <div class="transcript-review-list">
+              @for (recording of filteredTranscriptReviewRecordings(); track recording.recordingId) {
+                <div class="transcript-review-card" [class.transcript-review-card-warning]="recording.status === 'FAILED' || recording.status === 'NOT_REQUESTED'">
+                  <div class="transcript-review-head">
+                    <span class="transcript-pill transcript-pill-detail" [class]="transcriptPillClass(recording.status)">
+                      {{ transcriptLabel(recording.status) }}
+                    </span>
+                    <span class="subtle-text">Clip {{ transcriptRecordingOrdinal(recording) }}</span>
+                  </div>
+                  <div class="transcript-review-body">
+                    @if (recording.processingStage) {
+                      <span class="subtle-text">
+                        Stage: {{ transcriptProcessingStageLabel(recording.processingStage) }}
+                        @if (recording.lastStageAt) {
+                          | {{ recording.lastStageAt | date: 'MMM d, HH:mm:ss' }}
+                        }
+                      </span>
+                    }
+                    <span class="subtle-text">
+                      {{ transcriptRecordingBody(recording) }}
+                    </span>
+                    @if (recording.errorMessage && recording.status !== 'FAILED') {
+                      <span class="transcript-review-error">{{ recording.errorMessage }}</span>
+                    }
+                  </div>
+                  <div class="transcript-review-actions">
+                    <button mat-button type="button" class="compact-btn" (click)="reviewTranscriptRecording(recording)">
+                      Review
+                    </button>
+                    @if (canRetryTranscriptRecording(recording)) {
+                      <button
+                        mat-button
+                        type="button"
+                        class="compact-btn"
+                        (click)="retryTranscriptRecording(recording)"
+                        [disabled]="isRetryingTranscriptRecordingId() === recording.recordingId"
+                      >
+                        {{ isRetryingTranscriptRecordingId() === recording.recordingId ? 'Retrying...' : 'Retry' }}
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          @switch (selectedSessionTranscript()?.status) {
+            @case ('NOT_REQUESTED') {
+              <div class="empty-state transcript-empty">
+                <mat-icon>article</mat-icon>
+                <strong>No transcript yet</strong>
+                <span>Generate one for the full session when needed.</span>
+              </div>
+            }
+            @case ('FAILED') {
+              <div class="notice notice-error">
+                <mat-icon>error_outline</mat-icon>
+                {{ selectedSessionTranscript()?.errorMessage || 'Session transcript generation failed.' }}
+              </div>
+            }
+            @default {
+              @if (shouldShowTranscriptSummary()) {
+                <div class="transcript-summary-card">
+                  @if (selectedSessionTranscript()?.shortSummary) {
+                    <div class="transcript-summary-block">
+                      <strong>Summary</strong>
+                      <span>{{ selectedSessionTranscript()?.shortSummary }}</span>
+                    </div>
+                  }
+                  @if (selectedSessionTranscript()?.incidentSummary) {
+                    <div class="transcript-summary-block">
+                      <strong>Incident View</strong>
+                      <span>{{ selectedSessionTranscript()?.incidentSummary }}</span>
+                    </div>
+                  }
+                  @if (selectedSessionTranscript()?.keywords?.length) {
+                    <div class="transcript-summary-keywords">
+                      @for (keyword of selectedSessionTranscript()?.keywords || []; track keyword) {
+                        <span class="transcript-summary-keyword">{{ keyword }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+
+              @if (shouldShowTranscriptFullText() && selectedSessionTranscript()?.fullText) {
+                <div class="transcript-full-text">
+                  {{ selectedSessionTranscript()?.fullText }}
+                </div>
+              }
+
+              @if (shouldShowTranscriptSegments()) {
+                @if (filteredTranscriptSegments().length) {
+                  <div class="transcript-segments">
+                    @for (segment of filteredTranscriptSegments(); track segment.id || segment.segmentIndex) {
+                      <button
+                        type="button"
+                        class="transcript-segment transcript-segment-button"
+                        [class.transcript-segment-active]="segment.id === activeTranscriptSegmentId()"
+                        [class.transcript-segment-low-confidence]="isLowConfidenceSegment(segment)"
+                        (click)="seekToTranscriptSegment(segment)"
+                      >
+                        <div class="segment-time-col">
+                          <span class="segment-time">{{ formatSegmentTime(segment) }}</span>
+                          @if (segment.confidence && isLowConfidenceSegment(segment)) {
+                            <mat-icon class="confidence-warning" matTooltip="Low Confidence">warning</mat-icon>
+                          }
+                        </div>
+                        <div class="segment-copy">
+                          <span class="segment-text">{{ segment.text }}</span>
+                        </div>
+                      </button>
+                    }
+                  </div>
+                } @else if (transcriptSearchQuery()) {
+                  <div class="empty-state transcript-empty">
+                    <strong>No matches</strong>
+                    <span>Try a different search term.</span>
+                  </div>
+                } @else if (transcriptReviewFilter() !== 'all') {
+                  <div class="empty-state transcript-empty">
+                    <strong>No text for this filter</strong>
+                    <span>{{ transcriptFilterEmptyMessage() }}</span>
+                  </div>
+                }
+              } @else if (selectedSessionTranscript()?.status === 'PROCESSING' || selectedSessionTranscript()?.status === 'PENDING') {
+                <div class="empty-state transcript-empty">
+                  <mat-icon class="rotating">hourglass_top</mat-icon>
+                  <strong>Request accepted</strong>
+                  <span>Preparing transcript content...</span>
+                </div>
+              }
+            }
+          }
+        } @else {
+          <div class="empty-state transcript-empty">
+            <mat-icon>info_outline</mat-icon>
+            <strong>Select a session</strong>
+            <span>Details will appear here.</span>
+          </div>
+        }
+      </div>
+    </mat-card>
+  </section>
+</section>

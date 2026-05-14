@@ -34,6 +34,12 @@ export interface PageResponse<T> {
   hasNext: boolean;
 }
 
+export interface CursorPageResponse<T> {
+  items: T[];
+  nextCursor: string | null;
+  hasNext: boolean;
+}
+
 export interface LiveKitTokenResponse {
   token: string;
   roomName: string;
@@ -66,6 +72,14 @@ export type RecordingTranscriptStatus =
   | 'READY'
   | 'FAILED';
 
+export type RecordingTranscriptProcessingStage =
+  | 'QUEUED'
+  | 'TRANSCRIBING'
+  | 'TRANSCRIBED'
+  | 'PUNCTUATED'
+  | 'FINALIZED'
+  | 'FAILED';
+
 export type SessionRecordingIntegrityStatus =
   | 'COMPLETE'
   | 'PROCESSING_UPLOADS'
@@ -90,6 +104,8 @@ export interface RecordingTranscriptResponse {
   languageCode: string | null;
   fullText: string | null;
   errorMessage: string | null;
+  processingStage: RecordingTranscriptProcessingStage | null;
+  lastStageAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string | null;
@@ -133,6 +149,14 @@ export interface SessionRecordingTimelineSegmentResponse {
   transcriptStatus?: RecordingTranscriptStatus | null;
 }
 
+export interface SessionRecordingTimelineGapResponse {
+  type: 'MISSING_SEQUENCE' | 'DUPLICATE_SEQUENCE' | 'TIMING_GAP' | 'TIMING_OVERLAP' | 'MISSING_TIMING';
+  label: string;
+  startMs: number | null;
+  endMs: number | null;
+  missingCount: number | null;
+}
+
 export interface SessionRecordingTimelineResponse {
   sessionId: string;
   workerId: string;
@@ -147,6 +171,7 @@ export interface SessionRecordingTimelineResponse {
   duplicateSegmentCount: number;
   missingSequenceCount: number;
   segmentsMissingTimingCount: number;
+  gaps: SessionRecordingTimelineGapResponse[];
   segments: SessionRecordingTimelineSegmentResponse[];
 }
 
@@ -188,6 +213,8 @@ export interface SessionTranscriptRecordingResponse {
   recordingSequence: number | null;
   status: RecordingTranscriptStatus;
   errorMessage: string | null;
+  processingStage: RecordingTranscriptProcessingStage | null;
+  lastStageAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string | null;
@@ -205,7 +232,12 @@ export interface SessionTranscriptResponse {
   model: string | null;
   languageCode: string | null;
   fullText: string | null;
+  shortSummary: string | null;
+  incidentSummary: string | null;
+  keywords: string[];
   errorMessage: string | null;
+  processingStage: RecordingTranscriptProcessingStage | null;
+  lastStageAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string | null;
@@ -246,4 +278,14 @@ export interface RecordingInvestigationSearchResponse {
   query: string;
   totalMatches: number;
   hits: RecordingInvestigationSearchHitResponse[];
+}
+
+export interface TranscriptSmokeCheckResponse {
+  ready: boolean;
+  enabled: boolean;
+  engine: string | null;
+  endpoint: string | null;
+  pollDelayMs: number;
+  checks: string[];
+  warnings: string[];
 }

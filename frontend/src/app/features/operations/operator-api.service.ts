@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '@env/environment';
 import {
   CurrentUserResponse,
+  CursorPageResponse,
   LiveKitTokenResponse,
   LoginResponse,
   PageResponse,
@@ -12,6 +13,7 @@ import {
   RecordingResponse,
   SessionRecordingExportResponse,
   SessionRecordingTimelineResponse,
+  TranscriptSmokeCheckResponse,
   SessionTranscriptSearchResponse,
   SessionTranscriptResponse,
   RecordingTranscriptResponse,
@@ -97,10 +99,28 @@ export class OperatorApiService {
     );
   }
 
-  async listRecordings(): Promise<RecordingResponse[]> {
+  async listActiveSessionsCursor(cursor: string | null, size: number): Promise<CursorPageResponse<SessionResponse>> {
+    const params: Record<string, any> = { size };
+    if (cursor) {
+      params['cursor'] = cursor;
+    }
     return firstValueFrom(
-      this.http.get<RecordingResponse[]>(this.url('/recordings'), {
-        headers: this.authHeaders()
+      this.http.get<CursorPageResponse<SessionResponse>>(this.url('/sessions/active-cursor'), {
+        headers: this.authHeaders(),
+        params
+      })
+    );
+  }
+
+  async listRecordings(cursor: string | null, size: number): Promise<CursorPageResponse<RecordingResponse>> {
+    const params: Record<string, any> = { size };
+    if (cursor) {
+      params['cursor'] = cursor;
+    }
+    return firstValueFrom(
+      this.http.get<CursorPageResponse<RecordingResponse>>(this.url('/recordings'), {
+        headers: this.authHeaders(),
+        params
       })
     );
   }
@@ -144,6 +164,14 @@ export class OperatorApiService {
   async getSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
     return firstValueFrom(
       this.http.get<SessionTranscriptResponse>(this.url(`/sessions/${sessionId}/transcript`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async getTranscriptSmokeCheck(): Promise<TranscriptSmokeCheckResponse> {
+    return firstValueFrom(
+      this.http.get<TranscriptSmokeCheckResponse>(this.url('/transcripts/smoke-check'), {
         headers: this.authHeaders()
       })
     );

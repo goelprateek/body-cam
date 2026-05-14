@@ -5,13 +5,17 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { OperatorApiService } from '@features/operations/operator-api.service';
 import {
   RecordingInvestigationSearchHitResponse,
   RecordingInvestigationSearchResponse,
   RecordingResponse,
+  RecordingTranscriptProcessingStage,
+  TranscriptSmokeCheckResponse,
   SessionRecordingIntegrityStatus,
   SessionRecordingExportResponse,
+  SessionRecordingTimelineGapResponse,
   RecordingTranscriptSegmentResponse,
   RecordingTranscriptStatus,
   SessionTranscriptRecordingResponse,
@@ -38,555 +42,13 @@ interface RecordingSessionCard {
 @Component({
   selector: 'app-recordings-page',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatTooltipModule],
-  template: `
-    <section class="page workspace-grid">
-      <mat-card class="panel section-panel glass-panel" appearance="outlined">
-        <div class="section-head premium-head">
-          <div class="head-title">
-            <h2>Session Archive</h2>
-            <span class="subtle-text live-count">{{ recordingSessions().length }}</span>
-          </div>
-          <button mat-icon-button class="refresh-btn" (click)="loadRecordings()" [disabled]="isLoading()">
-            <mat-icon>refresh</mat-icon>
-          </button>
-        </div>
-
-        @if (isLoading()) {
-          <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
-        }
-
-        @if (pageError()) {
-          <div class="notice notice-error">{{ pageError() }}</div>
-        }
-
-        <div class="archive-search-row">
-          <input
-            type="search"
-            class="transcript-search-input"
-            placeholder="Search sessions, references, rooms, or transcript text"
-            [value]="investigationSearchQuery()"
-            (input)="updateInvestigationSearch(($any($event.target)).value)"
-          />
-          @if (investigationSearchQuery()) {
-            <button
-              mat-button
-              type="button"
-              class="transcript-search-clear"
-              (click)="clearInvestigationSearch()"
-            >
-              Clear
-            </button>
-          }
-        </div>
-
-        @if (isInvestigationSearching()) {
-          <div class="subtle-text transcript-search-meta">Searching archive...</div>
-        } @else if (investigationSearchQuery()) {
-          <div class="subtle-text transcript-search-meta">
-            {{ investigationSearchResults()?.totalMatches || 0 }} investigation match{{ (investigationSearchResults()?.totalMatches || 0) === 1 ? '' : 'es' }}
-          </div>
-        }
-
-        @if (investigationSearchResults()?.hits?.length) {
-          <div class="investigation-results premium-scroll">
-            @for (hit of investigationSearchResults()?.hits || []; track hit.sessionId + ':' + hit.recordingId + ':' + (hit.transcriptStartSeconds || hit.matchedField)) {
-              <button type="button" class="investigation-hit" (click)="openInvestigationHit(hit)">
-                <span class="investigation-hit-head">
-                  <strong>{{ hit.workerName }}</strong>
-                  <span class="subtle-text">{{ investigationFieldLabel(hit.matchedField) }}</span>
-                </span>
-                <span class="investigation-hit-meta">{{ hit.referenceNumber }} | {{ hit.roomName }}</span>
-                <span class="investigation-hit-snippet">{{ hit.snippet }}</span>
-              </button>
-            }
-          </div>
-        } @else if (investigationSearchQuery() && !isInvestigationSearching()) {
-          <div class="empty-state transcript-empty">
-            <strong>No archive matches</strong>
-            <span>Try a different term for transcript, reference, room, or worker search.</span>
-          </div>
-        }
-
-        <div class="recording-list session-list-scroll premium-scroll">
-          @for (session of visibleRecordingSessions(); track session.sessionId) {
-            <mat-card
-              class="archive-card premium-card"
-              appearance="outlined"
-              [class.archive-card-selected]="session.sessionId === selectedSessionId()"
-              (click)="selectSession(session.sessionId)"
-            >
-              <div class="archive-card-inner">
-                <div class="archive-thumb">
-                  <div class="thumb-overlay">
-                    <mat-icon class="play-icon">play_arrow</mat-icon>
-                  </div>
-                  <div class="thumb-placeholder">
-                    <mat-icon>video_library</mat-icon>
-                  </div>
-                  <div class="duration-pill">{{ session.recordingCount }} SEG</div>
-                </div>
-
-                <div class="archive-details">
-                  <div class="archive-header-group">
-                    <div class="archive-title-stack">
-                      <strong class="archive-worker">{{ session.workerName }}</strong>
-                      <span class="archive-room">{{ session.roomName }}</span>
-                    </div>
-                    <span
-                      class="transcript-badge"
-                      [class]="transcriptPillClass(session.transcriptStatus)"
-                      [matTooltip]="transcriptLabel(session.transcriptStatus)"
-                    >
-                      <mat-icon class="transcript-icon">{{ transcriptIcon(session.transcriptStatus) }}</mat-icon>
-                    </span>
-                  </div>
-
-                  <div class="archive-meta-row">
-                    @if (session.referenceNumber) {
-                      <div class="meta-pill" matTooltip="Reference Number">
-                        <mat-icon>tag</mat-icon>
-                        <span>{{ session.referenceNumber }}</span>
-                      </div>
-                    }
-                    <div class="meta-pill" matTooltip="Session Duration">
-                      <mat-icon>schedule</mat-icon>
-                      <span>{{ formatDurationFromSeconds(session.approxDurationSeconds) }}</span>
-                    </div>
-                    <div class="meta-pill">
-                      <mat-icon>event</mat-icon>
-                      <span>{{ session.latestCreatedAt | date: 'MMM d, HH:mm' }}</span>
-                    </div>
-                    @if (session.latitude && session.longitude) {
-                      <div class="meta-pill" [matTooltip]="formatSessionCoordinates(session)">
-                        <mat-icon>place</mat-icon>
-                        <span class="meta-truncate">{{ session.latitude | number:'1.2-2' }}, {{ session.longitude | number:'1.2-2' }}</span>
-                      </div>
-                    }
-                  </div>
-                </div>
-              </div>
-            </mat-card>
-          } @empty {
-            <div class="empty-state premium-empty">
-              <div class="empty-icon-wrap">
-                <mat-icon>video_library</mat-icon>
-              </div>
-              <span class="empty-title">Archive Empty</span>
-              <span class="empty-subtitle">No recordings available.</span>
-            </div>
-          }
-        </div>
-      </mat-card>
-
-      <section class="workspace-main">
-        <mat-card #viewerPanel class="panel viewer-panel glass-panel" appearance="outlined">
-          <div class="section-head premium-head viewer-head">
-            <div class="viewer-head-copy">
-              <h2>{{ selectedSession()?.workerName || 'Playback' }}</h2>
-              <p class="viewer-caption">{{ selectedSessionCaption() }}</p>
-            </div>
-            <div class="viewer-status">
-              @if (selectedTimeline()) {
-                <span class="status-pill premium-status-pill">
-                  {{ selectedTimeline()?.segments?.length || 0 }} SEGMENTS
-                </span>
-              }
-              @if (selectedSessionExport()?.status) {
-                <span class="status-pill premium-status-pill">
-                  EXPORT {{ selectedSessionExport()?.status }}
-                </span>
-              }
-            </div>
-          </div>
-
-          @if (reviewClipNotice()) {
-            <div class="notice">
-              <strong>{{ reviewClipNotice()?.title }}</strong>
-              <span>{{ reviewClipNotice()?.message }}</span>
-            </div>
-          }
-
-          @if (selectedTimeline()) {
-            <div class="timeline-summary-row">
-              <div class="timeline-summary-pill">
-                <mat-icon>schedule</mat-icon>
-                <span>{{ formatDurationMs(selectedTimeline()?.totalDurationMs) }}</span>
-              </div>
-              <div class="timeline-summary-pill" [class]="integrityPillClass(selectedTimeline()?.integrityStatus)">
-                <mat-icon>{{ integrityIcon(selectedTimeline()?.integrityStatus) }}</mat-icon>
-                <span>{{ integrityLabel(selectedTimeline()?.integrityStatus) }}</span>
-              </div>
-              <div class="timeline-summary-pill">
-                <mat-icon>queue_play_next</mat-icon>
-                <span>Segment {{ selectedTimelineSegmentOrdinal() }} of {{ selectedTimeline()?.segments?.length || 0 }}</span>
-              </div>
-              @if (selectedTimeline()?.hasTimelineGaps) {
-                <div class="timeline-summary-pill timeline-summary-pill-warning">
-                  <mat-icon>warning_amber</mat-icon>
-                  <span>Timeline has missing or out-of-order uploads</span>
-                </div>
-              }
-            </div>
-
-            <div class="timeline-summary-row timeline-summary-row-compact">
-              <div class="timeline-summary-pill">
-                <mat-icon>inventory_2</mat-icon>
-                <span>{{ exportStatusLabel(selectedSessionExport()) }}</span>
-              </div>
-              @if (selectedSessionExport()?.artifactCount) {
-                <div class="timeline-summary-pill">
-                  <mat-icon>folder_zip</mat-icon>
-                  <span>{{ selectedSessionExport()?.artifactCount }} artifacts</span>
-                </div>
-              }
-              @if (selectedSessionExport()?.packageSizeBytes) {
-                <div class="timeline-summary-pill">
-                  <mat-icon>save_alt</mat-icon>
-                  <span>{{ formatBytes(selectedSessionExport()?.packageSizeBytes) }}</span>
-                </div>
-              }
-              <div class="transcript-action-row">
-                <button
-                  mat-stroked-button
-                  class="premium-btn premium-btn-secondary"
-                  type="button"
-                  (click)="requestExportPackage()"
-                  [disabled]="isExportRequesting() || isExportLoading()"
-                >
-                  {{ selectedSessionExport()?.status === 'READY' ? 'Refresh Export Package' : isExportRequesting() ? 'Queueing Export...' : 'Request Export Package' }}
-                </button>
-                @if (selectedSessionExport()?.downloadUrl) {
-                  <a
-                    mat-flat-button
-                    class="premium-btn"
-                    [href]="selectedSessionExport()?.downloadUrl || ''"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Download Package
-                  </a>
-                }
-              </div>
-            </div>
-          }
-
-          <div class="recording-player premium-frame">
-            @if (isPlaybackLoading()) {
-              <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
-            }
-
-            @if (playbackError()) {
-              <div class="notice notice-error">{{ playbackError() }}</div>
-            }
-
-            <div class="viewer-stage premium-stage">
-              @if (selectedPlaybackUrl()) {
-                <video
-                  #timelinePlayer
-                  class="replay-video"
-                  [src]="selectedPlaybackUrl() || ''"
-                  controls
-                  preload="metadata"
-                  (ended)="handlePlaybackEnded()"
-                  (loadedmetadata)="handleVideoMetadataLoaded()"
-                  (timeupdate)="handleVideoTimeUpdate()"
-                  style="width: 100%; display: block;"
-                >
-                  @if (selectedSubtitleUrl()) {
-                    <track
-                      kind="subtitles"
-                      label="Transcript Subtitles"
-                      srclang="en"
-                      [attr.src]="selectedSubtitleUrl()"
-                      default
-                    />
-                  }
-                </video>
-              } @else {
-                <div class="viewer-empty premium-empty-viewer">
-                  <div class="radar-scan" style="opacity: 0.2; background: conic-gradient(from 0deg at 50% 50%, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 80%, rgba(255, 255, 255, 0.2) 100%);"></div>
-                  <mat-icon class="huge-icon premium-huge-icon" style="color: rgba(255,255,255,0.2); filter: none;">play_circle_outline</mat-icon>
-                  <strong>Select a session to play</strong>
-                </div>
-              }
-            </div>
-
-            @if (selectedTimeline()?.segments?.length) {
-              <div class="timeline-segment-strip premium-scroll">
-                @for (segment of selectedTimeline()?.segments || []; track segment.recordingId; let i = $index) {
-                  <button
-                    type="button"
-                    class="timeline-segment-btn"
-                    [class.timeline-segment-btn-active]="i === selectedTimelineSegmentIndex()"
-                    [class.timeline-segment-btn-warning]="segmentWarning(segment)"
-                    (click)="selectTimelineSegment(i)"
-                  >
-                    <span class="timeline-segment-label">{{ timelineSegmentLabel(segment, i) }}</span>
-                    <span class="timeline-segment-time">{{ formatTimelineSegmentDuration(segment) }}</span>
-                  </button>
-                }
-              </div>
-            }
-          </div>
-        </mat-card>
-
-        <mat-card class="panel glass-panel transcript-panel" appearance="outlined">
-          <div class="section-head premium-head">
-            <div class="viewer-head-copy">
-              <h2>Transcript</h2>
-              <p class="viewer-caption">
-                Transcript generation follows the full session timeline while subtitles remain segment-specific during playback.
-              </p>
-            </div>
-            @if (selectedSession()) {
-              <div class="transcript-action-row">
-                @if (hasRetryableTranscriptIntervals()) {
-                  <button
-                    mat-stroked-button
-                    class="premium-btn premium-btn-secondary"
-                    type="button"
-                    (click)="retryFailedTranscriptIntervals()"
-                    [disabled]="isRetryingFailedTranscript() || isTranscriptGenerating() || isTranscriptLoading()"
-                  >
-                    {{ isRetryingFailedTranscript() ? 'Retrying Failed Intervals...' : 'Retry Failed Or Missing' }}
-                  </button>
-                }
-                <button
-                  mat-flat-button
-                  class="premium-btn"
-                  type="button"
-                  (click)="generateTranscript()"
-                  [disabled]="isTranscriptGenerating() || isTranscriptLoading() || isRetryingFailedTranscript()"
-                >
-                  {{ selectedSessionTranscript()?.status === 'FAILED'
-                    ? 'Retry Transcript'
-                    : selectedSessionTranscript()?.status === 'READY'
-                      ? 'Regenerate Session Transcript'
-                      : 'Generate Session Transcript' }}
-                </button>
-              </div>
-            }
-          </div>
-
-          @if (selectedSessionTranscript()) {
-            <div class="timeline-summary-row timeline-summary-row-compact">
-              <div class="timeline-summary-pill">
-                <mat-icon>article</mat-icon>
-                <span>{{ selectedSessionTranscript()?.readyRecordings || 0 }} / {{ selectedSessionTranscript()?.totalRecordings || 0 }} clips ready</span>
-              </div>
-              @if ((selectedSessionTranscript()?.failedRecordings || 0) > 0) {
-                <div class="timeline-summary-pill timeline-summary-pill-warning">
-                  <mat-icon>error_outline</mat-icon>
-                  <span>{{ selectedSessionTranscript()?.failedRecordings }} failed</span>
-                </div>
-              }
-              @if ((selectedSessionTranscript()?.processingRecordings || 0) > 0 || (selectedSessionTranscript()?.pendingRecordings || 0) > 0) {
-                <div class="timeline-summary-pill">
-                  <mat-icon>hourglass_top</mat-icon>
-                  <span>{{ (selectedSessionTranscript()?.processingRecordings || 0) + (selectedSessionTranscript()?.pendingRecordings || 0) }} pending</span>
-                </div>
-              }
-              @if ((selectedSessionTranscript()?.notRequestedRecordings || 0) > 0) {
-                <div class="timeline-summary-pill timeline-summary-pill-warning">
-                  <mat-icon>playlist_remove</mat-icon>
-                  <span>{{ selectedSessionTranscript()?.notRequestedRecordings }} missing transcript</span>
-                </div>
-              }
-              @if (lowConfidenceTranscriptCount() > 0) {
-                <div class="timeline-summary-pill timeline-summary-pill-warning">
-                  <mat-icon>hearing_disabled</mat-icon>
-                  <span>{{ lowConfidenceTranscriptCount() }} low-confidence segments</span>
-                </div>
-              }
-            </div>
-          }
-
-          @if (isTranscriptLoading()) {
-            <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
-          }
-
-          @if (transcriptError()) {
-            <div class="notice notice-error">{{ transcriptError() }}</div>
-          }
-
-          @if (selectedSessionTranscript()) {
-            <div class="transcript-status-row">
-              <span class="transcript-pill transcript-pill-detail" [class]="transcriptPillClass(selectedSessionTranscript()?.status)">
-                {{ transcriptLabel(selectedSessionTranscript()?.status) }}
-              </span>
-              @if (selectedSessionTranscript()?.engine) {
-                <span class="subtle-text">Engine: {{ selectedSessionTranscript()?.engine }}</span>
-              }
-              @if (selectedSessionTranscript()?.model) {
-                <span class="subtle-text">Model: {{ selectedSessionTranscript()?.model }}</span>
-              }
-            </div>
-
-            @if (selectedSessionTranscript()?.recordings?.length) {
-              <div class="transcript-filter-row">
-                <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'all'" (click)="setTranscriptReviewFilter('all')">All Clips</button>
-                <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'failed'" (click)="setTranscriptReviewFilter('failed')">Failed</button>
-                <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'missing'" (click)="setTranscriptReviewFilter('missing')">Missing</button>
-                <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'pending'" (click)="setTranscriptReviewFilter('pending')">Pending</button>
-                <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'low-confidence'" (click)="setTranscriptReviewFilter('low-confidence')">Low Confidence</button>
-              </div>
-            }
-
-            @if (selectedSessionTranscript()?.segments?.length) {
-              <div class="transcript-search-row">
-                <input
-                  type="search"
-                  class="transcript-search-input"
-                  placeholder="Search within this session transcript"
-                  [value]="transcriptSearchQuery()"
-                  (input)="updateTranscriptSearch(($any($event.target)).value)"
-                />
-                @if (transcriptSearchQuery()) {
-                  <button
-                    mat-button
-                    type="button"
-                    class="transcript-search-clear"
-                    (click)="clearTranscriptSearch()"
-                  >
-                    Clear
-                  </button>
-                }
-              </div>
-
-              @if (isTranscriptSearching()) {
-                <div class="subtle-text transcript-search-meta">
-                  Searching session transcript...
-                </div>
-              } @else if (transcriptSearchQuery()) {
-                <div class="subtle-text transcript-search-meta">
-                  {{ filteredTranscriptSegments().length }} backend match{{ filteredTranscriptSegments().length === 1 ? '' : 'es' }}
-                </div>
-              }
-            }
-
-            @if (filteredTranscriptReviewRecordings().length) {
-              <div class="transcript-review-list">
-                @for (recording of filteredTranscriptReviewRecordings(); track recording.recordingId) {
-                  <div class="transcript-review-card" [class.transcript-review-card-warning]="recording.status === 'FAILED' || recording.status === 'NOT_REQUESTED'">
-                    <div class="transcript-review-head">
-                      <span class="transcript-pill transcript-pill-detail" [class]="transcriptPillClass(recording.status)">
-                        {{ transcriptLabel(recording.status) }}
-                      </span>
-                      <span class="subtle-text">Clip {{ transcriptRecordingOrdinal(recording) }} - {{ formatTranscriptRecordingWindow(recording) }}</span>
-                    </div>
-                    <div class="transcript-review-body">
-                      <span class="subtle-text">
-                        {{ transcriptRecordingBody(recording) }}
-                      </span>
-                        @if (recording.errorMessage && recording.status !== 'FAILED') {
-                          <span class="transcript-review-error">{{ recording.errorMessage }}</span>
-                        }
-                    </div>
-                    <div class="transcript-review-actions">
-                      <button mat-button type="button" (click)="reviewTranscriptRecording(recording)">
-                        Review Clip
-                      </button>
-                      @if (canRetryTranscriptRecording(recording)) {
-                        <button
-                          mat-button
-                          type="button"
-                          (click)="retryTranscriptRecording(recording)"
-                          [disabled]="isRetryingTranscriptRecordingId() === recording.recordingId"
-                        >
-                          {{ isRetryingTranscriptRecordingId() === recording.recordingId ? 'Retrying...' : 'Retry Clip' }}
-                        </button>
-                      }
-                    </div>
-                  </div>
-                }
-              </div>
-            }
-
-            @switch (selectedSessionTranscript()?.status) {
-              @case ('NOT_REQUESTED') {
-                <div class="empty-state transcript-empty">
-                  <strong>No transcript yet</strong>
-                  <span>Generate one for the full session when the operator needs it.</span>
-                </div>
-              }
-              @case ('FAILED') {
-                <div class="notice notice-error">
-                  {{ selectedSessionTranscript()?.errorMessage || 'Session transcript generation failed.' }}
-                </div>
-              }
-              @default {
-                @if (shouldShowTranscriptFullText() && selectedSessionTranscript()?.fullText) {
-                  <div class="transcript-full-text">
-                    {{ selectedSessionTranscript()?.fullText }}
-                  </div>
-                }
-
-                @if (shouldShowTranscriptSegments()) {
-                  @if (filteredTranscriptSegments().length) {
-                    <div class="transcript-segments">
-                      @for (segment of filteredTranscriptSegments(); track segment.id || segment.segmentIndex) {
-                        <button
-                          type="button"
-                          class="transcript-segment transcript-segment-button"
-                          [class.transcript-segment-active]="segment.id === activeTranscriptSegmentId()"
-                          [class.transcript-segment-low-confidence]="isLowConfidenceSegment(segment)"
-                          (click)="seekToTranscriptSegment(segment)"
-                        >
-                          <span class="segment-time">{{ formatSegmentTime(segment) }}</span>
-                          <span class="segment-copy">
-                            <span class="segment-text">{{ segment.text }}</span>
-                            <span class="segment-meta-row">
-                              @if (segment.confidence) {
-                                <span
-                                  class="segment-confidence"
-                                  [class.segment-confidence-low]="isLowConfidenceSegment(segment)"
-                                >
-                                  Confidence {{ formatConfidence(segment.confidence) }}
-                                </span>
-                              }
-                              @if (segment.recordingSequence != null) {
-                                <span class="segment-recording-ref">
-                                  Clip {{ segment.recordingSequence + 1 }}
-                                </span>
-                              }
-                            </span>
-                          </span>
-                        </button>
-                      }
-                    </div>
-                  } @else if (transcriptSearchQuery()) {
-                    <div class="empty-state transcript-empty">
-                      <strong>No transcript matches</strong>
-                      <span>Try a different search term for this session.</span>
-                    </div>
-                  } @else if (transcriptReviewFilter() !== 'all') {
-                    <div class="empty-state transcript-empty">
-                      <strong>No transcript text for this filter</strong>
-                      <span>{{ transcriptFilterEmptyMessage() }}</span>
-                    </div>
-                  }
-                } @else if (selectedSessionTranscript()?.status === 'PROCESSING' || selectedSessionTranscript()?.status === 'PENDING') {
-                  <div class="empty-state transcript-empty">
-                    <strong>Transcript request accepted</strong>
-                    <span>The backend is preparing transcript content for the session timeline.</span>
-                  </div>
-                }
-              }
-            }
-          } @else {
-            <div class="empty-state transcript-empty">
-              <strong>Select a session</strong>
-              <span>Session transcript details will appear here with playback.</span>
-            </div>
-          }
-        </mat-card>
-      </section>
-    </section>
-  `
+  imports: [CommonModule, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatTooltipModule, MatSnackBarModule],
+  templateUrl: './recordings-page.component.html',
+  styleUrl: './recordings-page.component.scss'
 })
 export class RecordingsPageComponent implements OnDestroy {
   readonly api = inject(OperatorApiService);
+  private readonly snackBar = inject(MatSnackBar);
 
   @ViewChild('timelinePlayer')
   private timelinePlayer?: ElementRef<HTMLVideoElement>;
@@ -606,6 +68,7 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly selectedPlaybackUrl = signal<string | null>(null);
   readonly selectedSubtitleUrl = signal<string | null>(null);
   readonly selectedSessionTranscript = signal<SessionTranscriptResponse | null>(null);
+  readonly transcriptSmokeCheck = signal<TranscriptSmokeCheckResponse | null>(null);
   readonly activeTranscriptSegmentId = signal<string | null>(null);
   readonly reviewClipNotice = signal<{ title: string; message: string } | null>(null);
   readonly transcriptSearchQuery = signal('');
@@ -621,9 +84,12 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly isTranscriptGenerating = signal(false);
   readonly isRetryingFailedTranscript = signal(false);
   readonly isRetryingTranscriptRecordingId = signal<string | null>(null);
-  readonly pageError = signal<string | null>(null);
-  readonly playbackError = signal<string | null>(null);
-  readonly transcriptError = signal<string | null>(null);
+
+  readonly nextCursor = signal<string | null>(null);
+  readonly pageSize = signal(50);
+  readonly totalRecordings = signal(0);
+  readonly hasMoreRecordings = signal(true);
+  readonly isLoadingMore = signal(false);
 
   private pendingAutoplay = false;
   private pendingSeekSecondsWithinSegment: number | null = null;
@@ -634,6 +100,14 @@ export class RecordingsPageComponent implements OnDestroy {
 
   constructor() {
     void this.loadRecordings();
+    void this.loadTranscriptSmokeCheck();
+  }
+
+  private showError(message: string): void {
+    this.snackBar.open(message, 'Close', {
+      duration: 5000,
+      panelClass: ['error-snackbar']
+    });
   }
 
   ngOnDestroy(): void {
@@ -782,6 +256,65 @@ export class RecordingsPageComponent implements OnDestroy {
       case 'HAS_GAPS':
       default:
         return 'timeline-summary-pill-warning';
+    }
+  }
+
+  timelineIntegrityDetails(): string[] {
+    const timeline = this.selectedTimeline();
+    if (!timeline) {
+      return [];
+    }
+
+    const details: string[] = [];
+    if (timeline.hasTimelineGaps || timeline.missingSequenceCount > 0) {
+      details.push(`${timeline.missingSequenceCount} missing sequence gap${timeline.missingSequenceCount === 1 ? '' : 's'} detected`);
+    }
+    if (timeline.duplicateSegmentCount > 0) {
+      details.push(`${timeline.duplicateSegmentCount} duplicate upload segment${timeline.duplicateSegmentCount === 1 ? '' : 's'} need review`);
+    }
+    if (timeline.segmentsMissingTimingCount > 0) {
+      details.push(`${timeline.segmentsMissingTimingCount} segment${timeline.segmentsMissingTimingCount === 1 ? '' : 's'} missing timing metadata`);
+    }
+    return details;
+  }
+
+  timelineGaps(): SessionRecordingTimelineGapResponse[] {
+    return this.selectedTimeline()?.gaps ?? [];
+  }
+
+  timelineGapRangeLabel(gap: SessionRecordingTimelineGapResponse): string {
+    if (gap.startMs == null && gap.endMs == null) {
+      return 'Timing range unavailable';
+    }
+    const start = gap.startMs == null ? 'Unknown' : this.formatDurationMs(gap.startMs);
+    const end = gap.endMs == null ? 'Unknown' : this.formatDurationMs(gap.endMs);
+    return `${start} - ${end}`;
+  }
+
+  transcriptSmokeCheckLabel(): string {
+    const smokeCheck = this.transcriptSmokeCheck();
+    if (!smokeCheck) {
+      return 'Transcript health unavailable';
+    }
+    return smokeCheck.ready ? 'Transcript pipeline ready' : 'Transcript pipeline needs attention';
+  }
+
+  transcriptProcessingStageLabel(stage?: RecordingTranscriptProcessingStage | null): string {
+    switch (stage) {
+      case 'QUEUED':
+        return 'Queued';
+      case 'TRANSCRIBING':
+        return 'Transcribing';
+      case 'TRANSCRIBED':
+        return 'Raw STT Ready';
+      case 'PUNCTUATED':
+        return 'Punctuation Added';
+      case 'FINALIZED':
+        return 'Finalized';
+      case 'FAILED':
+        return 'Stage Failed';
+      default:
+        return 'Stage Unavailable';
     }
   }
 
@@ -941,6 +474,11 @@ export class RecordingsPageComponent implements OnDestroy {
     return this.transcriptReviewFilter() === 'all' && !this.transcriptSearchQuery().trim();
   }
 
+  shouldShowTranscriptSummary(): boolean {
+    const transcript = this.selectedSessionTranscript();
+    return !!(transcript && (transcript.shortSummary || transcript.incidentSummary || transcript.keywords.length));
+  }
+
   shouldShowTranscriptSegments(): boolean {
     const transcript = this.selectedSessionTranscript();
     if (!transcript) {
@@ -967,8 +505,7 @@ export class RecordingsPageComponent implements OnDestroy {
 
   updateInvestigationSearch(query: string): void {
     this.investigationSearchQuery.set(query);
-    this.pageError.set(null);
-    const normalizedQuery = query.trim();
+        const normalizedQuery = query.trim();
     if (!normalizedQuery) {
       this.investigationSearchRequestId++;
       this.investigationSearchResults.set(null);
@@ -989,7 +526,6 @@ export class RecordingsPageComponent implements OnDestroy {
         if (requestId !== this.investigationSearchRequestId) {
           return;
         }
-        this.pageError.set(this.api.explainError(error));
         this.investigationSearchResults.set({
           query: normalizedQuery,
           totalMatches: 0,
@@ -1022,14 +558,14 @@ export class RecordingsPageComponent implements OnDestroy {
 
   transcriptRecordingBody(recording: SessionTranscriptRecordingResponse): string {
     switch (recording.status) {
-        case 'READY':
-          return `${recording.transcriptSegmentCount} transcript segment${recording.transcriptSegmentCount === 1 ? '' : 's'} available for this clip.`;
-        case 'FAILED':
-          return recording.errorMessage?.trim() || 'Transcript generation failed for this clip and can be retried independently.';
-        case 'PROCESSING':
-          return 'Transcript generation is currently running for this clip.';
+      case 'READY':
+        return `${recording.transcriptSegmentCount} transcript segment${recording.transcriptSegmentCount === 1 ? '' : 's'} available for this clip.`;
+      case 'FAILED':
+        return recording.errorMessage?.trim() || 'Transcript generation failed for this clip and can be retried independently.';
+      case 'PROCESSING':
+        return `Transcript generation is currently running for this clip at ${this.transcriptProcessingStageLabel(recording.processingStage)}.`;
       case 'PENDING':
-        return 'Transcript generation is queued for this clip.';
+        return `Transcript generation is queued for this clip at ${this.transcriptProcessingStageLabel(recording.processingStage)}.`;
       case 'NOT_REQUESTED':
       default:
         return 'This clip is still missing transcript coverage.';
@@ -1042,8 +578,7 @@ export class RecordingsPageComponent implements OnDestroy {
 
   updateTranscriptSearch(query: string): void {
     this.transcriptSearchQuery.set(query);
-    this.transcriptError.set(null);
-    const normalizedQuery = query.trim();
+        const normalizedQuery = query.trim();
     const sessionId = this.selectedSessionId();
     if (!normalizedQuery || !sessionId) {
       this.transcriptSearchRequestId++;
@@ -1065,7 +600,6 @@ export class RecordingsPageComponent implements OnDestroy {
         if (requestId !== this.transcriptSearchRequestId || this.selectedSessionId() !== sessionId) {
           return;
         }
-        this.transcriptError.set(this.api.explainError(error));
         this.transcriptSearchResults.set({
           sessionId,
           query: normalizedQuery,
@@ -1090,14 +624,19 @@ export class RecordingsPageComponent implements OnDestroy {
 
   async loadRecordings(): Promise<void> {
     this.isLoading.set(true);
-    this.pageError.set(null);
+    this.nextCursor.set(null);
+    this.hasMoreRecordings.set(true);
     try {
-      const recordings = await this.api.listRecordings();
-      const sortedRecordings = [...recordings].sort((left, right) =>
+      const pageResponse = await this.api.listRecordings(this.nextCursor(), this.pageSize());
+      const sortedRecordings = [...pageResponse.items].sort((left, right) =>
         right.createdAt.localeCompare(left.createdAt)
       );
       this.recordings.set(sortedRecordings);
-      const recordingSessions = this.buildRecordingSessions(sortedRecordings);
+      this.totalRecordings.set(sortedRecordings.length);
+      this.nextCursor.set(pageResponse.nextCursor);
+      this.hasMoreRecordings.set(pageResponse.hasNext);
+      
+      const recordingSessions = this.buildRecordingSessions(this.recordings());
       this.recordingSessions.set(recordingSessions);
 
       const currentSessionId = this.selectedSessionId();
@@ -1125,9 +664,58 @@ export class RecordingsPageComponent implements OnDestroy {
         this.revokeSubtitleUrl();
       }
     } catch (error) {
-      this.pageError.set(this.api.explainError(error));
+      this.showError(this.api.explainError(error));
     } finally {
       this.isLoading.set(false);
+    }
+  }
+
+  private async loadTranscriptSmokeCheck(): Promise<void> {
+    try {
+      this.transcriptSmokeCheck.set(await this.api.getTranscriptSmokeCheck());
+    } catch {
+      this.transcriptSmokeCheck.set(null);
+    }
+  }
+
+  async loadMoreRecordings(): Promise<void> {
+    if (this.isLoading() || this.isLoadingMore() || !this.hasMoreRecordings()) {
+      return;
+    }
+
+    this.isLoadingMore.set(true);
+    try {
+      const cursor = this.nextCursor();
+      const pageResponse = await this.api.listRecordings(cursor, this.pageSize());
+      
+      const currentRecordings = this.recordings();
+      const combinedRecordings = [...currentRecordings, ...pageResponse.items].sort((left, right) =>
+        right.createdAt.localeCompare(left.createdAt)
+      );
+      
+      this.recordings.set(combinedRecordings);
+      this.totalRecordings.set(combinedRecordings.length);
+      this.nextCursor.set(pageResponse.nextCursor);
+      this.hasMoreRecordings.set(pageResponse.hasNext);
+      
+      const recordingSessions = this.buildRecordingSessions(combinedRecordings);
+      this.recordingSessions.set(recordingSessions);
+    } catch (error) {
+      this.showError(this.api.explainError(error));
+    } finally {
+      this.isLoadingMore.set(false);
+    }
+  }
+
+  onScroll(event: Event): void {
+    const target = event.target as HTMLElement;
+    const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    
+    // threshold of 100px from bottom to load more
+    if (scrollBottom <= 100) {
+      if (!this.isLoading() && !this.isLoadingMore() && this.hasMoreRecordings()) {
+        void this.loadMoreRecordings();
+      }
     }
   }
 
@@ -1146,9 +734,7 @@ export class RecordingsPageComponent implements OnDestroy {
     this.transcriptSearchResults.set(null);
     this.transcriptSearchRequestId++;
     this.clearExportPolling();
-    this.playbackError.set(null);
-    this.transcriptError.set(null);
-    this.revokeSubtitleUrl();
+            this.revokeSubtitleUrl();
     this.isPlaybackLoading.set(true);
     this.isTranscriptLoading.set(true);
     this.isExportLoading.set(true);
@@ -1171,7 +757,7 @@ export class RecordingsPageComponent implements OnDestroy {
       this.scheduleExportPollingIfNeeded(exportResponse);
 
       if (!timeline.segments.length) {
-        this.playbackError.set('No uploaded segments are available for this session yet.');
+        this.showError('');
         this.applyPendingInvestigationHitIfReady();
         return;
       }
@@ -1181,8 +767,8 @@ export class RecordingsPageComponent implements OnDestroy {
     } catch (error) {
       if (this.selectedSessionId() === sessionId) {
         const message = this.api.explainError(error);
-        this.playbackError.set(message);
-        this.transcriptError.set(message);
+        this.showError(message);
+        this.showError(message);
       }
     } finally {
       if (this.selectedSessionId() === sessionId) {
@@ -1261,8 +847,7 @@ export class RecordingsPageComponent implements OnDestroy {
     }
 
     this.isTranscriptGenerating.set(true);
-    this.transcriptError.set(null);
-    this.revokeSubtitleUrl();
+        this.revokeSubtitleUrl();
 
     try {
       const [sessionTranscript, timeline] = await Promise.all([
@@ -1282,7 +867,6 @@ export class RecordingsPageComponent implements OnDestroy {
       }
     } catch (error) {
       if (this.selectedSessionId() === session.sessionId) {
-        this.transcriptError.set(this.api.explainError(error));
       }
     } finally {
       this.isTranscriptGenerating.set(false);
@@ -1296,8 +880,7 @@ export class RecordingsPageComponent implements OnDestroy {
     }
 
     this.isExportRequesting.set(true);
-    this.pageError.set(null);
-    try {
+        try {
       const exportResponse = await this.api.requestSessionRecordingExport(session.sessionId);
       if (this.selectedSessionId() === session.sessionId) {
         this.selectedSessionExport.set(exportResponse);
@@ -1305,7 +888,6 @@ export class RecordingsPageComponent implements OnDestroy {
       }
     } catch (error) {
       if (this.selectedSessionId() === session.sessionId) {
-        this.pageError.set(this.api.explainError(error));
       }
     } finally {
       this.isExportRequesting.set(false);
@@ -1328,8 +910,7 @@ export class RecordingsPageComponent implements OnDestroy {
     }
 
     this.isRetryingFailedTranscript.set(true);
-    this.transcriptError.set(null);
-
+    
     try {
       const [sessionTranscript, timeline] = await Promise.all([
         this.api.retryFailedSessionTranscript(session.sessionId),
@@ -1349,7 +930,6 @@ export class RecordingsPageComponent implements OnDestroy {
       }
     } catch (error) {
       if (this.selectedSessionId() === session.sessionId) {
-        this.transcriptError.set(this.api.explainError(error));
       }
     } finally {
       this.isRetryingFailedTranscript.set(false);
@@ -1378,8 +958,7 @@ export class RecordingsPageComponent implements OnDestroy {
 
   async retryTranscriptRecording(recording: SessionTranscriptRecordingResponse): Promise<void> {
     this.isRetryingTranscriptRecordingId.set(recording.recordingId);
-    this.transcriptError.set(null);
-    try {
+        try {
       await this.api.generateRecordingTranscript(recording.recordingId);
       const sessionId = this.selectedSessionId();
       if (!sessionId) {
@@ -1401,7 +980,6 @@ export class RecordingsPageComponent implements OnDestroy {
         }
       }
     } catch (error) {
-      this.transcriptError.set(this.api.explainError(error));
     } finally {
       this.isRetryingTranscriptRecordingId.set(null);
     }
@@ -1466,7 +1044,6 @@ export class RecordingsPageComponent implements OnDestroy {
       this.scheduleExportPollingIfNeeded(exportResponse);
     } catch (error) {
       if (this.selectedSessionId() === sessionId) {
-        this.pageError.set(this.api.explainError(error));
       }
     }
   }
@@ -1485,9 +1062,7 @@ export class RecordingsPageComponent implements OnDestroy {
     this.selectedTimelineSegmentIndex.set(index);
     this.selectedRecordingId.set(segment.recordingId);
     this.selectedPlaybackUrl.set(segment.playbackUrl);
-    this.transcriptError.set(null);
-    this.playbackError.set(null);
-    this.revokeSubtitleUrl();
+            this.revokeSubtitleUrl();
     this.pendingAutoplay = autoplay;
 
     try {
@@ -1495,7 +1070,6 @@ export class RecordingsPageComponent implements OnDestroy {
       this.handleVideoTimeUpdate();
     } catch (error) {
       if (this.selectedRecordingId() === segment.recordingId) {
-        this.transcriptError.set(this.api.explainError(error));
       }
     }
   }
@@ -1537,7 +1111,6 @@ export class RecordingsPageComponent implements OnDestroy {
       this.selectedSubtitleUrl.set(subtitleUrl);
     } catch (error) {
       if (this.selectedRecordingId() === recordingId) {
-        this.transcriptError.set(this.api.explainError(error));
       }
     }
   }
@@ -1633,10 +1206,20 @@ export class RecordingsPageComponent implements OnDestroy {
           referenceNumber: latestRecording.referenceNumber,
           latestCreatedAt: latestRecording.createdAt,
           recordingCount: sortedSessionRecordings.length,
-          approxDurationSeconds: sortedSessionRecordings.reduce(
-            (total, recording) => total + (recording.durationSeconds ?? 0),
-            0
-          ),
+          approxDurationSeconds: (() => {
+            let maxEndMs = 0;
+            let sumDuration = 0;
+            let hasEndMs = false;
+            for (const recording of sortedSessionRecordings) {
+              const endMs = recording.metadata?.sessionElapsedEndMs;
+              if (endMs != null) {
+                hasEndMs = true;
+                maxEndMs = Math.max(maxEndMs, endMs);
+              }
+              sumDuration += recording.durationSeconds ?? 0;
+            }
+            return hasEndMs && maxEndMs > 0 ? Math.round(maxEndMs / 1000) : sumDuration;
+          })(),
           latitude: latestRecording.metadata?.latitude ?? null,
           longitude: latestRecording.metadata?.longitude ?? null,
           transcriptStatus: this.sessionTranscriptStatus(sortedSessionRecordings)
