@@ -2,6 +2,7 @@ package com.kriyanshtech.bodycam.recording.controller;
 
 import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptResponse;
 import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSearchResponse;
+import com.kriyanshtech.bodycam.recording.dto.TranscriptGenerationRequest;
 import com.kriyanshtech.bodycam.recording.service.RecordingTranscriptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,15 +36,31 @@ public class SessionRecordingTranscriptController {
     }
 
     @PostMapping("/generate")
-    public ResponseEntity<SessionTranscriptResponse> generateTranscript(@PathVariable("sessionId") UUID sessionId) {
-        log.info("Received session transcript generation request sessionId={}", sessionId);
-        return ResponseEntity.ok(recordingTranscriptService.generateSessionTranscript(sessionId));
+    public ResponseEntity<SessionTranscriptResponse> generateTranscript(
+            @PathVariable("sessionId") UUID sessionId,
+            @RequestBody(required = false) TranscriptGenerationRequest request) {
+        log.info("Received session transcript generation request sessionId={} requestedEngine={}", sessionId,
+                request != null ? request.engine() : null);
+        return ResponseEntity.ok(recordingTranscriptService.generateSessionTranscript(
+                sessionId,
+                request != null ? request.engine() : null));
     }
 
     @PostMapping("/retry-failed")
-    public ResponseEntity<SessionTranscriptResponse> retryFailedTranscript(@PathVariable("sessionId") UUID sessionId) {
-        log.info("Received failed session transcript retry request sessionId={}", sessionId);
-        return ResponseEntity.ok(recordingTranscriptService.retryFailedSessionTranscript(sessionId));
+    public ResponseEntity<SessionTranscriptResponse> retryFailedTranscript(
+            @PathVariable("sessionId") UUID sessionId,
+            @RequestBody(required = false) TranscriptGenerationRequest request) {
+        log.info("Received failed session transcript retry request sessionId={} requestedEngine={}", sessionId,
+                request != null ? request.engine() : null);
+        return ResponseEntity.ok(recordingTranscriptService.retryFailedSessionTranscript(
+                sessionId,
+                request != null ? request.engine() : null));
+    }
+
+    @PostMapping("/summary")
+    public ResponseEntity<SessionTranscriptResponse> summarizeTranscript(@PathVariable("sessionId") UUID sessionId) {
+        log.info("Received session transcript summary request sessionId={}", sessionId);
+        return ResponseEntity.ok(recordingTranscriptService.summarizeSessionTranscript(sessionId));
     }
 
     @GetMapping("/search")

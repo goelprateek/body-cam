@@ -7,10 +7,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.kriyanshtech.bodycam.recording.dto.RecordingTranscriptResponse;
+import com.kriyanshtech.bodycam.recording.dto.TranscriptGenerationRequest;
 import com.kriyanshtech.bodycam.recording.service.RecordingTranscriptService;
 
 import java.util.UUID;
@@ -34,9 +36,13 @@ public class RecordingTranscriptController {
 
     @PostMapping("/generate")
     public ResponseEntity<RecordingTranscriptResponse> generateTranscript(
-            @PathVariable("recordingId") UUID recordingId) {
-        log.info("Received transcript generation request recordingId={}", recordingId);
-        return ResponseEntity.ok(recordingTranscriptService.generateTranscript(recordingId));
+            @PathVariable("recordingId") UUID recordingId,
+            @RequestBody(required = false) TranscriptGenerationRequest request) {
+        log.info("Received transcript generation request recordingId={} requestedEngine={}", recordingId,
+                request != null ? request.engine() : null);
+        return ResponseEntity.ok(recordingTranscriptService.generateTranscript(
+                recordingId,
+                request != null ? request.engine() : null));
     }
 
     @GetMapping(path = "/subtitles.vtt", produces = "text/vtt")

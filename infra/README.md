@@ -5,7 +5,9 @@ The stack now uses the same split pattern as MeterManagement, but kept under `in
 - `docker-compose.yml` for local infrastructure services only
 - `docker-compose.prod.yml` for production
 - `compose/local/db.yml` and `compose/prod/db.yml` for data-layer services like PostgreSQL and Redis
-- `compose/local/infra.yml` and `compose/prod/infra.yml` for infrastructure services like MinIO, LiveKit, LiveKit config rendering, coturn, and the Vosk service
+- `compose/local/infra.yml` and `compose/prod/infra.yml` for infrastructure services like MinIO, LiveKit, LiveKit config rendering, coturn, and transcript services such as `faster-whisper`
+  - the local stack also includes a `vosk` service on port `2700` so transcript engine switching is easy during development
+  - each faster-whisper stack also includes a one-shot `faster-whisper-model-sync` container that pre-downloads the selected model into the shared `transcript_data` volume only when the real HuggingFace cache directory for that model is not already present
 - `compose/local/app.yml` and `compose/prod/app.yml` for backend and frontend services
 
 Backend runtime config:
@@ -14,16 +16,20 @@ Backend runtime config:
 - production backend container env comes from `backend/.env.prod`
 - `backend/.env.local` is for direct backend runs outside Compose, such as IDE launches or local host execution
 - `infra/.env.local` is only for local Compose infrastructure services like PostgreSQL, Redis, MinIO, LiveKit, and coturn
-  - plus Vosk image and publishing settings such as `TRANSCRIPT_IMAGE` and `TRANSCRIPT_PORT`
+  - plus transcript image and publishing settings such as `TRANSCRIPT_IMAGE`, `TRANSCRIPT_PORT`, `TRANSCRIPT_MODEL`, `TRANSCRIPT_LOCAL_ONLY`, `VOSK_IMAGE`, and `VOSK_PORT`
 
 Local runs:
 
 - infrastructure only: `docker compose --env-file .env.local -f docker-compose.yml up -d`
-  - this now starts the local `vosk` service as well, exposed on `localhost:${TRANSCRIPT_PORT}`
+  - this now starts the local `faster-whisper` service, exposed on `http://localhost:${TRANSCRIPT_PORT}/v1/audio/transcriptions`
+  - it also starts local `vosk`, exposed on `ws://localhost:${VOSK_PORT}`
+  - before runtime starts, `faster-whisper-model-sync` downloads `${TRANSCRIPT_MODEL}` into `transcript_data`
 - backend on host: run from `backend/` using `backend/.env.local`
 - frontend on host: run from `frontend/` against the host-run backend
 - optional full local compose app stack remains defined in `compose/local/app.yml` under the `app` profile and can be started with `docker compose --env-file .env.local -f docker-compose.yml --profile app up -d`
-  - in that mode the backend reaches Vosk over the internal Compose hostname `ws://vosk:2700`
+  - in that mode the backend reaches `faster-whisper` over the internal Compose hostname `http://faster-whisper:9000/v1/audio/transcriptions`
+  - if you switch `APP_TRANSCRIPT_ENGINE=vosk`, the backend can use `ws://vosk:2700` without extra compose edits
+  - runtime `TRANSCRIPT_LOCAL_ONLY=true` can stay enabled because model warmup happens in the sync container
 
 Production runs:
 

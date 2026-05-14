@@ -12,9 +12,9 @@
 @baseUrl = http://localhost:8080
 @username = operator1
 @password = operator123
-@authToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyMjIyMjIyMi0yMjIyLTIyMjItMjIyMi0yMjIyMjIyMjIyMjIiLCJyb2xlIjoiT1BFUkFUT1IiLCJkaXNwbGF5TmFtZSI6Ik9wZXJhdG9yIDEiLCJpc3MiOiJib2R5Y2FtLWJhY2tlbmQiLCJleHAiOjE3Nzg2ODEyNDQsImlhdCI6MTc3ODY1MjQ0NCwidXNlcm5hbWUiOiJvcGVyYXRvcjEifQ.81R1QNYM9G-vuowCu6eDjDzPfyriWPAvp1aMSYS7CdU
+@authToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIyMjIyMjIyMi0yMjIyLTIyMjItMjIyMi0yMjIyMjIyMjIyMjIiLCJyb2xlIjoiT1BFUkFUT1IiLCJkaXNwbGF5TmFtZSI6Ik9wZXJhdG9yIDEiLCJpc3MiOiJib2R5Y2FtLWJhY2tlbmQiLCJleHAiOjE3Nzg3ODUyMzQsImlhdCI6MTc3ODc1NjQzNCwidXNlcm5hbWUiOiJvcGVyYXRvcjEifQ.Rp-npr8IzpgHFrXgLQZRUmb8jU21ZoDM3RkVx_yQlKM
 @workerId = 11111111-1111-1111-1111-111111111111
-@sessionId = 626499fb-8e0c-450c-b72a-48f224b08957
+@sessionId = 6f0653b9-6212-441c-b8d7-09c69ee67116
 @recordingId = 33333333-3333-3333-3333-333333333333
 @recordingFile = C:/tmp/sample.mp4
 
@@ -115,7 +115,7 @@ Content-Type: application/json
     "capturedAt": "2026-05-13T10:00:00Z",
     "segmentSequence": 0,
     "segmentStartedAt": "2026-05-13T10:00:00Z",
-    "segmentEndedAt": "2026-05-13T10:00:10Z",
+    "segmentEndedAt": "2026-05-13T10:00:54Z",
     "sessionElapsedStartMs": 0,
     "sessionElapsedEndMs": 10000,
     "latitude": 28.6139,

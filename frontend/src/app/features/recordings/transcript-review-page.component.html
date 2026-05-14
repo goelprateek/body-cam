@@ -1,0 +1,120 @@
+<section class="transcript-review-page">
+  <mat-card class="review-shell glass-panel" appearance="outlined">
+    <div class="review-head">
+      <div class="review-copy">
+        <button mat-button type="button" class="back-btn" (click)="backToRecordings()">
+          <mat-icon>arrow_back</mat-icon>
+          Back to Recordings
+        </button>
+        <h1>Transcript Review</h1>
+        <p class="review-caption">Clip-level transcript status, retries, and engine selection live here so the player screen can stay focused.</p>
+      </div>
+
+      <div class="review-actions">
+        @if (engineOptions().length) {
+          <label class="engine-picker">
+            <span>Engine</span>
+            <select [value]="selectedEngine() || ''" (change)="setSelectedEngine(($any($event.target)).value)">
+              @for (engine of engineOptions(); track engine.key) {
+                <option [value]="engine.key" [disabled]="!engine.ready">
+                  {{ engine.label }}{{ engine.configuredDefault ? ' (Default)' : '' }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+
+        <button
+          mat-stroked-button
+          type="button"
+          class="compact-btn"
+          (click)="retryFailedIntervals()"
+          [disabled]="!hasRetryableRecordings() || isRetryingFailed() || isGenerating()"
+        >
+          {{ isRetryingFailed() ? 'Retrying...' : 'Retry Failed' }}
+        </button>
+
+        <button
+          mat-flat-button
+          type="button"
+          class="compact-btn"
+          (click)="generateTranscript()"
+          [disabled]="isGenerating() || isRetryingFailed()"
+        >
+          {{ transcript()?.status === 'READY' ? 'Regenerate Session' : isGenerating() ? 'Generating...' : 'Generate Session' }}
+        </button>
+      </div>
+    </div>
+
+    @if (isLoading()) {
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    }
+
+    @if (transcript()) {
+      <div class="review-summary">
+        <span class="transcript-pill" [class]="statusPillClass(transcript()?.status)">
+          {{ statusLabel(transcript()?.status) }}
+        </span>
+        <span class="summary-chip">{{ transcript()?.totalRecordings || 0 }} clips</span>
+        <span class="summary-chip">{{ transcript()?.readyRecordings || 0 }} ready</span>
+        <span class="summary-chip">{{ transcript()?.failedRecordings || 0 }} failed</span>
+        <span class="summary-chip">{{ transcript()?.processingRecordings || 0 }} processing</span>
+        <span class="summary-chip">{{ transcript()?.notRequestedRecordings || 0 }} missing</span>
+      </div>
+
+      @if (transcript()?.errorMessage && transcript()?.status === 'FAILED') {
+        <div class="notice notice-error">
+          <mat-icon>error_outline</mat-icon>
+          <span>{{ transcript()?.errorMessage }}</span>
+        </div>
+      }
+
+      <div class="clip-review-list">
+        @for (recording of transcript()?.recordings || []; track recording.recordingId) {
+          <mat-card class="clip-review-card" appearance="outlined">
+            <div class="clip-review-head">
+              <div class="clip-review-copy">
+                <div class="clip-review-title-row">
+                  <strong>Clip {{ recordingOrdinal(recording) }}</strong>
+                  <span class="transcript-pill" [class]="statusPillClass(recording.status)">
+                    {{ statusLabel(recording.status) }}
+                  </span>
+                </div>
+                <span class="subtle-text">{{ recordingWindow(recording) }}</span>
+              </div>
+
+              <div class="clip-review-actions">
+                @if (canRetryRecording(recording)) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="compact-btn"
+                    (click)="retryRecording(recording)"
+                    [disabled]="isRetryingRecordingId() === recording.recordingId"
+                  >
+                    {{ isRetryingRecordingId() === recording.recordingId ? 'Retrying...' : 'Retry Clip' }}
+                  </button>
+                }
+              </div>
+            </div>
+
+            <div class="clip-review-body">
+              <span class="detail-line">
+                <strong>Stage:</strong> {{ stageLabel(recording.processingStage) }}
+              </span>
+              <span class="detail-line">{{ recordingSummary(recording) }}</span>
+              @if (recording.lastErrorStage || recording.retryCount > 0) {
+                <span class="detail-line detail-line-warning">
+                  Last failure stage: {{ stageLabel(recording.lastErrorStage) }} | Retries: {{ recording.retryCount }}
+                </span>
+              }
+              @if (recording.lastStageAt) {
+                <span class="detail-line">Updated {{ recording.lastStageAt | date: 'MMM d, HH:mm:ss' }}</span>
+              }
+            </div>
+          </mat-card>
+        }
+      </div>
+    }
+  </mat-card>
+</section>

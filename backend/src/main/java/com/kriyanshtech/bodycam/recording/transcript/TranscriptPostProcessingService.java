@@ -25,4 +25,9 @@ public class TranscriptPostProcessingService {
             List<TranscriptSegmentPayload> punctuatedSegments) {
         return transcriptFinalizationService.finalizeTranscript(result.engine(), punctuatedSegments);
     }
+
+    public List<com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSegmentResponse> finalizeSessionSegments(
+            List<com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSegmentResponse> sessionSegments) {
+        return transcriptFinalizationService.finalizeSessionSegments(sessionSegments);
+    }
 }

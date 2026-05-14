@@ -1,11 +1,14 @@
 package com.kriyanshtech.bodycam.recording.controller;
 
+import com.kriyanshtech.bodycam.recording.dto.TranscriptEngineOptionResponse;
 import com.kriyanshtech.bodycam.recording.dto.TranscriptSmokeCheckResponse;
 import com.kriyanshtech.bodycam.recording.service.TranscriptSmokeCheckService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/transcripts")
@@ -19,5 +22,10 @@ public class TranscriptDiagnosticsController {
     @GetMapping("/smoke-check")
     public ResponseEntity<TranscriptSmokeCheckResponse> smokeCheck() {
         return ResponseEntity.ok(transcriptSmokeCheckService.run());
+    }
+
+    @GetMapping("/engines")
+    public ResponseEntity<List<TranscriptEngineOptionResponse>> availableEngines() {
+        return ResponseEntity.ok(transcriptSmokeCheckService.availableEngines());
     }
 }

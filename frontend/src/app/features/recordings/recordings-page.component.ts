@@ -6,11 +6,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
+import { Router } from '@angular/router';
 import { OperatorApiService } from '@features/operations/operator-api.service';
 import {
   RecordingInvestigationSearchHitResponse,
   RecordingInvestigationSearchResponse,
   RecordingResponse,
+  TranscriptEngineOptionResponse,
   RecordingTranscriptProcessingStage,
   TranscriptSmokeCheckResponse,
   SessionRecordingIntegrityStatus,
@@ -49,6 +51,7 @@ interface RecordingSessionCard {
 export class RecordingsPageComponent implements OnDestroy {
   readonly api = inject(OperatorApiService);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly router = inject(Router);
 
   @ViewChild('timelinePlayer')
   private timelinePlayer?: ElementRef<HTMLVideoElement>;
@@ -69,7 +72,10 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly selectedSubtitleUrl = signal<string | null>(null);
   readonly selectedSessionTranscript = signal<SessionTranscriptResponse | null>(null);
   readonly transcriptSmokeCheck = signal<TranscriptSmokeCheckResponse | null>(null);
+  readonly transcriptEngineOptions = signal<TranscriptEngineOptionResponse[]>([]);
+  readonly selectedTranscriptEngine = signal<string | null>(null);
   readonly activeTranscriptSegmentId = signal<string | null>(null);
+  readonly isTranscriptSeekHighlight = signal(false);
   readonly reviewClipNotice = signal<{ title: string; message: string } | null>(null);
   readonly transcriptSearchQuery = signal('');
   readonly transcriptReviewFilter = signal<'all' | 'failed' | 'missing' | 'pending' | 'low-confidence'>('all');
@@ -82,6 +88,8 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly isExportRequesting = signal(false);
   readonly isTranscriptLoading = signal(false);
   readonly isTranscriptGenerating = signal(false);
+  readonly isTranscriptSummaryLoading = signal(false);
+  readonly showTranscriptSummary = signal(false);
   readonly isRetryingFailedTranscript = signal(false);
   readonly isRetryingTranscriptRecordingId = signal<string | null>(null);
 
@@ -93,6 +101,7 @@ export class RecordingsPageComponent implements OnDestroy {
 
   private pendingAutoplay = false;
   private pendingSeekSecondsWithinSegment: number | null = null;
+  private transcriptSeekHighlightHandle: ReturnType<typeof setTimeout> | null = null;
   private transcriptSearchRequestId = 0;
   private investigationSearchRequestId = 0;
   private exportPollHandle: ReturnType<typeof setTimeout> | null = null;
@@ -100,7 +109,7 @@ export class RecordingsPageComponent implements OnDestroy {
 
   constructor() {
     void this.loadRecordings();
-    void this.loadTranscriptSmokeCheck();
+    void this.loadTranscriptEngines();
   }
 
   private showError(message: string): void {
@@ -112,6 +121,8 @@ export class RecordingsPageComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.clearExportPolling();
+    this.clearTranscriptSeekHighlight();
+    this.revokeSubtitleUrl();
   }
 
   selectedSession(): RecordingSessionCard | null {
@@ -299,6 +310,27 @@ export class RecordingsPageComponent implements OnDestroy {
     return smokeCheck.ready ? 'Transcript pipeline ready' : 'Transcript pipeline needs attention';
   }
 
+  transcriptEngineLabel(): string {
+    const selected = this.selectedTranscriptEngine();
+    if (!selected) {
+      return 'Configured default engine';
+    }
+    return this.transcriptEngineOptions().find((option) => option.key === selected)?.label ?? selected;
+  }
+
+  transcriptEngineWarning(recording?: SessionTranscriptRecordingResponse | null): string | null {
+    const lastErrorStage = recording?.lastErrorStage ?? this.selectedSessionTranscript()?.lastErrorStage ?? null;
+    const retryCount = recording?.retryCount ?? this.selectedSessionTranscript()?.retryCount ?? 0;
+    if (!lastErrorStage && retryCount <= 0) {
+      return null;
+    }
+    return `Last failure stage: ${this.transcriptProcessingStageLabel(lastErrorStage)} | Retries: ${retryCount}`;
+  }
+
+  setSelectedTranscriptEngine(engine: string): void {
+    this.selectedTranscriptEngine.set(engine || null);
+  }
+
   transcriptProcessingStageLabel(stage?: RecordingTranscriptProcessingStage | null): string {
     switch (stage) {
       case 'QUEUED':
@@ -331,6 +363,26 @@ export class RecordingsPageComponent implements OnDestroy {
       case 'NOT_REQUESTED':
       default:
         return 'Not Requested';
+    }
+  }
+
+  transcriptPanelHint(): string {
+    const transcript = this.selectedSessionTranscript();
+    if (!transcript) {
+      return 'Select a session to view or generate a transcript.';
+    }
+
+    switch (transcript.status) {
+      case 'READY':
+        return `${transcript.segments.length} timestamped line${transcript.segments.length === 1 ? '' : 's'} ready. Click a timestamp to jump in the video.`;
+      case 'PROCESSING':
+      case 'PENDING':
+        return 'Transcript generation is in progress for this session.';
+      case 'FAILED':
+        return transcript.errorMessage?.trim() || 'Transcript generation failed for this session.';
+      case 'NOT_REQUESTED':
+      default:
+        return 'Generate a session transcript when you need to review what was said.';
     }
   }
 
@@ -672,9 +724,26 @@ export class RecordingsPageComponent implements OnDestroy {
 
   private async loadTranscriptSmokeCheck(): Promise<void> {
     try {
-      this.transcriptSmokeCheck.set(await this.api.getTranscriptSmokeCheck());
+      const response = await this.api.getTranscriptSmokeCheck();
+      this.transcriptSmokeCheck.set(response);
+      if (!this.selectedTranscriptEngine()) {
+        this.selectedTranscriptEngine.set(response.engine);
+      }
     } catch {
       this.transcriptSmokeCheck.set(null);
+    }
+  }
+
+  private async loadTranscriptEngines(): Promise<void> {
+    try {
+      const engines = await this.api.getTranscriptEngines();
+      this.transcriptEngineOptions.set(engines);
+      if (!this.selectedTranscriptEngine()) {
+        const defaultEngine = engines.find((engine) => engine.configuredDefault) ?? engines[0];
+        this.selectedTranscriptEngine.set(defaultEngine?.key ?? null);
+      }
+    } catch {
+      this.transcriptEngineOptions.set([]);
     }
   }
 
@@ -729,6 +798,8 @@ export class RecordingsPageComponent implements OnDestroy {
     this.selectedSessionTranscript.set(null);
     this.activeTranscriptSegmentId.set(null);
     this.reviewClipNotice.set(null);
+    this.clearTranscriptSeekHighlight();
+    this.showTranscriptSummary.set(false);
     this.transcriptSearchQuery.set('');
     this.transcriptReviewFilter.set('all');
     this.transcriptSearchResults.set(null);
@@ -751,6 +822,7 @@ export class RecordingsPageComponent implements OnDestroy {
 
       this.selectedTimeline.set(timeline);
       this.selectedSessionTranscript.set(sessionTranscript);
+      this.selectedTranscriptEngine.set(sessionTranscript.engine ?? this.selectedTranscriptEngine());
       this.selectedSessionExport.set(exportResponse);
       this.transcriptSearchResults.set(null);
       this.syncTimelineStatuses(timeline);
@@ -851,11 +923,13 @@ export class RecordingsPageComponent implements OnDestroy {
 
     try {
       const [sessionTranscript, timeline] = await Promise.all([
-        this.api.generateSessionTranscript(session.sessionId),
+        this.api.generateSessionTranscript(session.sessionId, this.selectedTranscriptEngine()),
         this.api.getSessionRecordingTimeline(session.sessionId)
       ]);
       if (this.selectedSessionId() === session.sessionId) {
         this.selectedSessionTranscript.set(sessionTranscript);
+        this.selectedTranscriptEngine.set(sessionTranscript.engine ?? this.selectedTranscriptEngine());
+        this.showTranscriptSummary.set(false);
         this.transcriptSearchResults.set(null);
         this.selectedTimeline.set(timeline);
         this.syncTimelineStatuses(timeline);
@@ -867,10 +941,47 @@ export class RecordingsPageComponent implements OnDestroy {
       }
     } catch (error) {
       if (this.selectedSessionId() === session.sessionId) {
+        this.showError(this.api.explainError(error));
       }
     } finally {
       this.isTranscriptGenerating.set(false);
     }
+  }
+
+  canSummarizeTranscript(): boolean {
+    const transcript = this.selectedSessionTranscript();
+    return !!(transcript && transcript.status === 'READY' && transcript.fullText?.trim());
+  }
+
+  async summarizeTranscript(): Promise<void> {
+    const session = this.selectedSession();
+    if (!session) {
+      return;
+    }
+
+    this.isTranscriptSummaryLoading.set(true);
+    try {
+      const sessionTranscript = await this.api.summarizeSessionTranscript(session.sessionId);
+      if (this.selectedSessionId() === session.sessionId) {
+        this.selectedSessionTranscript.set(sessionTranscript);
+        this.showTranscriptSummary.set(true);
+      }
+    } catch (error) {
+      if (this.selectedSessionId() === session.sessionId) {
+        this.showError(this.api.explainError(error));
+      }
+    } finally {
+      this.isTranscriptSummaryLoading.set(false);
+    }
+  }
+
+  openTranscriptReview(): void {
+    const sessionId = this.selectedSessionId();
+    if (!sessionId) {
+      return;
+    }
+
+    void this.router.navigate(['/recordings', sessionId, 'transcript-review']);
   }
 
   async requestExportPackage(): Promise<void> {
@@ -913,11 +1024,12 @@ export class RecordingsPageComponent implements OnDestroy {
     
     try {
       const [sessionTranscript, timeline] = await Promise.all([
-        this.api.retryFailedSessionTranscript(session.sessionId),
+        this.api.retryFailedSessionTranscript(session.sessionId, this.selectedTranscriptEngine()),
         this.api.getSessionRecordingTimeline(session.sessionId)
       ]);
       if (this.selectedSessionId() === session.sessionId) {
         this.selectedSessionTranscript.set(sessionTranscript);
+        this.selectedTranscriptEngine.set(sessionTranscript.engine ?? this.selectedTranscriptEngine());
         this.selectedTimeline.set(timeline);
         this.transcriptReviewFilter.set('all');
         this.transcriptSearchResults.set(null);
@@ -959,7 +1071,7 @@ export class RecordingsPageComponent implements OnDestroy {
   async retryTranscriptRecording(recording: SessionTranscriptRecordingResponse): Promise<void> {
     this.isRetryingTranscriptRecordingId.set(recording.recordingId);
         try {
-      await this.api.generateRecordingTranscript(recording.recordingId);
+      await this.api.generateRecordingTranscript(recording.recordingId, this.selectedTranscriptEngine());
       const sessionId = this.selectedSessionId();
       if (!sessionId) {
         return;
@@ -970,6 +1082,7 @@ export class RecordingsPageComponent implements OnDestroy {
       ]);
       if (this.selectedSessionId() === sessionId) {
         this.selectedSessionTranscript.set(sessionTranscript);
+        this.selectedTranscriptEngine.set(sessionTranscript.engine ?? this.selectedTranscriptEngine());
         this.selectedTimeline.set(timeline);
         this.transcriptSearchResults.set(null);
         this.syncTimelineStatuses(timeline);
@@ -1075,20 +1188,33 @@ export class RecordingsPageComponent implements OnDestroy {
   }
 
   async seekToTranscriptSegment(segment: SessionTranscriptSegmentResponse): Promise<void> {
-    const targetSessionSecond = Number.parseFloat(segment.startSeconds ?? '0');
-    const target = this.findTimelineSegmentForSessionSecond(targetSessionSecond);
-    if (!target) {
+    this.triggerTranscriptSeekHighlight();
+    const timeline = this.selectedTimeline();
+    if (!timeline?.segments.length) {
       return;
     }
 
+    const targetSessionSecond = Number.parseFloat(segment.startSeconds ?? '0');
+    const targetIndex = timeline.segments.findIndex((timelineSegment) => timelineSegment.recordingId === segment.recordingId);
+    const target = targetIndex >= 0
+      ? {
+          index: targetIndex,
+          segmentSeekSeconds: Math.max(0, targetSessionSecond - this.segmentSessionStartSeconds(timeline.segments[targetIndex]))
+        }
+      : this.findTimelineSegmentForSessionSecond(targetSessionSecond);
+
     const currentSegment = this.activeTimelineSegment();
-    if (currentSegment && target.index === this.selectedTimelineSegmentIndex()) {
+    if (target && currentSegment && target.index === this.selectedTimelineSegmentIndex()) {
       const player = this.timelinePlayer?.nativeElement;
       if (player) {
         player.currentTime = Math.max(0, target.segmentSeekSeconds);
         void player.play().catch(() => undefined);
         this.handleVideoTimeUpdate();
       }
+      return;
+    }
+
+    if (!target) {
       return;
     }
 
@@ -1121,6 +1247,26 @@ export class RecordingsPageComponent implements OnDestroy {
       URL.revokeObjectURL(subtitleUrl);
     }
     this.selectedSubtitleUrl.set(null);
+  }
+
+  private triggerTranscriptSeekHighlight(): void {
+    if (this.transcriptSeekHighlightHandle != null) {
+      clearTimeout(this.transcriptSeekHighlightHandle);
+    }
+
+    this.isTranscriptSeekHighlight.set(true);
+    this.transcriptSeekHighlightHandle = setTimeout(() => {
+      this.isTranscriptSeekHighlight.set(false);
+      this.transcriptSeekHighlightHandle = null;
+    }, 1800);
+  }
+
+  private clearTranscriptSeekHighlight(): void {
+    if (this.transcriptSeekHighlightHandle != null) {
+      clearTimeout(this.transcriptSeekHighlightHandle);
+      this.transcriptSeekHighlightHandle = null;
+    }
+    this.isTranscriptSeekHighlight.set(false);
   }
 
   private findTimelineSegmentForSessionSecond(targetSessionSecond: number): { index: number; segmentSeekSeconds: number } | null {

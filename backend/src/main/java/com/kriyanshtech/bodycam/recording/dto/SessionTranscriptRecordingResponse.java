@@ -12,6 +12,8 @@ public record SessionTranscriptRecordingResponse(
         RecordingTranscriptStatus status,
         String errorMessage,
         RecordingTranscriptProcessingStage processingStage,
+        RecordingTranscriptProcessingStage lastErrorStage,
+        Integer retryCount,
         Instant lastStageAt,
         Instant startedAt,
         Instant completedAt,

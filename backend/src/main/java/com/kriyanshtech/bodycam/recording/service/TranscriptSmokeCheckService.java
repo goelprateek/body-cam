@@ -1,13 +1,13 @@
 package com.kriyanshtech.bodycam.recording.service;
 
 import com.kriyanshtech.bodycam.config.AppProperties;
+import com.kriyanshtech.bodycam.recording.dto.TranscriptEngineOptionResponse;
 import com.kriyanshtech.bodycam.recording.dto.TranscriptSmokeCheckResponse;
 import com.kriyanshtech.bodycam.recording.transcript.RecordingTranscriptEngine;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 @Service
 public class TranscriptSmokeCheckService {
@@ -22,6 +22,7 @@ public class TranscriptSmokeCheckService {
     public TranscriptSmokeCheckResponse run() {
         List<String> checks = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+        List<TranscriptEngineOptionResponse> availableEngines = availableEngines();
 
         boolean enabled = appProperties.transcript().enabled();
         checks.add(enabled ? "Transcript generation is enabled." : "Transcript generation is disabled.");
@@ -58,19 +59,43 @@ public class TranscriptSmokeCheckService {
                 configuredEngine,
                 configuredEndpoint,
                 appProperties.transcript().pollDelayMs(),
+                appProperties.transcript().maxRetryCount(),
+                availableEngines,
                 checks,
                 warnings
         );
+    }
+
+    public List<TranscriptEngineOptionResponse> availableEngines() {
+        String configuredEngine = appProperties.transcript().engine();
+        return transcriptEngines.stream()
+                .map(engine -> {
+                    String endpoint = configuredEndpoint(engine.key());
+                    boolean ready = engine.isReady();
+                    return new TranscriptEngineOptionResponse(
+                            engine.key(),
+                            engine.label(),
+                            engine.key().equalsIgnoreCase(configuredEngine),
+                            ready,
+                            endpoint);
+                })
+                .sorted((left, right) -> {
+                    if (left.configuredDefault() == right.configuredDefault()) {
+                        return left.key().compareToIgnoreCase(right.key());
+                    }
+                    return left.configuredDefault() ? -1 : 1;
+                })
+                .toList();
     }
 
     private String configuredEndpoint(String configuredEngine) {
         if (configuredEngine == null) {
             return null;
         }
-        return switch (configuredEngine.toLowerCase(Locale.ROOT)) {
-            case "vosk" -> appProperties.transcript().voskUrl();
-            case "faster-whisper" -> appProperties.transcript().fasterWhisper().url();
-            default -> null;
-        };
+        return transcriptEngines.stream()
+                .filter(engine -> engine.key().equalsIgnoreCase(configuredEngine))
+                .map(RecordingTranscriptEngine::configuredEndpoint)
+                .findFirst()
+                .orElse(null);
     }
 }

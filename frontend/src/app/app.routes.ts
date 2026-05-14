@@ -61,6 +61,13 @@ export const routes: Routes = [
         component: ProfilePageComponent
       },
       {
+        path: 'recordings/:sessionId/transcript-review',
+        loadComponent: () =>
+          import('./features/recordings/transcript-review-page.component').then(
+            (c) => c.TranscriptReviewPageComponent
+          )
+      },
+      {
         path: 'recordings',
         loadComponent: () =>
           import('./features/recordings/recordings-page.component').then(

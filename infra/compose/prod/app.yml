@@ -16,7 +16,7 @@ services:
         condition: service_healthy
       livekit:
         condition: service_healthy
-      vosk:
+      faster-whisper:
         condition: service_healthy
     networks:
       - private

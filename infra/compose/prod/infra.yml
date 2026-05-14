@@ -49,17 +49,50 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  vosk:
-    image: ${TRANSCRIPT_IMAGE:-alphacep/kaldi-en:latest}
+  faster-whisper:
+    image: ${TRANSCRIPT_IMAGE:-hwdsl2/whisper-server:latest}
+    depends_on:
+      faster-whisper-model-sync:
+        condition: service_completed_successfully
+    environment:
+      WHISPER_MODEL: ${TRANSCRIPT_MODEL:-large-v3-turbo}
+      WHISPER_LANGUAGE: ${TRANSCRIPT_LANGUAGE:-auto}
+      WHISPER_DEVICE: ${TRANSCRIPT_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${TRANSCRIPT_COMPUTE_TYPE:-int8}
+      WHISPER_THREADS: ${TRANSCRIPT_THREADS:-2}
+      WHISPER_LOCAL_ONLY: ${TRANSCRIPT_LOCAL_ONLY:-true}
     networks:
       - private
+    volumes:
+      - transcript_data:/var/lib/whisper
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import socket; s = socket.create_connection(('127.0.0.1', 2700), 5); s.close()\""]
+      test: ["CMD-SHELL", "python3 -c \"import socket; s = socket.create_connection(('127.0.0.1', 9000), 5); s.close()\""]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 30s
     restart: unless-stopped
+
+  faster-whisper-model-sync:
+    image: ${TRANSCRIPT_IMAGE:-hwdsl2/whisper-server:latest}
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        MODEL="${TRANSCRIPT_MODEL:-large-v3-turbo}";
+        CACHE_MATCH=$$(find /var/lib/whisper -maxdepth 1 -type d -name "models--Systran--faster-whisper-$${MODEL}*" | head -n 1);
+        if [ -n "$${CACHE_MATCH}" ]; then
+          echo "Whisper model cache already present for $${MODEL} at $${CACHE_MATCH}";
+          exit 0;
+        fi;
+        whisper_manage --downloadmodel "$${MODEL}"
+    environment:
+      WHISPER_LOCAL_ONLY: "false"
+    networks:
+      - private
+    volumes:
+      - transcript_data:/var/lib/whisper
+    restart: "no"
 
   livekit:
     image: livekit/livekit-server:latest

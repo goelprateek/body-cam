@@ -11,13 +11,14 @@ import {
   RecordingInvestigationSearchResponse,
   RecordingPlaybackResponse,
   RecordingResponse,
+  RecordingTranscriptResponse,
   SessionRecordingExportResponse,
   SessionRecordingTimelineResponse,
-  TranscriptSmokeCheckResponse,
   SessionTranscriptSearchResponse,
   SessionTranscriptResponse,
-  RecordingTranscriptResponse,
-  SessionResponse
+  SessionResponse,
+  TranscriptEngineOptionResponse,
+  TranscriptSmokeCheckResponse
 } from './operator.models';
 
 const ACCESS_TOKEN_KEY = 'bodycam.operator.access-token';
@@ -177,11 +178,19 @@ export class OperatorApiService {
     );
   }
 
-  async generateSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
+  async getTranscriptEngines(): Promise<TranscriptEngineOptionResponse[]> {
+    return firstValueFrom(
+      this.http.get<TranscriptEngineOptionResponse[]>(this.url('/transcripts/engines'), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async generateSessionTranscript(sessionId: string, engine: string | null): Promise<SessionTranscriptResponse> {
     return firstValueFrom(
       this.http.post<SessionTranscriptResponse>(
         this.url(`/sessions/${sessionId}/transcript/generate`),
-        {},
+        { engine },
         {
           headers: this.authHeaders()
         }
@@ -189,10 +198,22 @@ export class OperatorApiService {
     );
   }
 
-  async retryFailedSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
+  async retryFailedSessionTranscript(sessionId: string, engine: string | null): Promise<SessionTranscriptResponse> {
     return firstValueFrom(
       this.http.post<SessionTranscriptResponse>(
         this.url(`/sessions/${sessionId}/transcript/retry-failed`),
+        { engine },
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async summarizeSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
+    return firstValueFrom(
+      this.http.post<SessionTranscriptResponse>(
+        this.url(`/sessions/${sessionId}/transcript/summary`),
         {},
         {
           headers: this.authHeaders()
@@ -227,11 +248,11 @@ export class OperatorApiService {
     );
   }
 
-  async generateRecordingTranscript(recordingId: string): Promise<RecordingTranscriptResponse> {
+  async generateRecordingTranscript(recordingId: string, engine: string | null): Promise<RecordingTranscriptResponse> {
     return firstValueFrom(
       this.http.post<RecordingTranscriptResponse>(
         this.url(`/recordings/${recordingId}/transcript/generate`),
-        {},
+        { engine },
         {
           headers: this.authHeaders()
         }

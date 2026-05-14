@@ -250,7 +250,7 @@
         }
       }
 
-      <div class="recording-player premium-frame">
+      <div class="recording-player premium-frame" [class.recording-player-transcript-seek]="isTranscriptSeekHighlight()">
         @if (isPlaybackLoading()) {
           <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
         }
@@ -294,6 +294,7 @@
                 type="button"
                 class="timeline-segment-btn"
                 [class.timeline-segment-btn-active]="i === selectedTimelineSegmentIndex()"
+                [class.timeline-segment-btn-transcript-seek]="isTranscriptSeekHighlight() && i === selectedTimelineSegmentIndex()"
                 [class.timeline-segment-btn-warning]="segmentWarning(segment)"
                 (click)="selectTimelineSegment(i)"
               >
@@ -309,99 +310,49 @@
     <!-- Transcript Panel -->
     <mat-card class="panel evidence-transcript-panel glass-panel" appearance="outlined">
       <div class="evidence-header premium-head">
-          <div class="viewer-head-copy">
+        <div class="viewer-head-copy">
           <div class="transcript-title-row">
             <h2>Transcript</h2>
             @if (selectedSessionTranscript()) {
               <span class="transcript-pill transcript-pill-detail" [class]="transcriptPillClass(selectedSessionTranscript()?.status)">
                 {{ transcriptLabel(selectedSessionTranscript()?.status) }}
               </span>
-              @if (selectedSessionTranscript()?.processingStage) {
-                <span class="transcript-pill transcript-pill-detail transcript-pill-idle">
-                  {{ transcriptProcessingStageLabel(selectedSessionTranscript()?.processingStage) }}
-                </span>
-              }
             }
           </div>
-          @if (selectedSessionTranscript()?.engine || selectedSessionTranscript()?.model) {
-            <p class="viewer-caption">{{ selectedSessionTranscript()?.engine }} {{ selectedSessionTranscript()?.model }}</p>
-          } @else {
-            <p class="viewer-caption">Generated from full session timeline</p>
-          }
-          @if (selectedSessionTranscript()?.lastStageAt) {
-            <p class="viewer-caption">Last transcript stage update {{ selectedSessionTranscript()?.lastStageAt | date: 'MMM d, HH:mm:ss' }}</p>
-          }
-          @if (transcriptSmokeCheck()) {
-            <p class="viewer-caption">
-              {{ transcriptSmokeCheckLabel() }}
-              @if (transcriptSmokeCheck()?.engine) {
-                | {{ transcriptSmokeCheck()?.engine }}
-              }
-            </p>
-          }
+          <p class="viewer-caption">{{ transcriptPanelHint() }}</p>
         </div>
-        
+
         <div class="evidence-actions">
           @if (selectedSession()) {
-            @if (hasRetryableTranscriptIntervals()) {
-              <button
-                mat-icon-button
-                class="premium-icon-btn"
-                matTooltip="Retry Failed Intervals"
-                (click)="retryFailedTranscriptIntervals()"
-                [disabled]="isRetryingFailedTranscript() || isTranscriptGenerating() || isTranscriptLoading()"
-              >
-                <mat-icon>replay</mat-icon>
-              </button>
-            }
             <button
-              mat-icon-button
-              class="premium-icon-btn"
-              [matTooltip]="selectedSessionTranscript()?.status === 'READY' ? 'Regenerate Transcript' : 'Generate Transcript'"
+              mat-stroked-button
+              type="button"
+              class="premium-btn premium-btn-secondary compact-btn"
+              (click)="openTranscriptReview()"
+            >
+              Review
+            </button>
+            <button
+              mat-flat-button
+              type="button"
+              class="premium-btn compact-btn"
               (click)="generateTranscript()"
               [disabled]="isTranscriptGenerating() || isTranscriptLoading() || isRetryingFailedTranscript()"
             >
-              <mat-icon>article</mat-icon>
+              {{ selectedSessionTranscript()?.status === 'READY' ? 'Regenerate' : isTranscriptGenerating() ? 'Generating...' : 'Generate' }}
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              class="premium-btn premium-btn-secondary compact-btn"
+              (click)="summarizeTranscript()"
+              [disabled]="!canSummarizeTranscript() || isTranscriptSummaryLoading() || isTranscriptLoading()"
+            >
+              {{ isTranscriptSummaryLoading() ? 'Summarizing...' : 'Summarize' }}
             </button>
           }
         </div>
       </div>
-
-      @if (selectedSessionTranscript()) {
-        <div class="transcript-utility-bar">
-          <div class="transcript-filter-row">
-            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'all'" (click)="setTranscriptReviewFilter('all')">All</button>
-            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'failed'" (click)="setTranscriptReviewFilter('failed')">Failed</button>
-            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'missing'" (click)="setTranscriptReviewFilter('missing')">Missing</button>
-            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'pending'" (click)="setTranscriptReviewFilter('pending')">Pending</button>
-            <button type="button" class="transcript-filter-chip" [class.transcript-filter-chip-active]="transcriptReviewFilter() === 'low-confidence'" (click)="setTranscriptReviewFilter('low-confidence')">Low Conf</button>
-          </div>
-          
-          @if (selectedSessionTranscript()?.segments?.length) {
-            <div class="transcript-search-row">
-              <input
-                type="search"
-                class="transcript-search-input compact-search"
-                placeholder="Search transcript..."
-                [value]="transcriptSearchQuery()"
-                (input)="updateTranscriptSearch(($any($event.target)).value)"
-              />
-              @if (transcriptSearchQuery()) {
-                <button mat-icon-button class="clear-search-btn" (click)="clearTranscriptSearch()">
-                  <mat-icon>close</mat-icon>
-                </button>
-              }
-            </div>
-            @if (isTranscriptSearching()) {
-              <div class="subtle-text transcript-search-meta compact-meta">Searching...</div>
-            } @else if (transcriptSearchQuery()) {
-              <div class="subtle-text transcript-search-meta compact-meta">
-                {{ filteredTranscriptSegments().length }} match{{ filteredTranscriptSegments().length === 1 ? '' : 'es' }}
-              </div>
-            }
-          }
-        </div>
-      }
 
       <div class="transcript-content-area premium-scroll">
         @if (isTranscriptLoading()) {
@@ -409,138 +360,98 @@
         }
 
         @if (selectedSessionTranscript()) {
-          
-          @if (filteredTranscriptReviewRecordings().length) {
-            <div class="transcript-review-list">
-              @for (recording of filteredTranscriptReviewRecordings(); track recording.recordingId) {
-                <div class="transcript-review-card" [class.transcript-review-card-warning]="recording.status === 'FAILED' || recording.status === 'NOT_REQUESTED'">
-                  <div class="transcript-review-head">
-                    <span class="transcript-pill transcript-pill-detail" [class]="transcriptPillClass(recording.status)">
-                      {{ transcriptLabel(recording.status) }}
-                    </span>
-                    <span class="subtle-text">Clip {{ transcriptRecordingOrdinal(recording) }}</span>
-                  </div>
-                  <div class="transcript-review-body">
-                    @if (recording.processingStage) {
-                      <span class="subtle-text">
-                        Stage: {{ transcriptProcessingStageLabel(recording.processingStage) }}
-                        @if (recording.lastStageAt) {
-                          | {{ recording.lastStageAt | date: 'MMM d, HH:mm:ss' }}
-                        }
-                      </span>
-                    }
-                    <span class="subtle-text">
-                      {{ transcriptRecordingBody(recording) }}
-                    </span>
-                    @if (recording.errorMessage && recording.status !== 'FAILED') {
-                      <span class="transcript-review-error">{{ recording.errorMessage }}</span>
-                    }
-                  </div>
-                  <div class="transcript-review-actions">
-                    <button mat-button type="button" class="compact-btn" (click)="reviewTranscriptRecording(recording)">
-                      Review
-                    </button>
-                    @if (canRetryTranscriptRecording(recording)) {
-                      <button
-                        mat-button
-                        type="button"
-                        class="compact-btn"
-                        (click)="retryTranscriptRecording(recording)"
-                        [disabled]="isRetryingTranscriptRecordingId() === recording.recordingId"
-                      >
-                        {{ isRetryingTranscriptRecordingId() === recording.recordingId ? 'Retrying...' : 'Retry' }}
-                      </button>
-                    }
-                  </div>
-                </div>
-              }
-            </div>
-          }
-
           @switch (selectedSessionTranscript()?.status) {
             @case ('NOT_REQUESTED') {
-              <div class="empty-state transcript-empty">
+              <div class="empty-state transcript-empty transcript-panel-empty">
                 <mat-icon>article</mat-icon>
                 <strong>No transcript yet</strong>
                 <span>Generate one for the full session when needed.</span>
+                <button
+                  mat-flat-button
+                  type="button"
+                  class="premium-btn compact-btn"
+                  (click)="generateTranscript()"
+                  [disabled]="isTranscriptGenerating() || isTranscriptLoading()"
+                >
+                  {{ isTranscriptGenerating() ? 'Generating...' : 'Generate Transcript' }}
+                </button>
               </div>
             }
             @case ('FAILED') {
-              <div class="notice notice-error">
+              <div class="notice notice-error transcript-panel-empty">
                 <mat-icon>error_outline</mat-icon>
-                {{ selectedSessionTranscript()?.errorMessage || 'Session transcript generation failed.' }}
+                <span>{{ selectedSessionTranscript()?.errorMessage || 'Session transcript generation failed.' }}</span>
+                <button
+                  mat-stroked-button
+                  type="button"
+                  class="premium-btn premium-btn-secondary compact-btn"
+                  (click)="openTranscriptReview()"
+                >
+                  Open Review
+                </button>
               </div>
             }
             @default {
-              @if (shouldShowTranscriptSummary()) {
-                <div class="transcript-summary-card">
-                  @if (selectedSessionTranscript()?.shortSummary) {
-                    <div class="transcript-summary-block">
-                      <strong>Summary</strong>
-                      <span>{{ selectedSessionTranscript()?.shortSummary }}</span>
-                    </div>
-                  }
-                  @if (selectedSessionTranscript()?.incidentSummary) {
-                    <div class="transcript-summary-block">
-                      <strong>Incident View</strong>
-                      <span>{{ selectedSessionTranscript()?.incidentSummary }}</span>
-                    </div>
-                  }
-                  @if (selectedSessionTranscript()?.keywords?.length) {
-                    <div class="transcript-summary-keywords">
-                      @for (keyword of selectedSessionTranscript()?.keywords || []; track keyword) {
-                        <span class="transcript-summary-keyword">{{ keyword }}</span>
-                      }
-                    </div>
-                  }
+              @if (selectedSessionTranscript()?.status === 'PROCESSING' || selectedSessionTranscript()?.status === 'PENDING') {
+                <div class="empty-state transcript-empty transcript-panel-empty">
+                  <mat-icon class="rotating">hourglass_top</mat-icon>
+                  <strong>Transcript is on the way</strong>
+                  <span>Come back in a moment, or open review for clip-level progress.</span>
                 </div>
-              }
-
-              @if (shouldShowTranscriptFullText() && selectedSessionTranscript()?.fullText) {
-                <div class="transcript-full-text">
-                  {{ selectedSessionTranscript()?.fullText }}
-                </div>
-              }
-
-              @if (shouldShowTranscriptSegments()) {
-                @if (filteredTranscriptSegments().length) {
-                  <div class="transcript-segments">
-                    @for (segment of filteredTranscriptSegments(); track segment.id || segment.segmentIndex) {
-                      <button
-                        type="button"
-                        class="transcript-segment transcript-segment-button"
-                        [class.transcript-segment-active]="segment.id === activeTranscriptSegmentId()"
-                        [class.transcript-segment-low-confidence]="isLowConfidenceSegment(segment)"
-                        (click)="seekToTranscriptSegment(segment)"
-                      >
-                        <div class="segment-time-col">
-                          <span class="segment-time">{{ formatSegmentTime(segment) }}</span>
-                          @if (segment.confidence && isLowConfidenceSegment(segment)) {
-                            <mat-icon class="confidence-warning" matTooltip="Low Confidence">warning</mat-icon>
-                          }
-                        </div>
-                        <div class="segment-copy">
-                          <span class="segment-text">{{ segment.text }}</span>
-                        </div>
-                      </button>
+              } @else if (selectedSessionTranscript()?.segments?.length) {
+                @if (showTranscriptSummary() && (selectedSessionTranscript()?.shortSummary || selectedSessionTranscript()?.incidentSummary || selectedSessionTranscript()?.keywords?.length)) {
+                  <div class="transcript-summary-card">
+                    @if (selectedSessionTranscript()?.shortSummary) {
+                      <div class="transcript-summary-block">
+                        <strong>Summary</strong>
+                        <span>{{ selectedSessionTranscript()?.shortSummary }}</span>
+                      </div>
+                    }
+                    @if (selectedSessionTranscript()?.incidentSummary) {
+                      <div class="transcript-summary-block">
+                        <strong>Incident View</strong>
+                        <span>{{ selectedSessionTranscript()?.incidentSummary }}</span>
+                      </div>
+                    }
+                    @if (selectedSessionTranscript()?.keywords?.length) {
+                      <div class="transcript-summary-keywords">
+                        @for (keyword of selectedSessionTranscript()?.keywords || []; track keyword) {
+                          <span class="transcript-summary-keyword">{{ keyword }}</span>
+                        }
+                      </div>
                     }
                   </div>
-                } @else if (transcriptSearchQuery()) {
-                  <div class="empty-state transcript-empty">
-                    <strong>No matches</strong>
-                    <span>Try a different search term.</span>
-                  </div>
-                } @else if (transcriptReviewFilter() !== 'all') {
-                  <div class="empty-state transcript-empty">
-                    <strong>No text for this filter</strong>
-                    <span>{{ transcriptFilterEmptyMessage() }}</span>
-                  </div>
                 }
-              } @else if (selectedSessionTranscript()?.status === 'PROCESSING' || selectedSessionTranscript()?.status === 'PENDING') {
-                <div class="empty-state transcript-empty">
-                  <mat-icon class="rotating">hourglass_top</mat-icon>
-                  <strong>Request accepted</strong>
-                  <span>Preparing transcript content...</span>
+
+                <div class="transcript-inline-hint">
+                  <mat-icon>schedule</mat-icon>
+                  <span>Click any timestamp to jump the player and highlight the current clip.</span>
+                </div>
+
+                <div class="transcript-segments">
+                  @for (segment of selectedSessionTranscript()?.segments || []; track segment.id || segment.segmentIndex) {
+                    <div
+                      class="transcript-segment"
+                      [class.transcript-segment-active]="segment.id === activeTranscriptSegmentId()"
+                    >
+                      <button
+                        type="button"
+                        class="transcript-seek-time"
+                        (click)="seekToTranscriptSegment(segment)"
+                      >
+                        {{ formatSegmentTime(segment) }}
+                      </button>
+                      <div class="segment-copy">
+                        <span class="segment-text">{{ segment.text }}</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="empty-state transcript-empty transcript-panel-empty">
+                  <mat-icon>notes</mat-icon>
+                  <strong>No timestamped transcript lines yet</strong>
+                  <span>Open review to inspect clip-level transcript status.</span>
                 </div>
               }
             }

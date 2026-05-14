@@ -1,5 +1,6 @@
 package com.kriyanshtech.bodycam.recording.transcript;
 
+import com.kriyanshtech.bodycam.recording.dto.SessionTranscriptSegmentResponse;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -54,6 +55,42 @@ public class TranscriptFinalizationService {
                 .trim();
 
         return new ProcessedTranscriptResult(fullText.isBlank() ? null : fullText, finalized);
+    }
+
+    public List<SessionTranscriptSegmentResponse> finalizeSessionSegments(
+            List<SessionTranscriptSegmentResponse> sessionSegments) {
+        List<SessionTranscriptSegmentResponse> finalized = new ArrayList<>();
+        String previousText = null;
+
+        for (SessionTranscriptSegmentResponse segment : sessionSegments) {
+            if (segment == null || segment.startSeconds() == null || segment.endSeconds() == null) {
+                continue;
+            }
+            if (segment.endSeconds().compareTo(segment.startSeconds()) <= 0) {
+                continue;
+            }
+
+            String normalized = collapseRepeatedWords(segment.text());
+            normalized = removeOverlap(previousText, normalized);
+            normalized = capitalizeSentence(normalized);
+            normalized = ensureSentence(normalized);
+            if (normalized.isBlank()) {
+                continue;
+            }
+
+            finalized.add(new SessionTranscriptSegmentResponse(
+                    segment.id(),
+                    segment.recordingId(),
+                    segment.recordingSequence(),
+                    segment.segmentIndex(),
+                    segment.startSeconds(),
+                    segment.endSeconds(),
+                    normalized,
+                    segment.confidence()));
+            previousText = normalized;
+        }
+
+        return finalized;
     }
 
     private boolean isTimelineSafe(TranscriptSegmentPayload segment) {

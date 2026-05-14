@@ -58,10 +58,20 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
     }
 
     @Override
+    public String label() {
+        return "Vosk";
+    }
+
+    @Override
+    public String configuredEndpoint() {
+        return appProperties.transcript().voskUrl();
+    }
+
+    @Override
     public RecordingTranscriptGenerationResult generate(Path sourceVideoPath, UUID recordingId, UUID transcriptId)
             throws Exception {
         log.info("Starting transcript engine recordingId={} transcriptId={} engine={} endpoint={}",
-                recordingId, transcriptId, ENGINE_NAME, appProperties.transcript().voskUrl());
+                recordingId, transcriptId, ENGINE_NAME, configuredEndpoint());
         ExtractedTranscriptAudio extractedAudio = audioExtractor.extractMonoPcmAudio(sourceVideoPath, transcriptId);
         try {
             return transcribe(extractedAudio, recordingId, transcriptId);
@@ -93,7 +103,7 @@ public class VoskRecordingTranscriptEngine implements RecordingTranscriptEngine 
                 throw new IllegalStateException("Unable to detect WAV sample rate for transcript generation");
             }
 
-            URI uri = URI.create(appProperties.transcript().voskUrl());
+            URI uri = URI.create(configuredEndpoint());
             log.info("Connecting to transcript engine recordingId={} transcriptId={} engine={} uri={} sampleRate={}",
                     recordingId, transcriptId, ENGINE_NAME, uri, sampleRate);
             VoskMessageCollector listener = new VoskMessageCollector();

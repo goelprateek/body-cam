@@ -21,6 +21,8 @@ import com.kriyanshtech.bodycam.recording.transcript.RecordingTranscriptGenerati
 import com.kriyanshtech.bodycam.recording.transcript.SessionTranscriptSummary;
 import com.kriyanshtech.bodycam.recording.transcript.TranscriptSegmentPayload;
 import com.kriyanshtech.bodycam.recording.transcript.TranscriptPostProcessingService;
+import com.kriyanshtech.bodycam.recording.transcript.TranscriptRecoveryDecision;
+import com.kriyanshtech.bodycam.recording.transcript.TranscriptRecoveryService;
 import com.kriyanshtech.bodycam.recording.transcript.TranscriptSummaryService;
 import com.kriyanshtech.bodycam.session.repository.LiveSessionRepository;
 import org.slf4j.Logger;
@@ -55,6 +57,7 @@ public class RecordingTranscriptService {
     private final LiveSessionRepository liveSessionRepository;
     private final TranscriptPostProcessingService transcriptPostProcessingService;
     private final TranscriptSummaryService transcriptSummaryService;
+    private final TranscriptRecoveryService transcriptRecoveryService;
 
     public RecordingTranscriptService(
             RecordingAssetRepository recordingAssetRepository,
@@ -64,6 +67,7 @@ public class RecordingTranscriptService {
             LiveSessionRepository liveSessionRepository,
             TranscriptPostProcessingService transcriptPostProcessingService,
             TranscriptSummaryService transcriptSummaryService,
+            TranscriptRecoveryService transcriptRecoveryService,
             List<RecordingTranscriptEngine> transcriptEngines) {
         this.recordingAssetRepository = recordingAssetRepository;
         this.recordingTranscriptRepository = recordingTranscriptRepository;
@@ -72,6 +76,7 @@ public class RecordingTranscriptService {
         this.liveSessionRepository = liveSessionRepository;
         this.transcriptPostProcessingService = transcriptPostProcessingService;
         this.transcriptSummaryService = transcriptSummaryService;
+        this.transcriptRecoveryService = transcriptRecoveryService;
         this.transcriptEngines = indexEngines(transcriptEngines);
     }
 
@@ -86,17 +91,18 @@ public class RecordingTranscriptService {
     }
 
     @Transactional
-    public RecordingTranscriptResponse generateTranscript(UUID recordingId) {
+    public RecordingTranscriptResponse generateTranscript(UUID recordingId, String requestedEngine) {
         assertTranscriptEnabled();
         RecordingAsset recording = recordingAssetRepository.findById(recordingId)
                 .orElseThrow(() -> new NotFoundException("Recording not found: " + recordingId));
-        RecordingTranscript transcript = enqueueTranscript(recording, true);
+        RecordingTranscript transcript = enqueueTranscript(recording, true, requestedEngine);
         log.info(
-                "Queued transcript generation recordingId={} transcriptId={} status={} engine={}",
+                "Queued transcript generation recordingId={} transcriptId={} status={} engine={} requestedEngine={}",
                 recordingId,
                 transcript.getId(),
                 transcript.getStatus(),
-                transcript.getEngine());
+                transcript.getEngine(),
+                requestedEngine);
         return map(transcript);
     }
 
@@ -106,15 +112,21 @@ public class RecordingTranscriptService {
         return aggregateSessionTranscript(sessionId, recordings);
     }
 
+    @Transactional(readOnly = true)
+    public SessionTranscriptResponse summarizeSessionTranscript(UUID sessionId) {
+        return getSessionTranscript(sessionId);
+    }
+
     @Transactional
-    public SessionTranscriptResponse generateSessionTranscript(UUID sessionId) {
+    public SessionTranscriptResponse generateSessionTranscript(UUID sessionId, String requestedEngine) {
         assertTranscriptEnabled();
         List<RecordingAsset> recordings = orderedSessionRecordings(sessionId);
         int queuedCount = 0;
-        log.info("Session transcript generation queued sessionId={} recordingCount={}", sessionId, recordings.size());
+        log.info("Session transcript generation queued sessionId={} recordingCount={} requestedEngine={}", sessionId,
+                recordings.size(), requestedEngine);
 
         for (RecordingAsset recording : recordings) {
-            RecordingTranscript transcript = enqueueTranscript(recording, true);
+            RecordingTranscript transcript = enqueueTranscript(recording, true, requestedEngine);
             if (transcript.getStatus() == RecordingTranscriptStatus.PENDING
                     || transcript.getStatus() == RecordingTranscriptStatus.PROCESSING) {
                 queuedCount++;
@@ -127,17 +139,17 @@ public class RecordingTranscriptService {
     }
 
     @Transactional
-    public SessionTranscriptResponse retryFailedSessionTranscript(UUID sessionId) {
+    public SessionTranscriptResponse retryFailedSessionTranscript(UUID sessionId, String requestedEngine) {
         assertTranscriptEnabled();
         List<RecordingAsset> recordings = orderedSessionRecordings(sessionId);
         int retriedCount = 0;
-        log.info("Retrying failed or missing session transcript work sessionId={} recordingCount={}", sessionId,
-                recordings.size());
+        log.info("Retrying failed or missing session transcript work sessionId={} recordingCount={} requestedEngine={}",
+                sessionId, recordings.size(), requestedEngine);
 
         for (RecordingAsset recording : recordings) {
             RecordingTranscript transcript = recording.getTranscript();
             if (transcript == null || transcript.getStatus() == RecordingTranscriptStatus.FAILED) {
-                enqueueTranscript(recording, true);
+                enqueueTranscript(recording, true, requestedEngine);
                 retriedCount++;
             }
         }
@@ -275,7 +287,7 @@ public class RecordingTranscriptService {
             return;
         }
 
-        RecordingTranscriptEngine engine = requiredEngine();
+        RecordingTranscriptEngine engine = requiredEngine(transcript.getEngine());
         transcript.setEngine(engine.key());
         transcript.setLanguageCode(appProperties.transcript().languageCode());
         transcript.setUpdatedAt(Instant.now());
@@ -290,19 +302,22 @@ public class RecordingTranscriptService {
                 transcript.getRecording().getObjectKey(),
                 engine.key());
 
+        RecordingTranscriptProcessingStage failureStage = RecordingTranscriptProcessingStage.TRANSCRIBING;
         try {
             sourceVideoPath = downloadRecordingToTempFile(transcript.getRecording());
             RecordingTranscriptGenerationResult result = engine.generate(sourceVideoPath, recordingId,
                     transcript.getId());
             updateProcessingStage(transcript.getId(), RecordingTranscriptProcessingStage.TRANSCRIBED);
+            failureStage = RecordingTranscriptProcessingStage.PUNCTUATED;
             List<TranscriptSegmentPayload> punctuatedSegments = transcriptPostProcessingService.punctuate(result);
             updateProcessingStage(transcript.getId(), RecordingTranscriptProcessingStage.PUNCTUATED);
+            failureStage = RecordingTranscriptProcessingStage.FINALIZED;
             ProcessedTranscriptResult processedResult = transcriptPostProcessingService
                     .finalizeTranscript(result, punctuatedSegments);
 
             finalizeTranscriptSuccess(transcript.getId(), result, processedResult);
         } catch (Exception exception) {
-            finalizeTranscriptFailure(transcript.getId(), engine.key(), exception);
+            finalizeTranscriptFailure(transcript.getId(), engine.key(), failureStage, exception);
         } finally {
             deleteIfExists(sourceVideoPath);
         }
@@ -323,6 +338,8 @@ public class RecordingTranscriptService {
         transcript.replaceSegments(toSegments(transcript, processedResult.segments(), Instant.now()));
         transcript.setStatus(RecordingTranscriptStatus.READY);
         transcript.setProcessingStage(RecordingTranscriptProcessingStage.FINALIZED);
+        transcript.setLastErrorStage(null);
+        transcript.setRetryCount(0);
         transcript.setErrorMessage(null);
         transcript.setCompletedAt(Instant.now());
         transcript.setLastStageAt(Instant.now());
@@ -337,27 +354,53 @@ public class RecordingTranscriptService {
     }
 
     @Transactional
-    protected void finalizeTranscriptFailure(UUID transcriptId, String engineKey, Exception exception) {
+    protected void finalizeTranscriptFailure(
+            UUID transcriptId,
+            String engineKey,
+            RecordingTranscriptProcessingStage failureStage,
+            Exception exception) {
         RecordingTranscript transcript = recordingTranscriptRepository.findById(transcriptId)
                 .orElseThrow(() -> new NotFoundException("Transcript not found: " + transcriptId));
 
+        TranscriptRecoveryDecision decision = transcriptRecoveryService.evaluate(
+                transcript,
+                failureStage,
+                exception,
+                appProperties.transcript().maxRetryCount());
         transcript.replaceSegments(List.of());
-        transcript.setStatus(RecordingTranscriptStatus.FAILED);
-        transcript.setProcessingStage(RecordingTranscriptProcessingStage.FAILED);
-        transcript.setErrorMessage(exception.getMessage());
-        transcript.setCompletedAt(Instant.now());
+        transcript.setStatus(decision.requeue() ? RecordingTranscriptStatus.PENDING : RecordingTranscriptStatus.FAILED);
+        transcript.setProcessingStage(decision.requeue()
+                ? RecordingTranscriptProcessingStage.QUEUED
+                : RecordingTranscriptProcessingStage.FAILED);
+        transcript.setLastErrorStage(decision.failureStage());
+        transcript.setRetryCount(decision.nextRetryCount());
+        transcript.setErrorMessage(decision.errorMessage());
+        transcript.setCompletedAt(decision.requeue() ? null : Instant.now());
         transcript.setLastStageAt(Instant.now());
         transcript.setUpdatedAt(Instant.now());
         recordingTranscriptRepository.save(transcript);
-        log.error(
-                "Transcript generation failed recordingId={} transcriptId={} engine={}",
-                transcript.getRecording().getId(),
-                transcript.getId(),
-                engineKey,
-                exception);
+        if (decision.requeue()) {
+            log.warn(
+                    "Transcript generation failed but was requeued recordingId={} transcriptId={} engine={} failureStage={} retryCount={}",
+                    transcript.getRecording().getId(),
+                    transcript.getId(),
+                    engineKey,
+                    decision.failureStage(),
+                    decision.nextRetryCount(),
+                    exception);
+        } else {
+            log.error(
+                    "Transcript generation failed recordingId={} transcriptId={} engine={} failureStage={} retryCount={}",
+                    transcript.getRecording().getId(),
+                    transcript.getId(),
+                    engineKey,
+                    decision.failureStage(),
+                    decision.nextRetryCount(),
+                    exception);
+        }
     }
 
-    private RecordingTranscript enqueueTranscript(RecordingAsset recording, boolean forceRegeneration) {
+    private RecordingTranscript enqueueTranscript(RecordingAsset recording, boolean forceRegeneration, String requestedEngine) {
         RecordingTranscript transcript = recordingTranscriptRepository.findByRecording_Id(recording.getId())
                 .orElseGet(() -> createTranscript(recording));
 
@@ -372,13 +415,16 @@ public class RecordingTranscriptService {
         }
 
         Instant now = Instant.now();
+        String resolvedEngine = requiredEngine(requestedEngine).key();
         transcript.setStatus(RecordingTranscriptStatus.PENDING);
-        transcript.setEngine(requiredEngine().key());
+        transcript.setEngine(resolvedEngine);
         transcript.setModel(null);
         transcript.setLanguageCode(appProperties.transcript().languageCode());
         transcript.setFullText(null);
         transcript.setErrorMessage(null);
         transcript.setProcessingStage(RecordingTranscriptProcessingStage.QUEUED);
+        transcript.setLastErrorStage(null);
+        transcript.setRetryCount(0);
         transcript.setStartedAt(null);
         transcript.setCompletedAt(null);
         transcript.setLastStageAt(now);
@@ -470,6 +516,11 @@ public class RecordingTranscriptService {
             status = RecordingTranscriptStatus.READY;
         }
 
+        aggregateSegments = transcriptPostProcessingService.finalizeSessionSegments(
+                aggregateSegments.stream()
+                        .sorted((left, right) -> left.startSeconds().compareTo(right.startSeconds()))
+                        .toList());
+
         String fullText = aggregateSegments.stream()
                 .map(SessionTranscriptSegmentResponse::text)
                 .filter(text -> text != null && !text.isBlank())
@@ -507,6 +558,8 @@ public class RecordingTranscriptService {
                 summary.keywords(),
                 errorMessage,
                 aggregateProcessingStage(recordings),
+                aggregateLastErrorStage(recordings),
+                aggregateRetryCount(recordings),
                 aggregateLastStageAt(recordings),
                 startedAt,
                 completedAt,
@@ -542,6 +595,8 @@ public class RecordingTranscriptService {
                 status,
                 transcript != null ? transcript.getErrorMessage() : null,
                 transcript != null ? transcript.getProcessingStage() : null,
+                transcript != null ? transcript.getLastErrorStage() : null,
+                transcript != null ? transcript.getRetryCount() : 0,
                 transcript != null ? transcript.getLastStageAt() : null,
                 transcript != null ? transcript.getStartedAt() : null,
                 transcript != null ? transcript.getCompletedAt() : null,
@@ -586,8 +641,10 @@ public class RecordingTranscriptService {
         return indexed;
     }
 
-    private RecordingTranscriptEngine requiredEngine() {
-        String configuredEngine = appProperties.transcript().engine();
+    private RecordingTranscriptEngine requiredEngine(String requestedEngine) {
+        String configuredEngine = requestedEngine != null && !requestedEngine.isBlank()
+                ? requestedEngine
+                : appProperties.transcript().engine();
         if (configuredEngine == null || configuredEngine.isBlank()) {
             throw new IllegalStateException("Transcript engine is not configured");
         }
@@ -618,6 +675,8 @@ public class RecordingTranscriptService {
                 null,
                 null,
                 null,
+                0,
+                null,
                 null,
                 null,
                 null,
@@ -631,6 +690,7 @@ public class RecordingTranscriptService {
         transcript.setId(UUID.randomUUID());
         transcript.setRecording(recording);
         transcript.setStatus(RecordingTranscriptStatus.PENDING);
+        transcript.setRetryCount(0);
         transcript.setCreatedAt(now);
         transcript.setUpdatedAt(now);
         return transcript;
@@ -702,6 +762,8 @@ public class RecordingTranscriptService {
                 transcript.getFullText(),
                 transcript.getErrorMessage(),
                 transcript.getProcessingStage(),
+                transcript.getLastErrorStage(),
+                transcript.getRetryCount(),
                 transcript.getLastStageAt(),
                 transcript.getStartedAt(),
                 transcript.getCompletedAt(),
@@ -779,5 +841,33 @@ public class RecordingTranscriptService {
             latestStageAt = latest(latestStageAt, transcript.getLastStageAt());
         }
         return latestStageAt;
+    }
+
+    private RecordingTranscriptProcessingStage aggregateLastErrorStage(List<RecordingAsset> recordings) {
+        RecordingTranscriptProcessingStage latestErrorStage = null;
+        Instant latestStageAt = null;
+        for (RecordingAsset recording : recordings) {
+            RecordingTranscript transcript = recording.getTranscript();
+            if (transcript == null || transcript.getLastErrorStage() == null || transcript.getLastStageAt() == null) {
+                continue;
+            }
+            if (latestStageAt == null || transcript.getLastStageAt().isAfter(latestStageAt)) {
+                latestStageAt = transcript.getLastStageAt();
+                latestErrorStage = transcript.getLastErrorStage();
+            }
+        }
+        return latestErrorStage;
+    }
+
+    private Integer aggregateRetryCount(List<RecordingAsset> recordings) {
+        int totalRetryCount = 0;
+        for (RecordingAsset recording : recordings) {
+            RecordingTranscript transcript = recording.getTranscript();
+            if (transcript == null || transcript.getRetryCount() == null) {
+                continue;
+            }
+            totalRetryCount += transcript.getRetryCount();
+        }
+        return totalRetryCount;
     }
 }

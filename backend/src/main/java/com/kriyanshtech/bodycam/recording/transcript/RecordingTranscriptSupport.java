@@ -31,10 +31,44 @@ final class RecordingTranscriptSupport {
     }
 
     static void deleteIfExists(Logger log, Path path, String label) {
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException exception) {
-            log.warn("Failed to delete temporary transcript {} file {}", label, path, exception);
+        if (path == null) {
+            return;
+        }
+
+        final int maxAttempts = 5;
+        final long baseDelayMs = 250;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                Files.deleteIfExists(path);
+                return;
+            } catch (IOException exception) {
+
+                // Last attempt → log warning
+                if (attempt == maxAttempts) {
+                    log.warn(
+                            "Failed to delete temporary transcript {} file {} after {} attempts",
+                            label,
+                            path,
+                            maxAttempts,
+                            exception);
+                    return;
+                }
+
+                // Wait before retry (exponential-ish backoff)
+                try {
+                    Thread.sleep(baseDelayMs * attempt);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+
+                    log.warn(
+                            "Interrupted while deleting temporary transcript {} file {}",
+                            label,
+                            path,
+                            interruptedException);
+                    return;
+                }
+            }
         }
     }
 }

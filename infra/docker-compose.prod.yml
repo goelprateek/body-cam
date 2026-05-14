@@ -15,3 +15,4 @@ volumes:
   minio_data:
   backend_logs:
   livekit_config:
+  transcript_data:

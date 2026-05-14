@@ -17,6 +17,8 @@ public record RecordingTranscriptResponse(
         String fullText,
         String errorMessage,
         RecordingTranscriptProcessingStage processingStage,
+        RecordingTranscriptProcessingStage lastErrorStage,
+        Integer retryCount,
         Instant lastStageAt,
         Instant startedAt,
         Instant completedAt,

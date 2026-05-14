@@ -5,20 +5,25 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kriyanshtech.bodycam.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.HttpRequest.BodyPublisher;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -29,7 +34,6 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
     private final RecordingTranscriptAudioExtractor audioExtractor;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
 
     public FasterWhisperRecordingTranscriptEngine(
             RecordingTranscriptAudioExtractor audioExtractor,
@@ -38,12 +42,22 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
         this.audioExtractor = audioExtractor;
         this.appProperties = appProperties;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder().build();
     }
 
     @Override
     public String key() {
         return ENGINE_NAME;
+    }
+
+    @Override
+    public String label() {
+        return "Faster Whisper";
+    }
+
+    @Override
+    public String configuredEndpoint() {
+        AppProperties.FasterWhisper config = appProperties.transcript().fasterWhisper();
+        return config != null ? config.url() : null;
     }
 
     @Override
@@ -69,24 +83,10 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
             UUID recordingId,
             UUID transcriptId,
             AppProperties.FasterWhisper config) throws Exception {
-        String boundary = "bodycam-transcript-" + transcriptId;
         log.info("Posting transcript audio to engine recordingId={} transcriptId={} engine={} uri={} timeoutSeconds={}",
                 recordingId, transcriptId, ENGINE_NAME, config.url(), config.timeoutSeconds());
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(config.url()))
-                .timeout(Duration.ofSeconds(config.timeoutSeconds()))
-                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                .POST(buildMultipartBody(boundary, extractedAudio.wavPath(), config))
-                .build();
-
-        HttpResponse<String> response = httpClient.send(request,
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IllegalStateException("faster-whisper transcription failed: HTTP " + response.statusCode() + " - "
-                    + RecordingTranscriptSupport.trimMessage(response.body()));
-        }
-
-        JsonNode payload = objectMapper.readTree(response.body());
+        String responseBody = postMultipartRequest(extractedAudio.wavPath(), config);
+        JsonNode payload = objectMapper.readTree(responseBody);
         if (payload.hasNonNull("error")) {
             JsonNode errorNode = payload.path("error");
             if (errorNode.isTextual()) {
@@ -136,32 +136,60 @@ public class FasterWhisperRecordingTranscriptEngine implements RecordingTranscri
         return config;
     }
 
-    private BodyPublisher buildMultipartBody(String boundary, Path wavPath, AppProperties.FasterWhisper config)
-            throws IOException {
-        return HttpRequest.BodyPublishers.concat(
-                textPart(boundary, "model", config.model()),
-                textPart(boundary, "language", appProperties.transcript().languageCode()),
-                textPart(boundary, "task", config.task()),
-                textPart(boundary, "response_format", "verbose_json"),
-                textPart(boundary, "timestamp_granularities[]", "segment"),
-                fileHeaderPart(boundary),
-                HttpRequest.BodyPublishers.ofFile(wavPath),
-                HttpRequest.BodyPublishers
-                        .ofByteArray(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8)));
+    private String postMultipartRequest(Path wavPath, AppProperties.FasterWhisper config) {
+        RestTemplate restTemplate = createRestTemplate(config.timeoutSeconds());
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("model", config.model());
+        body.add("language", normalizedLanguageCode(appProperties.transcript().languageCode()));
+        body.add("task", config.task());
+        body.add("response_format", "verbose_json");
+        body.add("timestamp_granularities[]", "segment");
+        body.add("file", audioFilePart(wavPath));
+
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    config.url(),
+                    new HttpEntity<>(body, headers),
+                    String.class);
+            return response.getBody() == null ? "" : response.getBody();
+        } catch (HttpStatusCodeException exception) {
+            throw new IllegalStateException(
+                    "faster-whisper transcription failed: HTTP " + exception.getStatusCode().value() + " - "
+                            + RecordingTranscriptSupport.trimMessage(exception.getResponseBodyAsString()),
+                    exception);
+        }
     }
 
-    private BodyPublisher textPart(String boundary, String name, String value) {
-        String part = "--" + boundary + "\r\n"
-                + "Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n"
-                + value + "\r\n";
-        return HttpRequest.BodyPublishers.ofByteArray(part.getBytes(StandardCharsets.UTF_8));
+    private HttpEntity<FileSystemResource> audioFilePart(Path wavPath) {
+        HttpHeaders partHeaders = new HttpHeaders();
+        partHeaders.setContentType(MediaType.parseMediaType("audio/wav"));
+        return new HttpEntity<>(new FileSystemResource(wavPath), partHeaders);
     }
 
-    private BodyPublisher fileHeaderPart(String boundary) {
-        String header = "--" + boundary + "\r\n"
-                + "Content-Disposition: form-data; name=\"file\"; filename=\"transcript.wav\"\r\n"
-                + "Content-Type: audio/wav\r\n\r\n";
-        return HttpRequest.BodyPublishers.ofByteArray(header.getBytes(StandardCharsets.UTF_8));
+    private RestTemplate createRestTemplate(long timeoutSeconds) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        int timeoutMillis = Math.toIntExact(Duration.ofSeconds(timeoutSeconds).toMillis());
+        requestFactory.setConnectTimeout(timeoutMillis);
+        requestFactory.setReadTimeout(timeoutMillis);
+        return new RestTemplate(requestFactory);
+    }
+
+    private String normalizedLanguageCode(String languageCode) {
+        if (languageCode == null || languageCode.isBlank()) {
+            return "auto";
+        }
+        String normalized = languageCode.trim();
+        int separatorIndex = normalized.indexOf('-');
+        if (separatorIndex < 0) {
+            separatorIndex = normalized.indexOf('_');
+        }
+        if (separatorIndex > 0) {
+            normalized = normalized.substring(0, separatorIndex);
+        }
+        return normalized.toLowerCase(Locale.ROOT);
     }
 
     private List<TranscriptSegmentPayload> parseSegments(JsonNode payload) {

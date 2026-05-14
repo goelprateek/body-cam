@@ -105,6 +105,8 @@ export interface RecordingTranscriptResponse {
   fullText: string | null;
   errorMessage: string | null;
   processingStage: RecordingTranscriptProcessingStage | null;
+  lastErrorStage: RecordingTranscriptProcessingStage | null;
+  retryCount: number;
   lastStageAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -214,6 +216,8 @@ export interface SessionTranscriptRecordingResponse {
   status: RecordingTranscriptStatus;
   errorMessage: string | null;
   processingStage: RecordingTranscriptProcessingStage | null;
+  lastErrorStage: RecordingTranscriptProcessingStage | null;
+  retryCount: number;
   lastStageAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -237,6 +241,8 @@ export interface SessionTranscriptResponse {
   keywords: string[];
   errorMessage: string | null;
   processingStage: RecordingTranscriptProcessingStage | null;
+  lastErrorStage: RecordingTranscriptProcessingStage | null;
+  retryCount: number;
   lastStageAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -286,6 +292,16 @@ export interface TranscriptSmokeCheckResponse {
   engine: string | null;
   endpoint: string | null;
   pollDelayMs: number;
+  maxRetryCount: number;
+  availableEngines: TranscriptEngineOptionResponse[];
   checks: string[];
   warnings: string[];
+}
+
+export interface TranscriptEngineOptionResponse {
+  key: string;
+  label: string;
+  configuredDefault: boolean;
+  ready: boolean;
+  endpoint: string | null;
 }

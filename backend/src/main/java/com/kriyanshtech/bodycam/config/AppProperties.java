@@ -41,7 +41,9 @@ public record AppProperties(
             String voskUrl,
             String languageCode,
             long pollDelayMs,
-            FasterWhisper fasterWhisper
+            int maxRetryCount,
+            FasterWhisper fasterWhisper,
+            Summary summary
     ) {
     }
 
@@ -50,6 +52,12 @@ public record AppProperties(
             String model,
             String task,
             long timeoutSeconds
+    ) {
+    }
+
+    public record Summary(
+            boolean aiEnabled,
+            int aiMaxInputChars
     ) {
     }
 }

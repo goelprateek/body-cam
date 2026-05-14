@@ -52,6 +52,13 @@ public class RecordingTranscript {
     @Column(name = "processing_stage", length = 32)
     private RecordingTranscriptProcessingStage processingStage;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_error_stage", length = 32)
+    private RecordingTranscriptProcessingStage lastErrorStage;
+
+    @Column(name = "retry_count", nullable = false)
+    private Integer retryCount = 0;
+
     @Column(name = "last_stage_at")
     private Instant lastStageAt;
 
@@ -141,6 +148,22 @@ public class RecordingTranscript {
 
     public void setProcessingStage(RecordingTranscriptProcessingStage processingStage) {
         this.processingStage = processingStage;
+    }
+
+    public RecordingTranscriptProcessingStage getLastErrorStage() {
+        return lastErrorStage;
+    }
+
+    public void setLastErrorStage(RecordingTranscriptProcessingStage lastErrorStage) {
+        this.lastErrorStage = lastErrorStage;
+    }
+
+    public Integer getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(Integer retryCount) {
+        this.retryCount = retryCount;
     }
 
     public Instant getLastStageAt() {

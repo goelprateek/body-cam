@@ -24,23 +24,74 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test:
-        [
-          "CMD",
-          "curl",
-          "-f",
-          "http://127.0.0.1:9000/minio/health/live",
-        ]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 20s
     restart: unless-stopped
 
-  vosk:
-    image: ${TRANSCRIPT_IMAGE:-alphacep/kaldi-en:latest}
+  faster-whisper:
+    image: ${TRANSCRIPT_IMAGE:-hwdsl2/whisper-server:latest}
+    depends_on:
+      faster-whisper-model-sync:
+        condition: service_completed_successfully
+    environment:
+      WHISPER_MODEL: ${TRANSCRIPT_MODEL:-base}
+      WHISPER_LANGUAGE: ${TRANSCRIPT_LANGUAGE:-auto}
+      WHISPER_DEVICE: ${TRANSCRIPT_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${TRANSCRIPT_COMPUTE_TYPE:-int8}
+      WHISPER_THREADS: ${TRANSCRIPT_THREADS:-2}
+      WHISPER_LOCAL_ONLY: ${TRANSCRIPT_LOCAL_ONLY:-true}
     ports:
-      - "${TRANSCRIPT_PORT:-2700}:2700"
+      - "${TRANSCRIPT_PORT:-9000}:9000"
+    volumes:
+      - transcript_data:/var/lib/whisper
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python3 -c "import socket; s = socket.create_connection((''127.0.0.1'', 9000), 5); s.close()"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  faster-whisper-model-sync:
+    image: ${TRANSCRIPT_IMAGE:-hwdsl2/whisper-server:latest}
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        unset WHISPER_LOCAL_ONLY
+
+        MODEL="${TRANSCRIPT_MODEL:-base}";
+        CACHE_MATCH=$$(find /var/lib/whisper -maxdepth 1 -type d -name "models--Systran--faster-whisper-$${MODEL}*" | head -n 1);
+        if [ -n "$${CACHE_MATCH}" ]; then
+          echo "Whisper model cache already present for $${MODEL} at $${CACHE_MATCH}";
+          exit 0;
+        fi;
+        whisper_manage --downloadmodel "$${MODEL}"
+    volumes:
+      - transcript_data:/var/lib/whisper
+    restart: "no"
+
+  vosk:
+    image: ${VOSK_IMAGE:-alphacep/kaldi-en:latest}
+    ports:
+      - "${VOSK_PORT:-2700}:2700"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python3 -c "import socket; s = socket.create_connection((''127.0.0.1'', 2700), 5); s.close()"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   livekit:

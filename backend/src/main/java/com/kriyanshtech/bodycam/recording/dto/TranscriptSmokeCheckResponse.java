@@ -5,9 +5,11 @@ import java.util.List;
 public record TranscriptSmokeCheckResponse(
         boolean ready,
         boolean enabled,
-        String configuredEngine,
-        String configuredEndpoint,
+        String engine,
+        String endpoint,
         long pollDelayMs,
+        int maxRetryCount,
+        java.util.List<TranscriptEngineOptionResponse> availableEngines,
         List<String> checks,
         List<String> warnings
 ) {
