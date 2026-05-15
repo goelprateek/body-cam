@@ -16,6 +16,6 @@ public interface RecordingTranscriptRepository extends JpaRepository<RecordingTr
     @EntityGraph(attributePaths = {"recording", "recording.metadata", "recording.session", "segments"})
     Optional<RecordingTranscript> findById(UUID transcriptId);
 
-    @EntityGraph(attributePaths = {"recording", "recording.metadata", "recording.session", "segments"})
+    @EntityGraph(attributePaths = {"recording", "recording.metadata", "recording.session"})
     Optional<RecordingTranscript> findFirstByStatusOrderByCreatedAtAsc(RecordingTranscriptStatus status);
 }

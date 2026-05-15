@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -23,7 +23,7 @@ import {
   templateUrl: './transcript-review-page.component.html',
   styleUrl: './transcript-review-page.component.scss'
 })
-export class TranscriptReviewPageComponent {
+export class TranscriptReviewPageComponent implements OnDestroy {
   readonly api = inject(OperatorApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -38,9 +38,15 @@ export class TranscriptReviewPageComponent {
   readonly isGenerating = signal(false);
   readonly isRetryingFailed = signal(false);
   readonly isRetryingRecordingId = signal<string | null>(null);
+  private transcriptPollHandle: ReturnType<typeof setTimeout> | null = null;
+  private transcriptPollToken = 0;
 
   constructor() {
     void this.loadPage();
+  }
+
+  ngOnDestroy(): void {
+    this.clearTranscriptPolling();
   }
 
   statusLabel(status?: RecordingTranscriptStatus | null): string {
@@ -140,10 +146,14 @@ export class TranscriptReviewPageComponent {
       return;
     }
 
+    const requestedEngine = this.selectedEngine();
     this.isGenerating.set(true);
     try {
-      await this.api.generateSessionTranscript(this.sessionId, this.selectedEngine());
-      await this.refreshSessionData();
+      const transcript = await this.api.generateSessionTranscript(this.sessionId, requestedEngine);
+      this.transcript.set(transcript);
+      this.preserveRequestedEngine(requestedEngine, transcript);
+      await this.refreshTimeline();
+      this.startTranscriptPolling(requestedEngine);
     } catch (error) {
       this.showError(this.api.explainError(error));
     } finally {
@@ -156,10 +166,14 @@ export class TranscriptReviewPageComponent {
       return;
     }
 
+    const requestedEngine = this.selectedEngine();
     this.isRetryingFailed.set(true);
     try {
-      await this.api.retryFailedSessionTranscript(this.sessionId, this.selectedEngine());
-      await this.refreshSessionData();
+      const transcript = await this.api.retryFailedSessionTranscript(this.sessionId, requestedEngine);
+      this.transcript.set(transcript);
+      this.preserveRequestedEngine(requestedEngine, transcript);
+      await this.refreshTimeline();
+      this.startTranscriptPolling(requestedEngine);
     } catch (error) {
       this.showError(this.api.explainError(error));
     } finally {
@@ -168,10 +182,13 @@ export class TranscriptReviewPageComponent {
   }
 
   async retryRecording(recording: SessionTranscriptRecordingResponse): Promise<void> {
+    const requestedEngine = this.selectedEngine();
     this.isRetryingRecordingId.set(recording.recordingId);
     try {
-      await this.api.generateRecordingTranscript(recording.recordingId, this.selectedEngine());
+      await this.api.generateRecordingTranscript(recording.recordingId, requestedEngine);
       await this.refreshSessionData();
+      this.preserveRequestedEngine(requestedEngine, this.transcript());
+      this.startTranscriptPolling(requestedEngine);
     } catch (error) {
       this.showError(this.api.explainError(error));
     } finally {
@@ -200,7 +217,7 @@ export class TranscriptReviewPageComponent {
       this.engineOptions.set(engineOptions);
       this.transcript.set(transcript);
       this.timeline.set(timeline);
-      this.selectedEngine.set(transcript.engine ?? engineOptions.find((option) => option.configuredDefault)?.key ?? null);
+      this.selectedEngine.set(this.resolvePreferredEngine(engineOptions, transcript.engine, this.selectedEngine()));
     } catch (error) {
       this.showError(this.api.explainError(error));
       void this.router.navigate(['/recordings']);
@@ -216,7 +233,88 @@ export class TranscriptReviewPageComponent {
     ]);
     this.transcript.set(transcript);
     this.timeline.set(timeline);
-    this.selectedEngine.set(transcript.engine ?? this.selectedEngine());
+    this.selectedEngine.set(this.resolvePreferredEngine(this.engineOptions(), transcript.engine, this.selectedEngine()));
+  }
+
+  private async refreshTimeline(): Promise<void> {
+    const timeline = await this.api.getSessionRecordingTimeline(this.sessionId);
+    this.timeline.set(timeline);
+  }
+
+  private resolvePreferredEngine(
+    engineOptions: TranscriptEngineOptionResponse[],
+    transcriptEngine: string | null | undefined,
+    currentSelection: string | null
+  ): string | null {
+    const availableEngines = new Set(engineOptions.filter((option) => option.ready).map((option) => option.key));
+    if (currentSelection && availableEngines.has(currentSelection)) {
+      return currentSelection;
+    }
+
+    if (transcriptEngine && availableEngines.has(transcriptEngine)) {
+      return transcriptEngine;
+    }
+
+    return engineOptions.find((option) => option.ready && option.configuredDefault)?.key
+      ?? engineOptions.find((option) => option.ready)?.key
+      ?? null;
+  }
+
+  private preserveRequestedEngine(
+    requestedEngine: string | null,
+    transcript: SessionTranscriptResponse | null
+  ): void {
+    this.selectedEngine.set(this.resolvePreferredEngine(this.engineOptions(), transcript?.engine, requestedEngine));
+  }
+
+  private startTranscriptPolling(requestedEngine: string | null): void {
+    this.clearTranscriptPolling();
+    const pollToken = ++this.transcriptPollToken;
+    void this.pollTranscriptUntilSettled(pollToken, requestedEngine, 12);
+  }
+
+  private async pollTranscriptUntilSettled(
+    pollToken: number,
+    requestedEngine: string | null,
+    remainingAttempts: number
+  ): Promise<void> {
+    if (remainingAttempts <= 0 || pollToken !== this.transcriptPollToken) {
+      return;
+    }
+
+    this.transcriptPollHandle = setTimeout(async () => {
+      if (pollToken !== this.transcriptPollToken) {
+        return;
+      }
+
+      try {
+        await this.refreshSessionData();
+        this.preserveRequestedEngine(requestedEngine, this.transcript());
+      } catch (error) {
+        this.showError(this.api.explainError(error));
+        this.clearTranscriptPolling();
+        return;
+      }
+
+      const transcript = this.transcript();
+      if (!transcript || !this.isTranscriptPending(transcript.status)) {
+        this.clearTranscriptPolling();
+        return;
+      }
+
+      void this.pollTranscriptUntilSettled(pollToken, requestedEngine, remainingAttempts - 1);
+    }, 2000);
+  }
+
+  private isTranscriptPending(status: RecordingTranscriptStatus | null | undefined): boolean {
+    return status === 'PENDING' || status === 'PROCESSING';
+  }
+
+  private clearTranscriptPolling(): void {
+    if (this.transcriptPollHandle != null) {
+      clearTimeout(this.transcriptPollHandle);
+      this.transcriptPollHandle = null;
+    }
   }
 
   private formatDuration(totalSeconds: number | null): string {

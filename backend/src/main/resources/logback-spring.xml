@@ -43,7 +43,6 @@
         <logger name="org.hibernate.SQL" level="WARN"/>
         <root level="${ROOT_LOG_LEVEL}">
             <appender-ref ref="CONSOLE"/>
-            <appender-ref ref="ASYNC_FILE"/>
         </root>
     </springProfile>
 

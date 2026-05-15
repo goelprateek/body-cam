@@ -309,8 +309,9 @@
 
     <!-- Transcript Panel -->
     <mat-card class="panel evidence-transcript-panel glass-panel" appearance="outlined">
-      <div class="evidence-header premium-head">
-        <div class="viewer-head-copy">
+      <div class="transcript-panel-head">
+        <div class="transcript-panel-copy">
+          <span class="transcript-panel-kicker">Session Transcript</span>
           <div class="transcript-title-row">
             <h2>Transcript</h2>
             @if (selectedSessionTranscript()) {
@@ -322,16 +323,8 @@
           <p class="viewer-caption">{{ transcriptPanelHint() }}</p>
         </div>
 
-        <div class="evidence-actions">
-          @if (selectedSession()) {
-            <button
-              mat-stroked-button
-              type="button"
-              class="premium-btn premium-btn-secondary compact-btn"
-              (click)="openTranscriptReview()"
-            >
-              Review
-            </button>
+        @if (selectedSession()) {
+          <div class="transcript-panel-actions">
             <button
               mat-flat-button
               type="button"
@@ -350,9 +343,40 @@
             >
               {{ isTranscriptSummaryLoading() ? 'Summarizing...' : 'Summarize' }}
             </button>
+            <button
+              mat-stroked-button
+              type="button"
+              class="premium-btn premium-btn-secondary compact-btn"
+              (click)="openTranscriptReview()"
+            >
+              Review
+            </button>
+          </div>
+        }
+      </div>
+
+      @if (selectedSessionTranscript()) {
+        <div class="transcript-status-strip">
+          <span class="transcript-stat-chip">
+            <strong>Engine</strong>
+            <span>{{ transcriptEngineLabel() }}</span>
+          </span>
+          <span class="transcript-stat-chip">
+            <strong>Clips</strong>
+            <span>{{ selectedSessionTranscript()?.totalRecordings || 0 }}</span>
+          </span>
+          <span class="transcript-stat-chip">
+            <strong>Lines</strong>
+            <span>{{ selectedSessionTranscript()?.segments?.length || 0 }}</span>
+          </span>
+          @if (selectedSessionTranscript()?.status === 'READY' && shouldShowTranscriptSummary()) {
+            <span class="transcript-stat-chip transcript-stat-chip-accent">
+              <strong>Summary</strong>
+              <span>Available</span>
+            </span>
           }
         </div>
-      </div>
+      }
 
       <div class="transcript-content-area premium-scroll">
         @if (isTranscriptLoading()) {
@@ -401,6 +425,10 @@
               } @else if (selectedSessionTranscript()?.segments?.length) {
                 @if (showTranscriptSummary() && (selectedSessionTranscript()?.shortSummary || selectedSessionTranscript()?.incidentSummary || selectedSessionTranscript()?.keywords?.length)) {
                   <div class="transcript-summary-card">
+                    <div class="transcript-summary-head">
+                      <mat-icon>auto_awesome</mat-icon>
+                      <strong>Summary Snapshot</strong>
+                    </div>
                     @if (selectedSessionTranscript()?.shortSummary) {
                       <div class="transcript-summary-block">
                         <strong>Summary</strong>
@@ -434,13 +462,15 @@
                       class="transcript-segment"
                       [class.transcript-segment-active]="segment.id === activeTranscriptSegmentId()"
                     >
-                      <button
-                        type="button"
-                        class="transcript-seek-time"
-                        (click)="seekToTranscriptSegment(segment)"
-                      >
-                        {{ formatSegmentTime(segment) }}
-                      </button>
+                      <div class="segment-rail">
+                        <button
+                          type="button"
+                          class="transcript-seek-time"
+                          (click)="seekToTranscriptSegment(segment)"
+                        >
+                          {{ formatSegmentTime(segment) }}
+                        </button>
+                      </div>
                       <div class="segment-copy">
                         <span class="segment-text">{{ segment.text }}</span>
                       </div>

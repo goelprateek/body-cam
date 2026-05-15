@@ -18,8 +18,11 @@ repositories {
     mavenCentral()
 }
 
+ext {
+  set('springAiVersion', "2.0.0-M6")
+}
+
 dependencies {
-    implementation platform('org.springframework.ai:spring-ai-bom:1.1.6')
 
     // Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -52,6 +55,12 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+dependencyManagement {
+  imports {
+    mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+  }
 }
 
 tasks.named('test') {

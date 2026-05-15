@@ -258,7 +258,8 @@ public class TranscriptSummaryService {
         return summary.length() > 320 ? summary.substring(0, 317).trim() + "..." : summary;
     }
 
-    private String buildIncidentSummary(int recordingCount, int segmentCount, List<String> keywords, String shortSummary) {
+    private String buildIncidentSummary(int recordingCount, int segmentCount, List<String> keywords,
+            String shortSummary) {
         StringBuilder builder = new StringBuilder();
         builder.append("Session coverage spans ")
                 .append(recordingCount)
@@ -281,7 +282,6 @@ public class TranscriptSummaryService {
     private record TranscriptAiSummary(
             String shortSummary,
             String incidentSummary,
-            List<String> keywords
-    ) {
+            List<String> keywords) {
     }
 }

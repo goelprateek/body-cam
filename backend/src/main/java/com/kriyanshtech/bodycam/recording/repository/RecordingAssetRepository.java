@@ -17,11 +17,11 @@ import java.time.Instant;
 
 public interface RecordingAssetRepository extends JpaRepository<RecordingAsset, UUID> {
 
-    @EntityGraph(attributePaths = { "session", "metadata", "transcript", "transcript.segments" })
+    @EntityGraph(attributePaths = { "session", "metadata", "transcript" })
     @Query("SELECT r FROM RecordingAsset r ORDER BY r.createdAt DESC, r.id DESC")
     List<RecordingAsset> findFirstPage(Pageable pageable);
 
-    @EntityGraph(attributePaths = { "session", "metadata", "transcript", "transcript.segments" })
+    @EntityGraph(attributePaths = { "session", "metadata", "transcript" })
     @Query("SELECT r FROM RecordingAsset r WHERE r.createdAt < :cursorCreatedAt OR (r.createdAt = :cursorCreatedAt AND r.id < :cursorId) ORDER BY r.createdAt DESC, r.id DESC")
     List<RecordingAsset> findNextPage(@Param("cursorCreatedAt") Instant cursorCreatedAt,
             @Param("cursorId") UUID cursorId, Pageable pageable);
