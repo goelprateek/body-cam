@@ -5,6 +5,7 @@
     android:layout_height="match_parent"
     android:background="@color/screen_background"
     android:fillViewport="true"
+    android:fitsSystemWindows="true"
     android:overScrollMode="ifContentScrolls"
     android:scrollbars="none">
 
@@ -14,7 +15,7 @@
         android:orientation="vertical"
         android:paddingHorizontal="24dp"
         android:paddingTop="20dp"
-        android:paddingBottom="28dp">
+        android:paddingBottom="100dp">
 
         <LinearLayout
             android:id="@+id/loginLayout"

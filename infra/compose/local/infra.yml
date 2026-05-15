@@ -2,7 +2,7 @@ services:
   livekit-config:
     image: bash:5.2
     command:
-      - /bin/bash
+      - bash
       - /repo/scripts/deploy/render-livekit-config.sh
       - /repo
       - infra/.env.local

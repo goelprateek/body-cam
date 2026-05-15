@@ -125,6 +125,14 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        binding.referenceNumberInput.setOnFocusChangeListener { v, hasFocus ->
+            if (hasFocus) {
+                v.postDelayed({
+                    binding.root.smoothScrollTo(0, binding.referenceNumberLayout.top)
+                }, 200)
+            }
+        }
+
         binding.flipCameraIcon.setOnClickListener {
             viewModel.flipCamera()
         }
