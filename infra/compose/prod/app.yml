@@ -18,6 +18,8 @@ services:
         condition: service_healthy
       faster-whisper:
         condition: service_healthy
+      vosk:
+        condition: service_healthy
     networks:
       - private
       - proxy

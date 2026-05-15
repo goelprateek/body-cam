@@ -7,6 +7,7 @@ The stack now uses the same split pattern as MeterManagement, but kept under `in
 - `compose/local/db.yml` and `compose/prod/db.yml` for data-layer services like PostgreSQL and Redis
 - `compose/local/infra.yml` and `compose/prod/infra.yml` for infrastructure services like MinIO, LiveKit, LiveKit config rendering, coturn, and transcript services such as `faster-whisper`
   - the local stack also includes a `vosk` service on port `2700` so transcript engine switching is easy during development
+  - the production stack now also includes `vosk` beside `faster-whisper`, so operators can switch transcript engines without changing the deployment shape
   - each faster-whisper stack also includes a one-shot `faster-whisper-model-sync` container that pre-downloads the selected model into the shared `transcript_data` volume only when the real HuggingFace cache directory for that model is not already present
 - `compose/local/app.yml` and `compose/prod/app.yml` for backend and frontend services
 
@@ -46,6 +47,7 @@ Production-specific behavior:
 - `infra/livekit.yaml.template` is the single source for both local and production LiveKit config generation
 - local and production Compose now render the runtime LiveKit config from `infra/livekit.yaml.template` through a one-shot `livekit-config` service before the `livekit` container starts
 - production keeps `rtc.use_external_ip: true` via `infra/.env.prod`, while local can set `LIVEKIT_USE_EXTERNAL_IP=false` and provide `LIVEKIT_NODE_IP` for same-WiFi device testing
+- transcript services are loopback-published with distinct host ports in both environments so MinIO stays on `9000`, `faster-whisper` can use `9005`, and `vosk` can use `2700` for direct host-side debugging without port collisions
 - local same-WiFi real-device testing is driven by `TURN_HOST`, `LIVEKIT_USE_EXTERNAL_IP`, and `LIVEKIT_NODE_IP` in `infra/.env.local`
 - the host-run backend should publish a phone-reachable LiveKit join URL through `LIVEKIT_PUBLIC_URL` in `backend/.env.local`, for example `ws://192.168.x.x:7880`
 - `LIVEKIT_UDP_PORT_RANGE` is now the single source for both Docker UDP publishing and the rendered LiveKit RTC port range; if Windows blocks a port in the default range, move the whole range together to a safer slice

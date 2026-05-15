@@ -61,6 +61,8 @@ services:
       WHISPER_COMPUTE_TYPE: ${TRANSCRIPT_COMPUTE_TYPE:-int8}
       WHISPER_THREADS: ${TRANSCRIPT_THREADS:-2}
       WHISPER_LOCAL_ONLY: ${TRANSCRIPT_LOCAL_ONLY:-true}
+    ports:
+      - "${TRANSCRIPT_BIND_IP:-127.0.0.1}:${TRANSCRIPT_PORT:-9005}:9000"
     networks:
       - private
     volumes:
@@ -93,6 +95,20 @@ services:
     volumes:
       - transcript_data:/var/lib/whisper
     restart: "no"
+
+  vosk:
+    image: ${VOSK_IMAGE:-alphacep/kaldi-en:latest}
+    ports:
+      - "${VOSK_BIND_IP:-127.0.0.1}:${VOSK_PORT:-2700}:2700"
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s = socket.create_connection(('127.0.0.1', 2700), 5); s.close()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
 
   livekit:
     image: livekit/livekit-server:latest
