@@ -145,7 +145,12 @@
           <h2>{{ selectedSession()?.workerName || 'Playback Evidence' }}</h2>
           @if (selectedSession()?.referenceNumber) {
             <p class="viewer-ref-caption">
-              <span class="head-ref-badge">REF: {{ selectedSession()?.referenceNumber }}</span>
+              <span class="head-ref-badge">
+                <span>REF: {{ selectedSession()?.referenceNumber }}</span>
+                <button mat-icon-button class="micro-icon-btn" [cdkCopyToClipboard]="selectedSession()?.referenceNumber || ''" (click)="copyReferenceNumber()" matTooltip="Copy Reference Number">
+                  <mat-icon>content_copy</mat-icon>
+                </button>
+              </span>
             </p>
           }
           <p class="viewer-caption">{{ selectedSessionCaption() }}</p>
@@ -311,72 +316,64 @@
     <mat-card class="panel evidence-transcript-panel glass-panel" appearance="outlined">
       <div class="transcript-panel-head">
         <div class="transcript-panel-copy">
-          <span class="transcript-panel-kicker">Session Transcript</span>
-          <div class="transcript-title-row">
-            <h2>Transcript</h2>
-            @if (selectedSessionTranscript()) {
-              <span class="transcript-pill transcript-pill-detail" [class]="transcriptPillClass(selectedSessionTranscript()?.status)">
-                {{ transcriptLabel(selectedSessionTranscript()?.status) }}
+          <h2>Session Transcript</h2>
+          @if (selectedSessionTranscript()) {
+            <div class="transcript-metadata-pills">
+              <span class="meta-pill-item" matTooltip="Transcription Engine">
+                <mat-icon>memory</mat-icon>
+                <span>{{ transcriptEngineLabel() }}</span>
               </span>
-            }
-          </div>
-          <p class="viewer-caption">{{ transcriptPanelHint() }}</p>
+              <span class="meta-pill-item" matTooltip="Total Clips">
+                <mat-icon>movie</mat-icon>
+                <span>{{ selectedSessionTranscript()?.totalRecordings || 0 }} Clips</span>
+              </span>
+              <span class="meta-pill-item" matTooltip="Transcript Lines">
+                <mat-icon>notes</mat-icon>
+                <span>{{ selectedSessionTranscript()?.segments?.length || 0 }} Lines</span>
+              </span>
+              @if (selectedSessionTranscript()?.status === 'READY' && shouldShowTranscriptSummary()) {
+                <span class="meta-pill-item meta-pill-success" matTooltip="AI Summary Generated">
+                  <mat-icon>auto_awesome</mat-icon>
+                  <span>Summary Available</span>
+                </span>
+              }
+            </div>
+          } @else {
+            <p class="viewer-caption">{{ transcriptPanelHint() }}</p>
+          }
         </div>
 
         @if (selectedSession()) {
           <div class="transcript-panel-actions">
             <button
-              mat-flat-button
-              type="button"
-              class="premium-btn compact-btn"
+              mat-icon-button
+              color="primary"
               (click)="generateTranscript()"
               [disabled]="isTranscriptGenerating() || isTranscriptLoading() || isRetryingFailedTranscript()"
+              matTooltip="{{ selectedSessionTranscript()?.status === 'READY' ? 'Regenerate Transcript' : isTranscriptGenerating() ? 'Generating...' : 'Generate Transcript' }}"
             >
-              {{ selectedSessionTranscript()?.status === 'READY' ? 'Regenerate' : isTranscriptGenerating() ? 'Generating...' : 'Generate' }}
+              <mat-icon [class.rotating]="isTranscriptGenerating()">{{ isTranscriptGenerating() ? 'hourglass_top' : 'refresh' }}</mat-icon>
             </button>
             <button
-              mat-stroked-button
-              type="button"
-              class="premium-btn premium-btn-secondary compact-btn"
+              mat-icon-button
+              color="primary"
               (click)="summarizeTranscript()"
               [disabled]="!canSummarizeTranscript() || isTranscriptSummaryLoading() || isTranscriptLoading()"
+              [matTooltip]="isTranscriptSummaryLoading() ? 'Summarizing...' : 'Generate AI Summary'"
             >
-              {{ isTranscriptSummaryLoading() ? 'Summarizing...' : 'Summarize' }}
+              <mat-icon [class.rotating]="isTranscriptSummaryLoading()">auto_awesome</mat-icon>
             </button>
             <button
-              mat-stroked-button
-              type="button"
-              class="premium-btn premium-btn-secondary compact-btn"
+              mat-icon-button
+              color="primary"
               (click)="openTranscriptReview()"
+              matTooltip="Review Clips"
             >
-              Review
+              <mat-icon>fact_check</mat-icon>
             </button>
           </div>
         }
       </div>
-
-      @if (selectedSessionTranscript()) {
-        <div class="transcript-status-strip">
-          <span class="transcript-stat-chip">
-            <strong>Engine</strong>
-            <span>{{ transcriptEngineLabel() }}</span>
-          </span>
-          <span class="transcript-stat-chip">
-            <strong>Clips</strong>
-            <span>{{ selectedSessionTranscript()?.totalRecordings || 0 }}</span>
-          </span>
-          <span class="transcript-stat-chip">
-            <strong>Lines</strong>
-            <span>{{ selectedSessionTranscript()?.segments?.length || 0 }}</span>
-          </span>
-          @if (selectedSessionTranscript()?.status === 'READY' && shouldShowTranscriptSummary()) {
-            <span class="transcript-stat-chip transcript-stat-chip-accent">
-              <strong>Summary</strong>
-              <span>Available</span>
-            </span>
-          }
-        </div>
-      }
 
       <div class="transcript-content-area premium-scroll">
         @if (isTranscriptLoading()) {
@@ -451,10 +448,7 @@
                   </div>
                 }
 
-                <div class="transcript-inline-hint">
-                  <mat-icon>schedule</mat-icon>
-                  <span>Click any timestamp to jump the player and highlight the current clip.</span>
-                </div>
+
 
                 <div class="transcript-segments">
                   @for (segment of selectedSessionTranscript()?.segments || []; track segment.id || segment.segmentIndex) {

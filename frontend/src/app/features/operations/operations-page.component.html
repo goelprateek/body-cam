@@ -6,10 +6,12 @@
         <span class="subtle-text live-count">{{ sessions().length }}</span>
       </div>
       <div class="session-head-actions">
-        <button mat-stroked-button type="button" class="premium-btn premium-btn-secondary create-session-toggle" (click)="toggleCreatePanel()">
-          <mat-icon>{{ isCreatePanelOpen() ? 'close' : 'add_circle' }}</mat-icon>
-          {{ isCreatePanelOpen() ? 'Close' : 'Create Session' }}
-        </button>
+        @if (!isCreatePanelOpen()) {
+          <button mat-flat-button type="button" class="premium-btn create-session-toggle" (click)="toggleCreatePanel()">
+            <mat-icon>add_circle</mat-icon>
+            Session
+          </button>
+        }
         <button mat-icon-button class="refresh-btn" (click)="refreshAll()" [disabled]="isRefreshing()">
           <mat-icon>refresh</mat-icon>
         </button>
@@ -23,8 +25,13 @@
     @if (isCreatePanelOpen()) {
       <div class="session-create-card">
         <div class="session-create-head">
-          <strong>Create Browser Session</strong>
-          <span class="subtle-text">Create a session, then share a browser join link.</span>
+          <div>
+            <strong>Create Browser Session</strong>
+            <p class="subtle-text">Create a session, then share a browser join link.</p>
+          </div>
+          <button mat-icon-button type="button" class="session-share-close" (click)="toggleCreatePanel()">
+            <mat-icon>close</mat-icon>
+          </button>
         </div>
 
         <div class="session-create-grid">
@@ -51,22 +58,25 @@
 
         <div class="session-create-actions">
           <button
-            mat-flat-button
-            type="button"
-            class="premium-btn"
-            (click)="createSession(false)"
-            [disabled]="isCreatingSession()"
-          >
-            {{ isCreatingSession() ? 'Creating...' : 'Create Session' }}
-          </button>
-          <button
             mat-stroked-button
             type="button"
             class="premium-btn premium-btn-secondary"
-            (click)="createSession(true)"
+            (click)="createSession(false)"
             [disabled]="isCreatingSession()"
           >
-            {{ isCreatingSession() ? 'Creating...' : 'Create And Copy Viewer Link' }}
+            <mat-icon>add_circle</mat-icon>
+            {{ isCreatingSession() ? 'Creating...' : 'Create' }}
+          </button>
+          <button
+            mat-flat-button
+            type="button"
+            class="premium-btn"
+            (click)="createSession(true)"
+            [disabled]="isCreatingSession()"
+            matTooltip="Create session and copy viewer link"
+          >
+            <mat-icon>content_copy</mat-icon>
+            {{ isCreatingSession() ? 'Creating...' : 'Create & Copy' }}
           </button>
         </div>
       </div>

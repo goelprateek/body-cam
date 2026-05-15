@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
+import { ClipboardModule } from '@angular/cdk/clipboard';
 import { Router } from '@angular/router';
 import { OperatorApiService } from '@features/operations/operator-api.service';
 import {
@@ -44,7 +45,7 @@ interface RecordingSessionCard {
 @Component({
   selector: 'app-recordings-page',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatTooltipModule, MatSnackBarModule],
+  imports: [CommonModule, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatTooltipModule, MatSnackBarModule, ClipboardModule],
   templateUrl: './recordings-page.component.html',
   styleUrl: './recordings-page.component.scss'
 })
@@ -160,19 +161,11 @@ export class RecordingsPageComponent implements OnDestroy {
 
   selectedSessionCaption(): string {
     const session = this.selectedSession();
-    const timeline = this.selectedTimeline();
     if (!session) {
       return 'Select a session recording to play';
     }
 
-    const captionParts = [session.roomName];
-    if (session.referenceNumber) {
-      captionParts.push(`Ref ${session.referenceNumber}`);
-    }
-    if (timeline?.totalDurationMs != null) {
-      captionParts.push(this.formatDurationMs(timeline.totalDurationMs));
-    }
-    return captionParts.join(' | ');
+    return session.roomName;
   }
 
   formatSessionCoordinates(session: RecordingSessionCard): string {
@@ -990,6 +983,13 @@ export class RecordingsPageComponent implements OnDestroy {
     }
 
     void this.router.navigate(['/recordings', sessionId, 'transcript-review']);
+  }
+
+  copyReferenceNumber(): void {
+    const ref = this.selectedSession()?.referenceNumber;
+    if (ref) {
+      this.snackBar.open(`Reference copied: ${ref}`, 'Dismiss', { duration: 3000 });
+    }
   }
 
   async requestExportPackage(): Promise<void> {
