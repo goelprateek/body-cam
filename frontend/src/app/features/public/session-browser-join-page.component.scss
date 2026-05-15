@@ -133,21 +133,27 @@
 }
 
 .join-preview-frame {
-  min-height: 24rem;
+  height: clamp(20rem, 52vh, 34rem);
   border-radius: 16px;
   overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
   background: linear-gradient(160deg, rgba(26, 31, 35, 0.96), rgba(39, 80, 70, 0.96));
 }
 
 .join-preview-video {
+  flex: 1 1 auto;
   width: 100%;
+  min-width: 0;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
 .join-preview-empty {
-  min-height: 24rem;
+  min-height: 100%;
+  width: 100%;
   display: grid;
   place-items: center;
   text-align: center;
@@ -187,6 +193,6 @@
 
   .join-preview-frame,
   .join-preview-empty {
-    min-height: 18rem;
+    height: 18rem;
   }
 }

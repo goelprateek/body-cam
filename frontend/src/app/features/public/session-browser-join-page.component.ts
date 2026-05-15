@@ -197,10 +197,7 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
     }
 
     const element = track.attach() as HTMLVideoElement;
-    element.autoplay = true;
-    element.muted = true;
-    element.playsInline = true;
-    element.className = 'join-preview-video';
+    this.configureVideoElement(element, true);
     host.appendChild(element);
     this.localVideoElement = element;
   }
@@ -265,10 +262,7 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
 
     this.detachLocalVideo();
     const element = track.attach() as HTMLVideoElement;
-    element.autoplay = true;
-    element.muted = false;
-    element.playsInline = true;
-    element.className = 'join-preview-video';
+    this.configureVideoElement(element, false);
     host.appendChild(element);
     this.remoteVideoElement = element;
   }
@@ -312,6 +306,18 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
       (publication) => publication.source === Track.Source.Camera
     );
     this.attachLocalTrack((cameraPublication?.track as LocalTrack | null) ?? null);
+  }
+
+  private configureVideoElement(element: HTMLVideoElement, muted: boolean): void {
+    element.autoplay = true;
+    element.muted = muted;
+    element.playsInline = true;
+    element.className = 'join-preview-video';
+    element.style.width = '100%';
+    element.style.height = '100%';
+    element.style.display = 'block';
+    element.style.objectFit = 'cover';
+    element.style.background = '#091014';
   }
 
   private disconnect(): void {
