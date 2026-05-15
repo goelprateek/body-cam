@@ -31,7 +31,7 @@ public class LiveKitTokenService {
     public String createJoinToken(String participantName, String roomName, String participantRole) {
         Instant now = Instant.now();
         Instant expiry = now.plus(8, ChronoUnit.HOURS);
-        boolean canPublish = "WORKER".equals(participantRole);
+        boolean canPublish = "WORKER".equals(participantRole) || "BROWSER".equals(participantRole);
         log.info(
                 "Preparing LiveKit token claims roomName={} participantName={} participantRole={} canPublish={} expiresAt={}",
                 roomName,

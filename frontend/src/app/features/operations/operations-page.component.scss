@@ -3,6 +3,73 @@
   min-width: 0;
 }
 
+.session-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.create-session-toggle {
+  min-height: 2.35rem;
+}
+
+.session-create-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 0.95rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(53, 123, 166, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.session-create-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.session-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.session-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+
+.session-field span {
+  font-weight: 700;
+}
+
+.session-field input {
+  min-height: 2.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--surface-border);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  padding: 0.55rem 0.8rem;
+  font: inherit;
+}
+
+.session-field input:focus {
+  outline: none;
+  border-color: rgba(97, 183, 72, 0.45);
+  box-shadow: 0 0 0 3px rgba(97, 183, 72, 0.12);
+}
+
+.session-create-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
 .mat-mdc-card.session-card {
   padding: 1rem;
   border-radius: 10px !important;
@@ -114,8 +181,171 @@
   color: var(--danger) !important;
 }
 
+.action-btn-share {
+  color: var(--brand-dark) !important;
+}
+
+.action-btn-share-publisher {
+  color: var(--success) !important;
+}
+
 .viewer-panel {
   gap: 1rem;
+}
+
+.session-share-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 16px;
+  border: 1px solid rgba(53, 123, 166, 0.12);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.session-share-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.session-share-head h3,
+.session-share-head p {
+  margin: 0;
+}
+
+.session-share-kicker {
+  display: inline-block;
+  margin-bottom: 0.3rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.session-share-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.share-option-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(26, 31, 35, 0.08);
+  background: rgba(250, 252, 254, 0.88);
+}
+
+.share-option-card-publisher {
+  border-color: rgba(15, 141, 103, 0.18);
+  background: linear-gradient(180deg, rgba(15, 141, 103, 0.08), rgba(250, 252, 254, 0.9));
+}
+
+.share-option-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.share-option-copy strong,
+.share-option-copy p {
+  margin: 0;
+}
+
+.share-option-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.share-link-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.share-link-field span {
+  font-weight: 700;
+}
+
+.share-link-field input {
+  min-height: 2.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ink);
+  padding: 0.55rem 0.8rem;
+  font: inherit;
+}
+
+.share-option-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.share-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.premium-btn-publisher {
+  background: linear-gradient(135deg, var(--success), #2c78a4) !important;
+  color: #fff !important;
+}
+
+.share-refresh-link {
+  color: var(--brand-dark) !important;
+}
+
+.share-refresh-link-publisher {
+  color: var(--success) !important;
+}
+
+.share-revoke-link {
+  color: var(--danger) !important;
+}
+
+.share-revoke-link-publisher {
+  color: #c95a54 !important;
+}
+
+:root.dark-theme .session-create-card {
+  background: rgba(17, 25, 40, 0.62);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root.dark-theme .session-field input {
+  background: rgba(0, 0, 0, 0.24);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+:root.dark-theme .session-share-card,
+:root.dark-theme .share-option-card {
+  background: rgba(17, 25, 40, 0.62);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root.dark-theme .share-option-card-publisher {
+  background: linear-gradient(180deg, rgba(15, 141, 103, 0.16), rgba(17, 25, 40, 0.72));
+  border-color: rgba(15, 141, 103, 0.22);
+}
+
+:root.dark-theme .share-link-field input {
+  background: rgba(0, 0, 0, 0.24);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .viewer-frame {
@@ -185,4 +415,20 @@
 .frame-live .corner {
   border-color: rgba(15, 141, 103, 0.8);
   box-shadow: 0 0 8px rgba(15, 141, 103, 0.4);
+}
+
+@media (max-width: 900px) {
+  .session-create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .session-share-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .session-head-actions,
+  .session-create-actions,
+  .share-option-actions {
+    flex-wrap: wrap;
+  }
 }

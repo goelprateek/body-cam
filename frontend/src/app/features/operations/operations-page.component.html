@@ -5,13 +5,71 @@
         <h2>Active Sessions</h2>
         <span class="subtle-text live-count">{{ sessions().length }}</span>
       </div>
-      <button mat-icon-button class="refresh-btn" (click)="refreshAll()" [disabled]="isRefreshing()">
-        <mat-icon>refresh</mat-icon>
-      </button>
+      <div class="session-head-actions">
+        <button mat-stroked-button type="button" class="premium-btn premium-btn-secondary create-session-toggle" (click)="toggleCreatePanel()">
+          <mat-icon>{{ isCreatePanelOpen() ? 'close' : 'add_circle' }}</mat-icon>
+          {{ isCreatePanelOpen() ? 'Close' : 'Create Session' }}
+        </button>
+        <button mat-icon-button class="refresh-btn" (click)="refreshAll()" [disabled]="isRefreshing()">
+          <mat-icon>refresh</mat-icon>
+        </button>
+      </div>
     </div>
 
     @if (isRefreshing() || isJoining() || isEnding()) {
       <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
+    }
+
+    @if (isCreatePanelOpen()) {
+      <div class="session-create-card">
+        <div class="session-create-head">
+          <strong>Create Browser Session</strong>
+          <span class="subtle-text">Create a session, then share a browser join link.</span>
+        </div>
+
+        <div class="session-create-grid">
+          <label class="session-field">
+            <span>Participant Name</span>
+            <input
+              type="text"
+              [value]="newSessionWorkerName()"
+              (input)="updateNewSessionWorkerName(($any($event.target)).value)"
+              placeholder="Field Worker or Browser User"
+            />
+          </label>
+
+          <label class="session-field">
+            <span>Reference Number</span>
+            <input
+              type="text"
+              [value]="newSessionReferenceNumber()"
+              (input)="updateNewSessionReferenceNumber(($any($event.target)).value)"
+              placeholder="INC-2026-001"
+            />
+          </label>
+        </div>
+
+        <div class="session-create-actions">
+          <button
+            mat-flat-button
+            type="button"
+            class="premium-btn"
+            (click)="createSession(false)"
+            [disabled]="isCreatingSession()"
+          >
+            {{ isCreatingSession() ? 'Creating...' : 'Create Session' }}
+          </button>
+          <button
+            mat-stroked-button
+            type="button"
+            class="premium-btn premium-btn-secondary"
+            (click)="createSession(true)"
+            [disabled]="isCreatingSession()"
+          >
+            {{ isCreatingSession() ? 'Creating...' : 'Create And Copy Viewer Link' }}
+          </button>
+        </div>
+      </div>
     }
 
     @if (pageError()) {
@@ -56,6 +114,16 @@
             >
               <mat-icon>visibility</mat-icon>
               {{ isJoining() && session.id === joiningSessionId() ? 'Joining...' : 'View Live' }}
+            </button>
+            <button
+              mat-button
+              type="button"
+              class="action-btn-share"
+              (click)="toggleSharePanel(session); $event.stopPropagation()"
+              [disabled]="session.status !== 'ACTIVE'"
+            >
+              <mat-icon>share</mat-icon>
+              {{ sharePanelSessionId() === session.id ? 'Close Share' : 'Share Access' }}
             </button>
             <button
               mat-button
@@ -109,6 +177,139 @@
 
       @if (liveRoom.error()) {
         <div class="notice notice-error">{{ liveRoom.error() }}</div>
+      }
+
+      @if (sharePanelSession(); as shareSession) {
+        <div class="session-share-card">
+          <div class="session-share-head">
+            <div>
+              <span class="session-share-kicker">Share Session Access</span>
+              <h3>{{ shareSession.workerName }}</h3>
+              <p class="subtle-text">Ref {{ shareSession.referenceNumber }} | Send a watch-only or browser publisher link.</p>
+            </div>
+            <button mat-icon-button type="button" class="session-share-close" (click)="closeSharePanel()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+
+          <div class="session-share-grid">
+            <section class="share-option-card">
+              <div class="share-option-copy">
+                <span class="share-option-label">Viewer Link</span>
+                <strong>Watch without microphone or camera</strong>
+                <p class="subtle-text">Best for supervisors, observers, or anyone who should only watch the session.</p>
+              </div>
+
+              @if (viewerInvite()) {
+                <label class="share-link-field">
+                  <span>Viewer URL</span>
+                  <input type="text" [value]="inviteUrl(viewerInvite())" readonly />
+                </label>
+
+                <div class="share-meta-strip">
+                  <span class="status-chip">Expires {{ viewerInvite()!.expiresAt | date: 'HH:mm:ss' }}</span>
+                  <span class="status-chip">Valid for 10 minutes</span>
+                </div>
+
+                <div class="share-option-actions">
+                  <button mat-flat-button type="button" class="premium-btn" (click)="copyInvite(viewerInvite()!)">
+                    <mat-icon>content_copy</mat-icon>
+                    Copy Link
+                  </button>
+                  <button mat-stroked-button type="button" class="premium-btn premium-btn-secondary" (click)="emailInvite(viewerInvite()!)">
+                    <mat-icon>mail</mat-icon>
+                    Share By Email
+                  </button>
+                  <button mat-button type="button" class="share-refresh-link" (click)="generateShareLink(shareSession, 'VIEWER')">
+                    <mat-icon>refresh</mat-icon>
+                    Refresh Link
+                  </button>
+                  <button
+                    mat-button
+                    type="button"
+                    class="share-revoke-link"
+                    (click)="revokeInvite(viewerInvite()!)"
+                    [disabled]="revokingInviteId() === viewerInvite()!.id"
+                  >
+                    <mat-icon>block</mat-icon>
+                    {{ revokingInviteId() === viewerInvite()!.id ? 'Revoking...' : 'Revoke Link' }}
+                  </button>
+                </div>
+              } @else {
+                <div class="share-option-actions">
+                  <button
+                    mat-flat-button
+                    type="button"
+                    class="premium-btn"
+                    (click)="generateShareLink(shareSession, 'VIEWER')"
+                    [disabled]="sharingSessionId() === shareSession.id"
+                  >
+                    <mat-icon>visibility</mat-icon>
+                    {{ sharingSessionId() === shareSession.id ? 'Preparing...' : 'Generate Viewer Link' }}
+                  </button>
+                </div>
+              }
+            </section>
+
+            <section class="share-option-card share-option-card-publisher">
+              <div class="share-option-copy">
+                <span class="share-option-label">Publisher Link</span>
+                <strong>Join with browser microphone and camera</strong>
+                <p class="subtle-text">Use this only when the recipient should actively publish live audio and video into the room.</p>
+              </div>
+
+              @if (publisherInvite()) {
+                <label class="share-link-field">
+                  <span>Publisher URL</span>
+                  <input type="text" [value]="inviteUrl(publisherInvite())" readonly />
+                </label>
+
+                <div class="share-meta-strip">
+                  <span class="status-chip status-chip-publish">Expires {{ publisherInvite()!.expiresAt | date: 'HH:mm:ss' }}</span>
+                  <span class="status-chip status-chip-publish">Valid for 10 minutes</span>
+                </div>
+
+                <div class="share-option-actions">
+                  <button mat-flat-button type="button" class="premium-btn premium-btn-publisher" (click)="copyInvite(publisherInvite()!)">
+                    <mat-icon>content_copy</mat-icon>
+                    Copy Link
+                  </button>
+                  <button mat-stroked-button type="button" class="premium-btn premium-btn-secondary" (click)="emailInvite(publisherInvite()!)">
+                    <mat-icon>mail</mat-icon>
+                    Share By Email
+                  </button>
+                  <button mat-button type="button" class="share-refresh-link share-refresh-link-publisher" (click)="generateShareLink(shareSession, 'BROWSER')">
+                    <mat-icon>refresh</mat-icon>
+                    Refresh Link
+                  </button>
+                  <button
+                    mat-button
+                    type="button"
+                    class="share-revoke-link share-revoke-link-publisher"
+                    (click)="revokeInvite(publisherInvite()!)"
+                    [disabled]="revokingInviteId() === publisherInvite()!.id"
+                  >
+                    <mat-icon>block</mat-icon>
+                    {{ revokingInviteId() === publisherInvite()!.id ? 'Revoking...' : 'Revoke Link' }}
+                  </button>
+                </div>
+              } @else {
+                <div class="share-option-actions">
+                  <button
+                    mat-flat-button
+                    type="button"
+                    class="premium-btn premium-btn-publisher"
+                    (click)="generateShareLink(shareSession, 'BROWSER')"
+                    [disabled]="sharingSessionId() === shareSession.id"
+                  >
+                    <mat-icon>videocam</mat-icon>
+                    {{ sharingSessionId() === shareSession.id ? 'Preparing...' : 'Generate Publisher Link' }}
+                  </button>
+                </div>
+              }
+            </section>
+          </div>
+        </div>
       }
 
       <div class="viewer-frame premium-frame" [class.frame-live]="liveRoom.remoteVideoTrack()">

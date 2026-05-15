@@ -3,16 +3,20 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '@env/environment';
 import {
+  CreateSessionRequest,
   CurrentUserResponse,
   CursorPageResponse,
   LiveKitTokenResponse,
   LoginResponse,
   PageResponse,
+  PublicSessionInviteResponse,
   RecordingInvestigationSearchResponse,
   RecordingPlaybackResponse,
   RecordingResponse,
   RecordingTranscriptResponse,
   SessionRecordingExportResponse,
+  SessionInviteResponse,
+  SessionInviteRole,
   SessionRecordingTimelineResponse,
   SessionTranscriptSearchResponse,
   SessionTranscriptResponse,
@@ -83,6 +87,14 @@ export class OperatorApiService {
   async listSessions(): Promise<SessionResponse[]> {
     return firstValueFrom(
       this.http.get<SessionResponse[]>(this.url('/sessions'), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async createSession(request: CreateSessionRequest): Promise<SessionResponse> {
+    return firstValueFrom(
+      this.http.post<SessionResponse>(this.url('/sessions'), request, {
         headers: this.authHeaders()
       })
     );
@@ -283,6 +295,41 @@ export class OperatorApiService {
         {
           headers: this.authHeaders()
         }
+      )
+    );
+  }
+
+  async createSessionInvite(sessionId: string, participantRole: SessionInviteRole = 'BROWSER'): Promise<SessionInviteResponse> {
+    return firstValueFrom(
+      this.http.post<SessionInviteResponse>(
+        this.url(`/sessions/${sessionId}/invites`),
+        { participantRole },
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async revokeSessionInvite(sessionId: string, inviteId: string): Promise<void> {
+    await firstValueFrom(
+      this.http.delete<void>(this.url(`/sessions/${sessionId}/invites/${inviteId}`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async getPublicSessionInvite(inviteToken: string): Promise<PublicSessionInviteResponse> {
+    return firstValueFrom(
+      this.http.get<PublicSessionInviteResponse>(this.url(`/session-invites/${inviteToken}`))
+    );
+  }
+
+  async createPublicInviteJoinToken(inviteToken: string, participantName: string): Promise<LiveKitTokenResponse> {
+    return firstValueFrom(
+      this.http.post<LiveKitTokenResponse>(
+        this.url(`/session-invites/${inviteToken}/join-token`),
+        { participantName }
       )
     );
   }

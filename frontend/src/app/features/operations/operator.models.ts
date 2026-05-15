@@ -15,7 +15,7 @@ export interface CurrentUserResponse {
 
 export interface SessionResponse {
   id: string;
-  workerId: string;
+  workerId: string | null;
   workerName: string;
   referenceNumber: string;
   roomName: string;
@@ -44,6 +44,38 @@ export interface LiveKitTokenResponse {
   token: string;
   roomName: string;
   liveKitUrl: string;
+}
+
+export interface CreateSessionRequest {
+  workerId?: string | null;
+  workerName: string;
+  referenceNumber: string;
+}
+
+export type SessionInviteRole = 'WORKER' | 'OPERATOR' | 'BROWSER' | 'VIEWER';
+
+export interface SessionInviteResponse {
+  id: string;
+  sessionId: string;
+  workerName: string;
+  referenceNumber: string;
+  roomName: string;
+  sessionStatus: 'ACTIVE' | 'ENDED';
+  participantRole: SessionInviteRole;
+  inviteToken: string;
+  joinPath: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface PublicSessionInviteResponse {
+  sessionId: string;
+  workerName: string;
+  referenceNumber: string;
+  roomName: string;
+  sessionStatus: 'ACTIVE' | 'ENDED';
+  participantRole: SessionInviteRole;
+  expiresAt: string;
 }
 
 export interface RecordingMetadataResponse {

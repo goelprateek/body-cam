@@ -11,7 +11,7 @@
 - `backend/`
   Spring Boot API. Owns operator authentication, session metadata, recording metadata, LiveKit join token generation, recording upload handoff into MinIO, and the post-recording transcript pipeline. The backend groups uploaded clips by `sessionId`, stores each uploaded segment as a recording row for that session, supports an extensible per-clip metadata model for location, camera-facing, thermal, and future sensor data, and should treat STT output as intermediate data that must pass through transcript assembly before becoming the stored transcript artifact.
 - `frontend/`
-  Angular backoffice console. Operators sign in, inspect sessions, join live rooms, and review recordings.
+  Angular backoffice console. Operators sign in, inspect sessions, create browser-share sessions, choose between viewer-only and publisher links, join live rooms, and review recordings.
 - `infra/`
   Docker Compose topology for local and production environments, including LiveKit, MinIO, PostgreSQL, coturn, and runtime services.
 
@@ -138,6 +138,7 @@
 - Recording objects belong to object storage.
 - Session and recording metadata belong to Spring Boot plus PostgreSQL.
 - The backend currently brokers recording file uploads into object storage, but it does not handle live media transport.
+- Operators can now create a session directly in the console and mint a short-lived browser invite so a browser participant can either join as a viewer or publish camera or microphone without using the Android app. The operator share UI can also revoke those invite links before expiry.
 - Raw STT output is not the final evidence artifact. The backend should persist transcript data only after punctuation restoration, transcript finalization, optional AI summarization, and playback-safe timeline alignment have completed.
 - Camera flips happen inside one live session. The app may finalize one clip and start the next on the other lens, but all resulting clips still belong to the same backend session.
 - Per-clip metadata is the extension point for future device context such as GPS and thermal measurements; new fields should attach to the clip, not create a new session type.

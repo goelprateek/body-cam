@@ -34,6 +34,7 @@ This table summarizes which major feature areas are already covered in code and 
 | Worker Mobile Experience | Smaller recording segments | `Implemented` | Android now records `10s` segments. |
 | Worker Mobile Experience | GPS, device telemetry, failed-upload recovery actions, storage controls | `Pending` | These remain future Android hardening features. |
 | Live Session Operations | Operator join and live monitoring | `Implemented` | Live session join and monitoring are in place. |
+| Live Session Operations | Operator-created browser session sharing with viewer and publisher invites | `Implemented` | Operators can create a session, generate time-limited viewer or publisher browser invite links, and let a browser participant join the same LiveKit room with role-scoped media permissions. |
 | Live Session Operations | Presence, reconnect visibility, in-session markers, escalation workflow | `Pending` | These live-operation features are not yet modeled fully. |
 | Recording And Playback | Session timeline playback across ordered segments | `Implemented` | Backend timeline API and frontend continuous playback are live. |
 | Recording And Playback | Gap-aware playback and integrity states | `Implemented` | Timeline integrity, explicit gap or overlap details, missing timing warnings, and playback review cues are surfaced in backend and operator UI. |
@@ -55,7 +56,7 @@ This table summarizes which major feature areas are already covered in code and 
 | Infrastructure And Deployment | Transcript deploy smoke-check path | `Implemented` | A backend readiness endpoint and `scripts/deploy/check-transcript-smoke.ps1` now provide a concrete transcript deploy smoke-check path. |
 | Infrastructure And Deployment | Backup and restore playbooks, drift validation | `Pending` | These deployment hardening features remain future work. |
 | Security And Access Control | Basic authenticated operator access | `Implemented` | Authenticated access exists. |
-| Security And Access Control | Stronger role separation, export approval permissions, transcript auditing, secure sharing | `Pending` | These security and governance features are still left. |
+| Security And Access Control | Stronger role separation, export approval permissions, transcript auditing, secure sharing | `Partially Implemented` | Time-limited browser session invite sharing now exists with separate viewer and publisher links, but broader governance, revocation UX, and approval controls are still left. |
 
 ## Advanced Transcript Pipeline
 

@@ -45,6 +45,18 @@ const redirectAuthenticatedUser = async () => {
 
 export const routes: Routes = [
   {
+    path: 'join/:inviteToken',
+    loadComponent: () =>
+      import('./features/public/session-browser-join-page.component').then(
+        (c) => c.SessionBrowserJoinPageComponent
+      )
+  },
+  {
+    path: 'login',
+    component: LoginPageComponent,
+    canActivate: [redirectAuthenticatedUser]
+  },
+  {
     path: '',
     component: AppShellComponent,
     canActivate: [requireAuth],
@@ -79,11 +91,6 @@ export const routes: Routes = [
         component: PreferencesPageComponent
       }
     ]
-  },
-  {
-    path: 'login',
-    component: LoginPageComponent,
-    canActivate: [redirectAuthenticatedUser]
   },
   {
     path: '**',

@@ -19,10 +19,11 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { RemoteAudioTrack, RemoteVideoTrack } from 'livekit-client';
 import { LiveRoomService } from './live-room.service';
 import { OperatorApiService } from './operator-api.service';
-import { SessionResponse } from './operator.models';
+import { SessionInviteResponse, SessionInviteRole, SessionResponse } from './operator.models';
 
 @Component({
   selector: 'app-operations-page',
@@ -34,13 +35,16 @@ import { SessionResponse } from './operator.models';
     MatDividerModule,
     MatProgressBarModule,
     MatIconModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatSnackBarModule
   ],
   templateUrl: './operations-page.component.html',
   styleUrl: './operations-page.component.scss'
 })
 export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   private static readonly SESSION_PAGE_SIZE = 10;
+  private static readonly PUBLISHER_INVITE_ROLE = 'BROWSER' as const;
+  private static readonly VIEWER_INVITE_ROLE = 'VIEWER' as const;
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
@@ -53,13 +57,23 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
 
   readonly api = inject(OperatorApiService);
   readonly liveRoom = inject(LiveRoomService);
+  private readonly snackBar = inject(MatSnackBar);
 
   readonly sessions = signal<SessionResponse[]>([]);
   readonly selectedSessionId = signal<string | null>(null);
+  readonly isCreatePanelOpen = signal(false);
+  readonly newSessionWorkerName = signal('');
+  readonly newSessionReferenceNumber = signal('');
   readonly isRefreshing = signal(false);
   readonly isJoining = signal(false);
   readonly joiningSessionId = signal<string | null>(null);
   readonly isEnding = signal(false);
+  readonly isCreatingSession = signal(false);
+  readonly sharingSessionId = signal<string | null>(null);
+  readonly revokingInviteId = signal<string | null>(null);
+  readonly sharePanelSessionId = signal<string | null>(null);
+  readonly viewerInvite = signal<SessionInviteResponse | null>(null);
+  readonly publisherInvite = signal<SessionInviteResponse | null>(null);
   readonly isLoadingMore = signal(false);
   readonly hasMoreSessions = signal(false);
   readonly nextSessionCursor = signal<string | null>(null);
@@ -67,6 +81,9 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
 
   readonly selectedSession = computed(
     () => this.sessions().find((session) => session.id === this.selectedSessionId()) ?? null
+  );
+  readonly sharePanelSession = computed(
+    () => this.sessions().find((session) => session.id === this.sharePanelSessionId()) ?? null
   );
   readonly viewerMessage = computed(() => {
     if (this.liveRoom.connectionLabel() === 'Connecting') {
@@ -111,6 +128,31 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
 
   selectSession(sessionId: string): void {
     this.selectedSessionId.set(sessionId);
+  }
+
+  toggleSharePanel(session: SessionResponse): void {
+    if (this.sharePanelSessionId() === session.id) {
+      this.closeSharePanel();
+      return;
+    }
+
+    this.selectedSessionId.set(session.id);
+    this.sharePanelSessionId.set(session.id);
+    this.viewerInvite.set(null);
+    this.publisherInvite.set(null);
+    this.pageError.set(null);
+  }
+
+  toggleCreatePanel(): void {
+    this.isCreatePanelOpen.update((open) => !open);
+  }
+
+  updateNewSessionWorkerName(value: string): void {
+    this.newSessionWorkerName.set(value);
+  }
+
+  updateNewSessionReferenceNumber(value: string): void {
+    this.newSessionReferenceNumber.set(value);
   }
 
   async refreshAll(silent = false): Promise<void> {
@@ -224,6 +266,152 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     const remaining = host.scrollHeight - host.scrollTop - host.clientHeight;
     if (remaining <= 120) {
       void this.loadMoreSessions();
+    }
+  }
+
+  async createSession(copyJoinLink: boolean): Promise<void> {
+    const workerName = this.newSessionWorkerName().trim();
+    const referenceNumber = this.newSessionReferenceNumber().trim();
+    if (!workerName || !referenceNumber) {
+      this.pageError.set('Worker name and reference number are required to create a session.');
+      return;
+    }
+
+    this.pageError.set(null);
+    this.isCreatingSession.set(true);
+
+    try {
+      const session = await this.api.createSession({
+        workerName,
+        referenceNumber
+      });
+      await this.refreshAll(true);
+      this.selectedSessionId.set(session.id);
+      this.isCreatePanelOpen.set(false);
+      this.newSessionWorkerName.set('');
+      this.newSessionReferenceNumber.set('');
+
+      if (copyJoinLink) {
+        this.sharePanelSessionId.set(session.id);
+        await this.generateShareLink(session, OperationsPageComponent.VIEWER_INVITE_ROLE, true);
+      } else {
+        this.snackBar.open('Session created.', 'Close', { duration: 3000 });
+      }
+    } catch (error) {
+      this.pageError.set(this.api.explainError(error));
+    } finally {
+      this.isCreatingSession.set(false);
+    }
+  }
+
+  async generateShareLink(
+    session: SessionResponse,
+    participantRole: Extract<SessionInviteRole, 'BROWSER' | 'VIEWER'>,
+    copyToClipboard = false
+  ): Promise<void> {
+    this.pageError.set(null);
+    this.sharingSessionId.set(session.id);
+
+    try {
+      const invite = await this.api.createSessionInvite(session.id, participantRole);
+      this.storeInvite(invite, !copyToClipboard);
+      if (copyToClipboard) {
+        await this.copyInvite(invite);
+      }
+    } catch (error) {
+      this.pageError.set(this.api.explainError(error));
+    } finally {
+      this.sharingSessionId.set(null);
+    }
+  }
+
+  async copyInvite(invite: SessionInviteResponse): Promise<void> {
+    const joinUrl = this.buildJoinUrl(invite.joinPath);
+    await navigator.clipboard.writeText(joinUrl);
+    this.snackBar.open(
+      invite.participantRole === OperationsPageComponent.PUBLISHER_INVITE_ROLE
+        ? 'Publisher join link copied.'
+        : 'Viewer join link copied.',
+      'Close',
+      { duration: 4000 }
+    );
+  }
+
+  emailInvite(invite: SessionInviteResponse): void {
+    const joinUrl = this.buildJoinUrl(invite.joinPath);
+    const roleLabel = invite.participantRole === OperationsPageComponent.PUBLISHER_INVITE_ROLE
+      ? 'Publisher'
+      : 'Viewer';
+    const subject = encodeURIComponent(`Session access for ${invite.referenceNumber}`);
+    const body = encodeURIComponent(
+      [
+        `You have been invited to join session ${invite.referenceNumber}.`,
+        '',
+        `Access type: ${roleLabel}`,
+        `Participant: ${invite.workerName}`,
+        `Room: ${invite.roomName}`,
+        `Link: ${joinUrl}`,
+        `Expires: ${new Date(invite.expiresAt).toLocaleString()}`,
+        '',
+        roleLabel === 'Publisher'
+          ? 'This link allows browser microphone and camera publishing.'
+          : 'This link joins the room as a viewer without publishing browser media.'
+      ].join('\n')
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  }
+
+  async revokeInvite(invite: SessionInviteResponse): Promise<void> {
+    this.pageError.set(null);
+    this.revokingInviteId.set(invite.id);
+
+    try {
+      await this.api.revokeSessionInvite(invite.sessionId, invite.id);
+      if (invite.participantRole === OperationsPageComponent.PUBLISHER_INVITE_ROLE) {
+        this.publisherInvite.set(null);
+        this.snackBar.open('Publisher link revoked.', 'Close', { duration: 3000 });
+      } else if (invite.participantRole === OperationsPageComponent.VIEWER_INVITE_ROLE) {
+        this.viewerInvite.set(null);
+        this.snackBar.open('Viewer link revoked.', 'Close', { duration: 3000 });
+      }
+    } catch (error) {
+      this.pageError.set(this.api.explainError(error));
+    } finally {
+      this.revokingInviteId.set(null);
+    }
+  }
+
+  closeSharePanel(): void {
+    this.sharePanelSessionId.set(null);
+    this.viewerInvite.set(null);
+    this.publisherInvite.set(null);
+  }
+
+  inviteUrl(invite: SessionInviteResponse | null): string {
+    if (!invite) {
+      return '';
+    }
+    return this.buildJoinUrl(invite.joinPath);
+  }
+
+  private buildJoinUrl(joinPath: string): string {
+    return new URL(joinPath, window.location.origin).toString();
+  }
+
+  private storeInvite(invite: SessionInviteResponse, notifyReady: boolean): void {
+    if (invite.participantRole === OperationsPageComponent.PUBLISHER_INVITE_ROLE) {
+      this.publisherInvite.set(invite);
+      if (notifyReady) {
+        this.snackBar.open('Publisher link ready to share.', 'Close', { duration: 3000 });
+      }
+      return;
+    }
+
+    if (invite.participantRole === OperationsPageComponent.VIEWER_INVITE_ROLE) {
+      this.viewerInvite.set(invite);
+      if (notifyReady) {
+        this.snackBar.open('Viewer link ready to share.', 'Close', { duration: 3000 });
+      }
     }
   }
 
