@@ -81,6 +81,8 @@ services:
       - /bin/sh
       - -lc
       - |
+        unset WHISPER_LOCAL_ONLY
+
         MODEL="${TRANSCRIPT_MODEL:-large-v3-turbo}";
         CACHE_MATCH=$$(find /var/lib/whisper -maxdepth 1 -type d -name "models--Systran--faster-whisper-$${MODEL}*" | head -n 1);
         if [ -n "$${CACHE_MATCH}" ]; then
@@ -88,10 +90,6 @@ services:
           exit 0;
         fi;
         whisper_manage --downloadmodel "$${MODEL}"
-    environment:
-      WHISPER_LOCAL_ONLY: "false"
-    networks:
-      - private
     volumes:
       - transcript_data:/var/lib/whisper
     restart: "no"
