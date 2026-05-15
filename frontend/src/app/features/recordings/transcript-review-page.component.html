@@ -2,65 +2,55 @@
   <mat-card class="review-shell glass-panel" appearance="outlined">
     <div class="review-hero">
       <div class="review-copy">
-        <button mat-button type="button" class="back-btn" (click)="backToRecordings()">
+        <button mat-button type="button" class="back-btn subtle-text" (click)="backToRecordings()">
           <mat-icon>arrow_back</mat-icon>
           Back to Recordings
         </button>
-        <span class="review-kicker">Transcript Operations</span>
         <div class="review-title-row">
-          <h1>Transcript Review</h1>
+          <h2>Transcript Review</h2>
           @if (transcript()) {
             <span class="transcript-pill review-status-pill" [class]="statusPillClass(transcript()?.status)">
               {{ statusLabel(transcript()?.status) }}
             </span>
           }
         </div>
-        <p class="review-caption">Use this screen to switch engines, retry failed work, and inspect each clip without crowding the player view.</p>
+        <p class="review-caption subtle-text">Use this screen to switch engines, retry failed work, and inspect each clip without crowding the player view.</p>
       </div>
 
-      <div class="review-command-card">
-        <div class="review-command-head">
-          <strong>Session Controls</strong>
-          @if (transcript()) {
-            <span class="review-command-meta">{{ transcript()?.totalRecordings || 0 }} clips</span>
-          }
-        </div>
+      <div class="review-action-bar">
+        @if (engineOptions().length) {
+          <label class="engine-picker">
+            <span class="subtle-text">Transcription Engine</span>
+            <select [value]="selectedEngine() || ''" (change)="setSelectedEngine(($any($event.target)).value)">
+              @for (engine of engineOptions(); track engine.key) {
+                <option [value]="engine.key" [disabled]="!engine.ready">
+                  {{ engine.label }}{{ engine.configuredDefault ? ' (Default)' : '' }}
+                </option>
+              }
+            </select>
+          </label>
+        }
 
-        <div class="review-command-body">
-          @if (engineOptions().length) {
-            <label class="engine-picker">
-              <span>Transcription Engine</span>
-              <select [value]="selectedEngine() || ''" (change)="setSelectedEngine(($any($event.target)).value)">
-                @for (engine of engineOptions(); track engine.key) {
-                  <option [value]="engine.key" [disabled]="!engine.ready">
-                    {{ engine.label }}{{ engine.configuredDefault ? ' (Default)' : '' }}
-                  </option>
-                }
-              </select>
-            </label>
-          }
+        <div class="review-actions">
+          <button
+            mat-flat-button
+            type="button"
+            class="compact-btn review-primary-btn"
+            (click)="generateTranscript()"
+            [disabled]="isGenerating() || isRetryingFailed()"
+          >
+            {{ transcript()?.status === 'READY' ? 'Regenerate' : isGenerating() ? 'Generating...' : 'Generate' }}
+          </button>
 
-          <div class="review-actions">
-            <button
-              mat-flat-button
-              type="button"
-              class="compact-btn review-primary-btn"
-              (click)="generateTranscript()"
-              [disabled]="isGenerating() || isRetryingFailed()"
-            >
-              {{ transcript()?.status === 'READY' ? 'Regenerate Session' : isGenerating() ? 'Generating...' : 'Generate Session' }}
-            </button>
-
-            <button
-              mat-stroked-button
-              type="button"
-              class="compact-btn review-secondary-btn"
-              (click)="retryFailedIntervals()"
-              [disabled]="!hasRetryableRecordings() || isRetryingFailed() || isGenerating()"
-            >
-              {{ isRetryingFailed() ? 'Retrying...' : 'Retry Failed' }}
-            </button>
-          </div>
+          <button
+            mat-stroked-button
+            type="button"
+            class="compact-btn review-secondary-btn"
+            (click)="retryFailedIntervals()"
+            [disabled]="!hasRetryableRecordings() || isRetryingFailed() || isGenerating()"
+          >
+            {{ isRetryingFailed() ? 'Retrying...' : 'Retry Failed' }}
+          </button>
         </div>
       </div>
     </div>

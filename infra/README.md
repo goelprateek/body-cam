@@ -54,6 +54,7 @@ Production-specific behavior:
 - the local sample now uses `52000-52020` to reduce Windows UDP bind conflicts during development; production can keep a wider range where the host is under your control
 - MinIO's S3 API is exposed through Traefik on `https://<MINIO_DOMAIN>`
 - MinIO's web console can be exposed separately through Traefik on `https://<MINIO_CONSOLE_DOMAIN>` while the container port `9001` stays loopback-bound on the host
+- the MinIO container now also receives explicit `MINIO_SERVER_URL` and `MINIO_BROWSER_REDIRECT_URL` values so its banner and browser redirects line up with the public domains instead of only showing container or loopback addresses
 - coturn stays directly published for TURN traffic
 
 Production DNS and TLS contract:
