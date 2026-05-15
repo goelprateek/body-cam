@@ -5,6 +5,6 @@ import jakarta.validation.constraints.Pattern;
 
 public record JoinSessionTokenRequest(
         @NotBlank String participantName,
-        @Pattern(regexp = "WORKER|OPERATOR") String participantRole
+        @Pattern(regexp = "WORKER|OPERATOR|BROWSER|VIEWER") String participantRole
 ) {
 }

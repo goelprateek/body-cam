@@ -23,6 +23,9 @@ public class LiveSession {
     @Column(name = "worker_name", nullable = false)
     private String workerName;
 
+    @Column(name = "reference_number", nullable = false, length = 120)
+    private String referenceNumber;
+
     @Column(name = "room_name", nullable = false, unique = true)
     private String roomName;
 
@@ -65,6 +68,14 @@ public class LiveSession {
 
     public String getRoomName() {
         return roomName;
+    }
+
+    public String getReferenceNumber() {
+        return referenceNumber;
+    }
+
+    public void setReferenceNumber(String referenceNumber) {
+        this.referenceNumber = referenceNumber;
     }
 
     public void setRoomName(String roomName) {

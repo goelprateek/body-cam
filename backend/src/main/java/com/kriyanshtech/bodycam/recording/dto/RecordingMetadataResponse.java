@@ -7,6 +7,11 @@ import java.time.Instant;
 
 public record RecordingMetadataResponse(
         Instant capturedAt,
+        Integer segmentSequence,
+        Instant segmentStartedAt,
+        Instant segmentEndedAt,
+        Long sessionElapsedStartMs,
+        Long sessionElapsedEndMs,
         BigDecimal latitude,
         BigDecimal longitude,
         BigDecimal altitudeMeters,

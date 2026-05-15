@@ -35,6 +35,10 @@ set APP_HOME=%DIRNAME%
 @rem Resolve any "." and ".." in APP_HOME to make it shorter.
 for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 
+@rem Keep this repo on its local Gradle cache to avoid workstation-wide lock conflicts.
+for %%i in ("%APP_HOME%\..") do set REPO_HOME=%%~fi
+set GRADLE_USER_HOME=%REPO_HOME%\.gradle-user-home
+
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 

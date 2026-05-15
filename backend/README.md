@@ -36,6 +36,24 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - Current Android uploads can include `capturedAt`, `cameraFacing`, and best-effort location fields.
 - The metadata model is designed to grow cleanly into thermal or other sensor capture through typed thermal columns plus flexible `sensorPayload` JSON.
 
+## Transcript Runtime
+
+- Transcript generation now uses a pluggable engine boundary selected by `APP_TRANSCRIPT_ENGINE`.
+- `vosk` is the first engine and keeps the current self-hosted WebSocket flow.
+- `faster-whisper` is now implemented as a second engine option for the planned quality-upgrade path.
+- Transcript requests are now queued in the backend and processed asynchronously by a scheduled background runner instead of blocking the request path.
+- Audio extraction is now handled through embedded JavaCV native bindings instead of shelling out to a host or container `ffmpeg` binary.
+- That means local IDE runs and backend containers no longer require a separately installed `ffmpeg`.
+- The transcript DB and API contract stays engine-neutral so a later move to `whisper.cpp` can remain a backend engine swap.
+- The backend now also exposes session-level transcript aggregation so continuous session playback and transcript review follow the same ordered segment timeline.
+- The transcript poll loop delay is configurable with `APP_TRANSCRIPT_POLL_DELAY_MS`, defaulting to `5000`.
+- The `faster-whisper` engine expects an OpenAI-compatible self-hosted transcription endpoint, defaulting to `TRANSCRIPT_FASTER_WHISPER_URL=http://localhost:8001/v1/audio/transcriptions`.
+- When you are ready to switch, set:
+  `APP_TRANSCRIPT_ENGINE=faster-whisper`
+  `TRANSCRIPT_FASTER_WHISPER_URL=...`
+  `TRANSCRIPT_FASTER_WHISPER_MODEL=large-v3`
+  `TRANSCRIPT_FASTER_WHISPER_TASK=transcribe`
+
 ## Database Migrations
 
 - Flyway versioned migrations live in `src/main/resources/db/migration`.
@@ -56,10 +74,22 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - `POST /api/auth/login`
 - `GET /api/auth/me`
 - `GET /api/sessions`
-- `POST /api/sessions`
+- `POST /api/sessions` with `workerId`, `workerName`, and required `referenceNumber`
 - `POST /api/sessions/{id}/join-token`
 - `POST /api/sessions/{id}/end`
 - `GET /api/recordings`
 - `GET /api/recordings/{id}/playback-url`
+- `GET /api/sessions/{id}/recordings/timeline`
+- `GET /api/sessions/{id}/recordings/export-package`
+- `POST /api/sessions/{id}/recordings/export-package`
+- `GET /api/sessions/{id}/transcript`
+- `GET /api/sessions/{id}/transcript/search?q=...`
+- `GET /api/sessions/{id}/transcript/subtitles.vtt`
+- `POST /api/sessions/{id}/transcript/generate`
+- `POST /api/sessions/{id}/transcript/retry-failed`
+- `GET /api/recordings/investigation-search?q=...`
+- `GET /api/recordings/{id}/transcript`
+- `GET /api/recordings/{id}/transcript/subtitles.vtt`
+- `POST /api/recordings/{id}/transcript/generate`
 - `POST /api/recordings`
 - `POST /api/recordings/upload`

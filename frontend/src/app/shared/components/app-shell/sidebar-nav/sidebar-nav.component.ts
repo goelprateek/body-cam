@@ -20,10 +20,10 @@ import { LayoutService } from '@shared/services/layout.service';
     <div class="sidenav-wrapper">
       <header class="sidenav-header">
         <div class="brand-block" [class.compact]="!layout.sidebarExpanded()">
-          <img class="brand-icon" src="assets/logo.png" alt="Body Cam Logo" />
+          <img class="brand-icon" src="assets/logo.png" alt="Karebo Body Cam Logo" />
           @if (layout.sidebarExpanded()) {
             <div class="brand-copy">
-              <span class="brand-name">Body Cam</span>
+              <span class="brand-name">Karebo Body Cam</span>
               <span class="brand-caption">Operator Console</span>
             </div>
           }

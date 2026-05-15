@@ -6,11 +6,13 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.kriyanshtech.bodycam.config.AppProperties;
 
 @SpringBootApplication
 @EnableConfigurationProperties(AppProperties.class)
+@EnableScheduling
 public class BodyCamApplication {
 
     private static final Logger log = LoggerFactory.getLogger(BodyCamApplication.class);

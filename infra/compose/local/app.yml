@@ -1,10 +1,18 @@
 services:
   backend:
+    profiles: ["app"]
     build:
       context: ../../../backend
       dockerfile: Dockerfile
     env_file:
-      - ../../../backend/.env.docker.local
+      - ../../../backend/.env.local
+    environment:
+      DB_HOST: postgres
+      LIVEKIT_URL: ws://livekit:7880
+      MINIO_ENDPOINT: http://minio:9000
+      APP_TRANSCRIPT_ENGINE: ${APP_TRANSCRIPT_ENGINE:-faster-whisper}
+      TRANSCRIPT_FASTER_WHISPER_URL: http://faster-whisper:9000/v1/audio/transcriptions
+      TRANSCRIPT_VOSK_URL: ws://vosk:2700
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -16,6 +24,10 @@ services:
         condition: service_started
       livekit:
         condition: service_started
+      faster-whisper:
+        condition: service_healthy
+      vosk:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -29,6 +41,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    profiles: ["app"]
     build:
       context: ../../../frontend
       dockerfile: Dockerfile

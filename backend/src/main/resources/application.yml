@@ -1,6 +1,26 @@
 spring:
   application:
     name: bodycam-backend
+  ai:
+    model:
+      chat: ${SPRING_AI_MODEL_CHAT:none}
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    chat:
+      client:
+        enabled: ${SPRING_AI_CHAT_CLIENT_ENABLED:false}
+    openai:
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:https://api.openai.com}
+      api-key: ${SPRING_AI_OPENAI_API_KEY:}
+      chat:
+        api-key: ${SPRING_AI_OPENAI_CHAT_API_KEY:${SPRING_AI_OPENAI_API_KEY:}}
+        options:
+          model: ${SPRING_AI_OPENAI_CHAT_MODEL:gpt-4o-mini}
+          temperature: ${SPRING_AI_OPENAI_CHAT_TEMPERATURE:0.2}
   servlet:
     multipart:
       max-file-size: ${APP_RECORDING_MAX_UPLOAD_SIZE:512MB}
@@ -49,3 +69,18 @@ app:
     bucket: ${MINIO_BUCKET:recordings}
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  transcript:
+    enabled: ${APP_TRANSCRIPT_ENABLED:true}
+    engine: ${APP_TRANSCRIPT_ENGINE:vosk}
+    vosk-url: ${TRANSCRIPT_VOSK_URL:ws://localhost:2700}
+    language-code: ${APP_TRANSCRIPT_LANGUAGE_CODE:en-ZA}
+    poll-delay-ms: ${APP_TRANSCRIPT_POLL_DELAY_MS:5000}
+    max-retry-count: ${APP_TRANSCRIPT_MAX_RETRY_COUNT:2}
+    faster-whisper:
+      url: ${TRANSCRIPT_FASTER_WHISPER_URL:http://localhost:8001/v1/audio/transcriptions}
+      model: ${TRANSCRIPT_FASTER_WHISPER_MODEL:large-v3}
+      task: ${TRANSCRIPT_FASTER_WHISPER_TASK:transcribe}
+      timeout-seconds: ${TRANSCRIPT_FASTER_WHISPER_TIMEOUT_SECONDS:300}
+    summary:
+      ai-enabled: ${APP_TRANSCRIPT_SUMMARY_AI_ENABLED:false}
+      ai-max-input-chars: ${APP_TRANSCRIPT_SUMMARY_AI_MAX_INPUT_CHARS:12000}

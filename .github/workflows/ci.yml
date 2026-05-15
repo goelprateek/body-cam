@@ -81,3 +81,10 @@ jobs:
       - name: Render production compose
         working-directory: infra
         run: docker compose --env-file .env.prod.example -f docker-compose.prod.yml config
+
+      - name: Render and validate LiveKit production config
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/deploy/render-livekit-config.sh "$GITHUB_WORKSPACE" infra/.env.prod.example backend/.env.prod scripts/deploy/livekit.test.generated.yaml
+          bash scripts/deploy/validate-livekit-config.sh "$GITHUB_WORKSPACE" infra/.env.prod.example backend/.env.prod scripts/deploy/livekit.test.generated.yaml

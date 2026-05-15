@@ -19,10 +19,11 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { RemoteAudioTrack, RemoteVideoTrack } from 'livekit-client';
 import { LiveRoomService } from './live-room.service';
 import { OperatorApiService } from './operator-api.service';
-import { SessionResponse } from './operator.models';
+import { SessionInviteResponse, SessionInviteRole, SessionResponse } from './operator.models';
 
 @Component({
   selector: 'app-operations-page',
@@ -34,146 +35,16 @@ import { SessionResponse } from './operator.models';
     MatDividerModule,
     MatProgressBarModule,
     MatIconModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatSnackBarModule
   ],
-  template: `
-    <section class="page workspace-grid">
-      <mat-card class="panel section-panel glass-panel" appearance="outlined">
-        <div class="section-head premium-head">
-          <div class="head-title">
-            <h2>Active Sessions</h2>
-            <span class="subtle-text live-count">{{ sessions().length }}</span>
-          </div>
-          <button mat-icon-button class="refresh-btn" (click)="refreshAll()" [disabled]="isRefreshing()">
-             <mat-icon>refresh</mat-icon>
-          </button>
-        </div>
-
-        @if (isRefreshing() || isJoining() || isEnding()) {
-          <mat-progress-bar mode="indeterminate" class="premium-progress"></mat-progress-bar>
-        }
-
-        @if (pageError()) {
-          <div class="notice notice-error">{{ pageError() }}</div>
-        }
-
-        <div class="session-list session-list-scroll premium-scroll" (scroll)="onSessionListScroll($event)">
-          @for (session of sessions(); track session.id) {
-            <mat-card
-              class="session-card premium-card"
-              appearance="outlined"
-              [class.session-card-selected]="session.id === selectedSessionId()"
-              (click)="selectSession(session.id)"
-            >
-              <div class="session-card-head">
-                <div class="session-card-info">
-                  <div class="session-avatar" [class.avatar-live]="session.status === 'ACTIVE'">
-                    <mat-icon>person</mat-icon>
-                  </div>
-                  <div class="session-details">
-                    <p class="session-worker">{{ session.workerName }}</p>
-                    <p class="session-room">{{ session.roomName }}</p>
-                  </div>
-                </div>
-                <span class="status-pill premium-status-pill" [class.status-live]="session.status === 'ACTIVE'">
-                  @if (session.status === 'ACTIVE') { <span class="pulse-dot"></span> }
-                  {{ session.status }}
-                </span>
-              </div>
-
-              <div class="inline-actions session-actions">
-                <button
-                  mat-flat-button
-                  type="button"
-                  class="action-btn-join premium-btn"
-                  (click)="joinSession(session); $event.stopPropagation()"
-                  [disabled]="session.status !== 'ACTIVE' || isJoining()"
-                >
-                  <mat-icon>visibility</mat-icon>
-                  {{ isJoining() && session.id === joiningSessionId() ? 'Joining...' : 'View Live' }}
-                </button>
-                <button
-                  mat-button
-                  type="button"
-                  class="action-btn-end"
-                  (click)="endSession(session); $event.stopPropagation()"
-                  [disabled]="session.status !== 'ACTIVE' || isEnding()"
-                >
-                  <mat-icon>stop_circle</mat-icon>
-                  End Stream
-                </button>
-              </div>
-            </mat-card>
-          } @empty {
-            <div class="empty-state premium-empty">
-              <div class="empty-icon-wrap">
-                <mat-icon>satellite_alt</mat-icon>
-              </div>
-              <span class="empty-title">System Standby</span>
-              <span class="empty-subtitle">No active field sessions.</span>
-            </div>
-          }
-
-          @if (isLoadingMore()) {
-            <div class="session-list-footer subtle-text">Loading more active sessions...</div>
-          } @else if (!hasMoreSessions() && sessions().length) {
-            <div class="session-list-footer subtle-text">All active sessions loaded</div>
-          }
-        </div>
-      </mat-card>
-
-      <section class="workspace-main">
-        <mat-card class="panel viewer-panel glass-panel" appearance="outlined">
-          <div class="section-head premium-head viewer-head">
-            <div class="viewer-head-copy">
-              <h2>{{ selectedSession()?.workerName || 'Live Viewer' }}</h2>
-              <p class="viewer-caption">
-                {{ liveRoom.lastEvent() }}
-              </p>
-            </div>
-            <div class="viewer-status">
-              <span class="status-pill premium-status-pill" [class.status-live]="liveRoom.connectionLabel() === 'Live'">
-                @if (liveRoom.connectionLabel() === 'Live') { <span class="pulse-dot"></span> }
-                {{ liveRoom.connectionLabel() }}
-              </span>
-            </div>
-          </div>
-
-          @if (liveRoom.error()) {
-            <div class="notice notice-error">{{ liveRoom.error() }}</div>
-          }
-
-          <div class="viewer-frame premium-frame" [class.frame-live]="liveRoom.remoteVideoTrack()">
-            <div class="viewer-stage premium-stage" #videoHost>
-              @if (!liveRoom.remoteVideoTrack()) {
-                <div class="viewer-empty premium-empty-viewer">
-                  <div class="radar-scan"></div>
-                  <mat-icon class="huge-icon premium-huge-icon">videocam_off</mat-icon>
-                  <strong>{{ viewerMessage() }}</strong>
-                </div>
-              } @else {
-                 <div class="hud-overlay premium-hud">
-                    <div class="hud-top-right">
-                       <span class="hud-rec"><mat-icon>fiber_manual_record</mat-icon> REC</span>
-                    </div>
-                    <div class="hud-corners">
-                       <div class="corner tl"></div>
-                       <div class="corner tr"></div>
-                       <div class="corner bl"></div>
-                       <div class="corner br"></div>
-                    </div>
-                 </div>
-              }
-            </div>
-            <div #audioHost class="sr-only" aria-hidden="true"></div>
-          </div>
-        </mat-card>
-      </section>
-    </section>
-  `
+  templateUrl: './operations-page.component.html',
+  styleUrl: './operations-page.component.scss'
 })
 export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   private static readonly SESSION_PAGE_SIZE = 10;
+  private static readonly PUBLISHER_INVITE_ROLE = 'BROWSER' as const;
+  private static readonly VIEWER_INVITE_ROLE = 'VIEWER' as const;
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
@@ -186,21 +57,33 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
 
   readonly api = inject(OperatorApiService);
   readonly liveRoom = inject(LiveRoomService);
+  private readonly snackBar = inject(MatSnackBar);
 
   readonly sessions = signal<SessionResponse[]>([]);
   readonly selectedSessionId = signal<string | null>(null);
+  readonly isCreatePanelOpen = signal(false);
+  readonly newSessionWorkerName = signal('');
+  readonly newSessionReferenceNumber = signal('');
   readonly isRefreshing = signal(false);
   readonly isJoining = signal(false);
   readonly joiningSessionId = signal<string | null>(null);
   readonly isEnding = signal(false);
+  readonly isCreatingSession = signal(false);
+  readonly sharingSessionId = signal<string | null>(null);
+  readonly revokingInviteId = signal<string | null>(null);
+  readonly sharePanelSessionId = signal<string | null>(null);
+  readonly viewerInvite = signal<SessionInviteResponse | null>(null);
+  readonly publisherInvite = signal<SessionInviteResponse | null>(null);
   readonly isLoadingMore = signal(false);
   readonly hasMoreSessions = signal(false);
+  readonly nextSessionCursor = signal<string | null>(null);
   readonly pageError = signal<string | null>(null);
-
-  private nextSessionsPage = 0;
 
   readonly selectedSession = computed(
     () => this.sessions().find((session) => session.id === this.selectedSessionId()) ?? null
+  );
+  readonly sharePanelSession = computed(
+    () => this.sessions().find((session) => session.id === this.sharePanelSessionId()) ?? null
   );
   readonly viewerMessage = computed(() => {
     if (this.liveRoom.connectionLabel() === 'Connecting') {
@@ -219,8 +102,6 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   });
 
   constructor() {
-
-
     void this.refreshAll();
   }
 
@@ -245,13 +126,34 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     this.liveRoom.disconnect();
   }
 
-
-
   selectSession(sessionId: string): void {
     this.selectedSessionId.set(sessionId);
   }
 
+  toggleSharePanel(session: SessionResponse): void {
+    if (this.sharePanelSessionId() === session.id) {
+      this.closeSharePanel();
+      return;
+    }
 
+    this.selectedSessionId.set(session.id);
+    this.sharePanelSessionId.set(session.id);
+    this.viewerInvite.set(null);
+    this.publisherInvite.set(null);
+    this.pageError.set(null);
+  }
+
+  toggleCreatePanel(): void {
+    this.isCreatePanelOpen.update((open) => !open);
+  }
+
+  updateNewSessionWorkerName(value: string): void {
+    this.newSessionWorkerName.set(value);
+  }
+
+  updateNewSessionReferenceNumber(value: string): void {
+    this.newSessionReferenceNumber.set(value);
+  }
 
   async refreshAll(silent = false): Promise<void> {
     if (!silent) {
@@ -260,10 +162,12 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     }
 
     try {
-      const page = await this.api.listActiveSessions(0, OperationsPageComponent.SESSION_PAGE_SIZE);
+      this.nextSessionCursor.set(null);
+      this.hasMoreSessions.set(false);
+      const page = await this.api.listActiveSessionsCursor(null, OperationsPageComponent.SESSION_PAGE_SIZE);
 
       this.sessions.set(page.items);
-      this.nextSessionsPage = page.page + 1;
+      this.nextSessionCursor.set(page.nextCursor);
       this.hasMoreSessions.set(page.hasNext);
 
       if (
@@ -300,15 +204,15 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     this.isLoadingMore.set(true);
 
     try {
-      const page = await this.api.listActiveSessions(
-        this.nextSessionsPage,
+      const page = await this.api.listActiveSessionsCursor(
+        this.nextSessionCursor(),
         OperationsPageComponent.SESSION_PAGE_SIZE
       );
 
       const knownIds = new Set(this.sessions().map((session) => session.id));
       const nextItems = page.items.filter((session) => !knownIds.has(session.id));
       this.sessions.update((sessions) => [...sessions, ...nextItems]);
-      this.nextSessionsPage = page.page + 1;
+      this.nextSessionCursor.set(page.nextCursor);
       this.hasMoreSessions.set(page.hasNext);
     } catch (error) {
       this.pageError.set(this.api.explainError(error));
@@ -362,6 +266,152 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     const remaining = host.scrollHeight - host.scrollTop - host.clientHeight;
     if (remaining <= 120) {
       void this.loadMoreSessions();
+    }
+  }
+
+  async createSession(copyJoinLink: boolean): Promise<void> {
+    const workerName = this.newSessionWorkerName().trim();
+    const referenceNumber = this.newSessionReferenceNumber().trim();
+    if (!workerName || !referenceNumber) {
+      this.pageError.set('Worker name and reference number are required to create a session.');
+      return;
+    }
+
+    this.pageError.set(null);
+    this.isCreatingSession.set(true);
+
+    try {
+      const session = await this.api.createSession({
+        workerName,
+        referenceNumber
+      });
+      await this.refreshAll(true);
+      this.selectedSessionId.set(session.id);
+      this.isCreatePanelOpen.set(false);
+      this.newSessionWorkerName.set('');
+      this.newSessionReferenceNumber.set('');
+
+      if (copyJoinLink) {
+        this.sharePanelSessionId.set(session.id);
+        await this.generateShareLink(session, OperationsPageComponent.VIEWER_INVITE_ROLE, true);
+      } else {
+        this.snackBar.open('Session created.', 'Close', { duration: 3000 });
+      }
+    } catch (error) {
+      this.pageError.set(this.api.explainError(error));
+    } finally {
+      this.isCreatingSession.set(false);
+    }
+  }
+
+  async generateShareLink(
+    session: SessionResponse,
+    participantRole: Extract<SessionInviteRole, 'BROWSER' | 'VIEWER'>,
+    copyToClipboard = false
+  ): Promise<void> {
+    this.pageError.set(null);
+    this.sharingSessionId.set(session.id);
+
+    try {
+      const invite = await this.api.createSessionInvite(session.id, participantRole);
+      this.storeInvite(invite, !copyToClipboard);
+      if (copyToClipboard) {
+        await this.copyInvite(invite);
+      }
+    } catch (error) {
+      this.pageError.set(this.api.explainError(error));
+    } finally {
+      this.sharingSessionId.set(null);
+    }
+  }
+
+  async copyInvite(invite: SessionInviteResponse): Promise<void> {
+    const joinUrl = this.buildJoinUrl(invite.joinPath);
+    await navigator.clipboard.writeText(joinUrl);
+    this.snackBar.open(
+      invite.participantRole === OperationsPageComponent.PUBLISHER_INVITE_ROLE
+        ? 'Publisher join link copied.'
+        : 'Viewer join link copied.',
+      'Close',
+      { duration: 4000 }
+    );
+  }
+
+  emailInvite(invite: SessionInviteResponse): void {
+    const joinUrl = this.buildJoinUrl(invite.joinPath);
+    const roleLabel = invite.participantRole === OperationsPageComponent.PUBLISHER_INVITE_ROLE
+      ? 'Publisher'
+      : 'Viewer';
+    const subject = encodeURIComponent(`Session access for ${invite.referenceNumber}`);
+    const body = encodeURIComponent(
+      [
+        `You have been invited to join session ${invite.referenceNumber}.`,
+        '',
+        `Access type: ${roleLabel}`,
+        `Participant: ${invite.workerName}`,
+        `Room: ${invite.roomName}`,
+        `Link: ${joinUrl}`,
+        `Expires: ${new Date(invite.expiresAt).toLocaleString()}`,
+        '',
+        roleLabel === 'Publisher'
+          ? 'This link allows browser microphone and camera publishing.'
+          : 'This link joins the room as a viewer without publishing browser media.'
+      ].join('\n')
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  }
+
+  async revokeInvite(invite: SessionInviteResponse): Promise<void> {
+    this.pageError.set(null);
+    this.revokingInviteId.set(invite.id);
+
+    try {
+      await this.api.revokeSessionInvite(invite.sessionId, invite.id);
+      if (invite.participantRole === OperationsPageComponent.PUBLISHER_INVITE_ROLE) {
+        this.publisherInvite.set(null);
+        this.snackBar.open('Publisher link revoked.', 'Close', { duration: 3000 });
+      } else if (invite.participantRole === OperationsPageComponent.VIEWER_INVITE_ROLE) {
+        this.viewerInvite.set(null);
+        this.snackBar.open('Viewer link revoked.', 'Close', { duration: 3000 });
+      }
+    } catch (error) {
+      this.pageError.set(this.api.explainError(error));
+    } finally {
+      this.revokingInviteId.set(null);
+    }
+  }
+
+  closeSharePanel(): void {
+    this.sharePanelSessionId.set(null);
+    this.viewerInvite.set(null);
+    this.publisherInvite.set(null);
+  }
+
+  inviteUrl(invite: SessionInviteResponse | null): string {
+    if (!invite) {
+      return '';
+    }
+    return this.buildJoinUrl(invite.joinPath);
+  }
+
+  private buildJoinUrl(joinPath: string): string {
+    return new URL(joinPath, window.location.origin).toString();
+  }
+
+  private storeInvite(invite: SessionInviteResponse, notifyReady: boolean): void {
+    if (invite.participantRole === OperationsPageComponent.PUBLISHER_INVITE_ROLE) {
+      this.publisherInvite.set(invite);
+      if (notifyReady) {
+        this.snackBar.open('Publisher link ready to share.', 'Close', { duration: 3000 });
+      }
+      return;
+    }
+
+    if (invite.participantRole === OperationsPageComponent.VIEWER_INVITE_ROLE) {
+      this.viewerInvite.set(invite);
+      if (notifyReady) {
+        this.snackBar.open('Viewer link ready to share.', 'Close', { duration: 3000 });
+      }
     }
   }
 

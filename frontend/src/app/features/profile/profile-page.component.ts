@@ -6,6 +6,7 @@ import { MatCardModule } from '@angular/material/card';
   selector: 'app-profile-page',
   standalone: true,
   imports: [CommonModule, MatCardModule],
+  styleUrl: './profile-page.component.scss',
   template: `
     <section class="page">
       <mat-card class="panel section-panel settings-card" appearance="outlined">

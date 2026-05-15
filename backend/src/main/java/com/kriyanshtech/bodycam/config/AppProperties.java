@@ -6,7 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record AppProperties(
         Jwt jwt,
         LiveKit livekit,
-        Storage storage
+        Storage storage,
+        Transcript transcript
 ) {
 
     public record Jwt(
@@ -31,6 +32,32 @@ public record AppProperties(
             String bucket,
             String accessKey,
             String secretKey
+    ) {
+    }
+
+    public record Transcript(
+            boolean enabled,
+            String engine,
+            String voskUrl,
+            String languageCode,
+            long pollDelayMs,
+            int maxRetryCount,
+            FasterWhisper fasterWhisper,
+            Summary summary
+    ) {
+    }
+
+    public record FasterWhisper(
+            String url,
+            String model,
+            String task,
+            long timeoutSeconds
+    ) {
+    }
+
+    public record Summary(
+            boolean aiEnabled,
+            int aiMaxInputChars
     ) {
     }
 }

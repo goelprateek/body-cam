@@ -1,5 +1,6 @@
 include:
   - compose/local/db.yml
+  - compose/local/infra.yml
   - compose/local/app.yml
 
 networks:
@@ -13,3 +14,5 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  livekit_config:
+  transcript_data:

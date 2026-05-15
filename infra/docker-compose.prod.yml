@@ -1,5 +1,6 @@
 include:
   - compose/prod/db.yml
+  - compose/prod/infra.yml
   - compose/prod/app.yml
 
 networks:
@@ -13,3 +14,5 @@ volumes:
   redis_data:
   minio_data:
   backend_logs:
+  livekit_config:
+  transcript_data:

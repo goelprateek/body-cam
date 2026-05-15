@@ -6,12 +6,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kriyanshtech.bodycam.common.CreatedAtUuidCursor;
+import com.kriyanshtech.bodycam.common.CreatedAtUuidCursorCodec;
+import com.kriyanshtech.bodycam.common.CursorPaginationSupport;
 import com.kriyanshtech.bodycam.common.NotFoundException;
 import com.kriyanshtech.bodycam.recording.dto.CreateRecordingRequest;
 import com.kriyanshtech.bodycam.recording.dto.RecordingMetadataRequest;
 import com.kriyanshtech.bodycam.recording.dto.RecordingMetadataResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingPlaybackResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingResponse;
+import com.kriyanshtech.bodycam.recording.dto.SessionRecordingIntegrityStatus;
+import com.kriyanshtech.bodycam.recording.dto.SessionRecordingTimelineGapResponse;
+import com.kriyanshtech.bodycam.recording.dto.SessionRecordingTimelineResponse;
+import com.kriyanshtech.bodycam.recording.dto.SessionRecordingTimelineSegmentResponse;
 import com.kriyanshtech.bodycam.recording.entity.RecordingAsset;
 import com.kriyanshtech.bodycam.recording.entity.RecordingMetadata;
 import com.kriyanshtech.bodycam.recording.repository.RecordingAssetRepository;
@@ -21,35 +29,64 @@ import com.kriyanshtech.bodycam.session.repository.LiveSessionRepository;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import org.springframework.data.domain.PageRequest;
 
 @Service
 public class RecordingService {
     private static final int PLAYBACK_URL_EXPIRY_SECONDS = 300;
+    private static final long TIMELINE_GAP_THRESHOLD_MS = 1_500L;
     private static final Logger log = LoggerFactory.getLogger(RecordingService.class);
-
 
     private final RecordingAssetRepository recordingAssetRepository;
     private final RecordingMetadataRepository recordingMetadataRepository;
     private final LiveSessionRepository liveSessionRepository;
     private final ObjectStorageService objectStorageService;
+    private final CreatedAtUuidCursorCodec cursorCodec;
+    private final ObjectMapper objectMapper;
 
     public RecordingService(
             RecordingAssetRepository recordingAssetRepository,
             RecordingMetadataRepository recordingMetadataRepository,
             LiveSessionRepository liveSessionRepository,
-            ObjectStorageService objectStorageService
-    ) {
+            ObjectStorageService objectStorageService,
+            CreatedAtUuidCursorCodec cursorCodec, ObjectMapper objectMapper) {
         this.recordingAssetRepository = recordingAssetRepository;
         this.recordingMetadataRepository = recordingMetadataRepository;
         this.liveSessionRepository = liveSessionRepository;
         this.objectStorageService = objectStorageService;
+        this.cursorCodec = cursorCodec;
+        this.objectMapper = objectMapper;
+    }
+
+    @Transactional(readOnly = true)
+    public com.kriyanshtech.bodycam.common.CursorPageResponse<RecordingResponse> listRecordingsCursor(String cursor,
+            int size) {
+        List<RecordingAsset> assets;
+        if (cursor == null || cursor.trim().isEmpty()) {
+            assets = recordingAssetRepository.findFirstPage(PageRequest.of(0, size + 1));
+        } else {
+            CreatedAtUuidCursor decodedCursor = cursorCodec.decode(cursor);
+            assets = recordingAssetRepository.findNextPage(
+                    decodedCursor.createdAt(),
+                    decodedCursor.id(),
+                    PageRequest.of(0, size + 1));
+        }
+
+        return CursorPaginationSupport.buildPage(
+                assets,
+                size,
+                this::map,
+                asset -> cursorCodec.encode(new CreatedAtUuidCursor(asset.getCreatedAt(), asset.getId())));
     }
 
     @Transactional(readOnly = true)
     public List<RecordingResponse> listRecordings() {
-        List<RecordingResponse> recordings = recordingAssetRepository.findAllByOrderByCreatedAtDesc().stream().map(this::map).toList();
+        List<RecordingResponse> recordings = recordingAssetRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(this::map).toList();
         log.info("Listed {} recordings", recordings.size());
         return recordings;
     }
@@ -63,8 +100,57 @@ public class RecordingService {
         return new RecordingPlaybackResponse(
                 asset.getId(),
                 objectStorageService.presignedPlaybackUrl(asset.getObjectKey(), PLAYBACK_URL_EXPIRY_SECONDS),
-                PLAYBACK_URL_EXPIRY_SECONDS
-        );
+                PLAYBACK_URL_EXPIRY_SECONDS);
+    }
+
+    @Transactional(readOnly = true)
+    public SessionRecordingTimelineResponse sessionTimeline(UUID sessionId) {
+        LiveSession session = liveSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
+        List<RecordingAsset> recordings = recordingAssetRepository.findBySession_IdOrderByCreatedAtAsc(sessionId)
+                .stream()
+                .sorted(RecordingTimelineSupport.segmentTimelineComparator())
+                .toList();
+        log.info("Building session recording timeline sessionId={} segmentCount={}", sessionId, recordings.size());
+
+        List<SessionRecordingTimelineSegmentResponse> segments = recordings.stream()
+                .map(this::mapTimelineSegment)
+                .toList();
+
+        Long totalDurationMs = segments.stream()
+                .map(SessionRecordingTimelineSegmentResponse::sessionElapsedEndMs)
+                .filter(value -> value != null && value >= 0)
+                .max(Long::compareTo)
+                .orElseGet(() -> estimateTotalDurationMs(segments));
+
+        TimelineIntegrityEvaluation integrity = evaluateTimelineIntegrity(session, segments);
+        log.info(
+                "Built session recording timeline sessionId={} segmentCount={} totalDurationMs={} integrityStatus={} hasTimelineGaps={} duplicateSegmentCount={} missingSequenceCount={} segmentsMissingTimingCount={}",
+                sessionId,
+                segments.size(),
+                totalDurationMs,
+                integrity.integrityStatus(),
+                integrity.hasTimelineGaps(),
+                integrity.duplicateSegmentCount(),
+                integrity.missingSequenceCount(),
+                integrity.segmentsMissingTimingCount());
+
+        return new SessionRecordingTimelineResponse(
+                session.getId(),
+                session.getWorkerId(),
+                session.getWorkerName(),
+                session.getReferenceNumber(),
+                session.getRoomName(),
+                session.getStartedAt(),
+                session.getEndedAt(),
+                totalDurationMs,
+                integrity.integrityStatus(),
+                integrity.hasTimelineGaps(),
+                integrity.duplicateSegmentCount(),
+                integrity.missingSequenceCount(),
+                integrity.segmentsMissingTimingCount(),
+                integrity.gaps(),
+                segments);
     }
 
     @Transactional
@@ -76,16 +162,15 @@ public class RecordingService {
                 request.sessionId(),
                 request.objectKey(),
                 request.durationSeconds(),
-                request.metadata() != null
-        );
+                request.metadata() != null);
 
         return saveRecording(
                 session,
                 request.objectKey(),
+                buildIdempotencyKey(request.sessionId(), request.metadata()),
                 null,
                 request.durationSeconds(),
-                request.metadata()
-        );
+                request.metadata());
     }
 
     @Transactional
@@ -93,8 +178,7 @@ public class RecordingService {
             UUID sessionId,
             Integer durationSeconds,
             RecordingMetadataRequest metadata,
-            MultipartFile file
-    ) {
+            MultipartFile file) {
         LiveSession session = liveSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
 
@@ -102,28 +186,43 @@ public class RecordingService {
             throw new IllegalArgumentException("Recording segment file is required");
         }
 
+        String idempotencyKey = buildIdempotencyKey(sessionId, metadata);
+        if (idempotencyKey != null) {
+            RecordingAsset existingRecording = recordingAssetRepository.findByIdempotencyKey(idempotencyKey)
+                    .orElse(null);
+            if (existingRecording != null) {
+                log.info(
+                        "Reusing existing recording for duplicate upload sessionId={} idempotencyKey={} recordingId={} objectKey={}",
+                        sessionId,
+                        idempotencyKey,
+                        existingRecording.getId(),
+                        existingRecording.getObjectKey());
+                return map(existingRecording);
+            }
+        }
+
         String extension = extensionFor(file.getOriginalFilename(), file.getContentType());
         String objectKey = "sessions/%s/%s%s".formatted(sessionId, UUID.randomUUID(), extension);
         log.info(
-                "Uploading recording for sessionId={} originalFilename={} sizeBytes={} contentType={} durationSeconds={} metadataPresent={} objectKey={}",
+                "Uploading recording for sessionId={} originalFilename={} sizeBytes={} contentType={} durationSeconds={} metadataPresent={} objectKey={} idempotencyKey={}",
                 sessionId,
                 file.getOriginalFilename(),
                 file.getSize(),
                 file.getContentType(),
                 durationSeconds,
                 metadata != null,
-                objectKey
-        );
+                objectKey,
+                idempotencyKey);
 
         try (var inputStream = file.getInputStream()) {
             objectStorageService.upload(
                     objectKey,
                     inputStream,
                     file.getSize(),
-                    file.getContentType() == null ? "application/octet-stream" : file.getContentType()
-            );
+                    file.getContentType() == null ? "application/octet-stream" : file.getContentType());
         } catch (IOException exception) {
-            log.error("Failed to read uploaded recording stream for sessionId={} objectKey={}", sessionId, objectKey, exception);
+            log.error("Failed to read uploaded recording stream for sessionId={} objectKey={}", sessionId, objectKey,
+                    exception);
             throw new IllegalStateException("Failed to read recording segment", exception);
         }
 
@@ -132,39 +231,45 @@ public class RecordingService {
         return saveRecording(
                 session,
                 objectKey,
+                idempotencyKey,
                 null,
                 durationSeconds,
-                metadata
-        );
+                metadata);
     }
 
     private RecordingResponse saveRecording(
             LiveSession session,
             String objectKey,
+            String idempotencyKey,
             String playbackUrl,
             Integer durationSeconds,
-            RecordingMetadataRequest metadata
-    ) {
+            RecordingMetadataRequest metadata) {
         RecordingAsset recordingAsset = new RecordingAsset();
         recordingAsset.setId(UUID.randomUUID());
         recordingAsset.setSession(session);
         recordingAsset.setObjectKey(objectKey);
+        recordingAsset.setIdempotencyKey(idempotencyKey);
         recordingAsset.setPlaybackUrl(playbackUrl);
         recordingAsset.setDurationSeconds(durationSeconds);
         recordingAsset.setCreatedAt(Instant.now());
         RecordingAsset savedRecording = recordingAssetRepository.save(recordingAsset);
         log.info(
-                "Saved recording asset id={} sessionId={} objectKey={} durationSeconds={}",
+                "Saved recording asset id={} sessionId={} objectKey={} durationSeconds={} idempotencyKey={}",
                 savedRecording.getId(),
                 session.getId(),
                 objectKey,
-                durationSeconds
-        );
+                durationSeconds,
+                idempotencyKey);
 
         if (metadata != null) {
             RecordingMetadata savedMetadata = new RecordingMetadata();
             savedMetadata.setRecording(savedRecording);
             savedMetadata.setCapturedAt(metadata.capturedAt());
+            savedMetadata.setSegmentSequence(metadata.segmentSequence());
+            savedMetadata.setSegmentStartedAt(metadata.segmentStartedAt());
+            savedMetadata.setSegmentEndedAt(metadata.segmentEndedAt());
+            savedMetadata.setSessionElapsedStartMs(metadata.sessionElapsedStartMs());
+            savedMetadata.setSessionElapsedEndMs(metadata.sessionElapsedEndMs());
             savedMetadata.setLatitude(metadata.latitude());
             savedMetadata.setLongitude(metadata.longitude());
             savedMetadata.setAltitudeMeters(metadata.altitudeMeters());
@@ -174,19 +279,25 @@ public class RecordingService {
             savedMetadata.setThermalMinC(metadata.thermalMinC());
             savedMetadata.setThermalMaxC(metadata.thermalMaxC());
             savedMetadata.setThermalAvgC(metadata.thermalAvgC());
-            savedMetadata.setSensorPayload(metadata.sensorPayload());
+            savedMetadata.setSensorPayload(
+                    metadata.sensorPayload() != null
+                            ? objectMapper.valueToTree(metadata.sensorPayload())
+                            : null);
             savedMetadata.setCreatedAt(Instant.now());
             savedRecording.setMetadata(recordingMetadataRepository.save(savedMetadata));
             log.info(
-                    "Saved recording metadata for recordingId={} capturedAt={} cameraFacing={} hasLocation={} hasSensorPayload={}",
+                    "Saved recording metadata for recordingId={} segmentSequence={} sessionElapsedStartMs={} sessionElapsedEndMs={} capturedAt={} cameraFacing={} hasLocation={} hasSensorPayload={}",
                     savedRecording.getId(),
+                    metadata.segmentSequence(),
+                    metadata.sessionElapsedStartMs(),
+                    metadata.sessionElapsedEndMs(),
                     metadata.capturedAt(),
                     metadata.cameraFacing(),
                     metadata.latitude() != null && metadata.longitude() != null,
-                    metadata.sensorPayload() != null
-            );
+                    metadata.sensorPayload() != null);
         } else {
-            log.warn("Recording saved without metadata for recordingId={} sessionId={}", savedRecording.getId(), session.getId());
+            log.warn("Recording saved without metadata for recordingId={} sessionId={}", savedRecording.getId(),
+                    session.getId());
         }
 
         return map(savedRecording);
@@ -209,13 +320,33 @@ public class RecordingService {
         return new RecordingResponse(
                 asset.getId(),
                 asset.getSession().getId(),
+                asset.getSession().getWorkerId(),
+                asset.getSession().getWorkerName(),
+                asset.getSession().getReferenceNumber(),
                 asset.getSession().getRoomName(),
                 asset.getObjectKey(),
                 null,
                 asset.getDurationSeconds(),
                 asset.getCreatedAt(),
-                mapMetadata(asset.getMetadata())
-        );
+                mapMetadata(asset.getMetadata()),
+                asset.getTranscript() == null ? null : asset.getTranscript().getStatus());
+    }
+
+    private SessionRecordingTimelineSegmentResponse mapTimelineSegment(RecordingAsset asset) {
+        RecordingMetadata metadata = asset.getMetadata();
+        return new SessionRecordingTimelineSegmentResponse(
+                asset.getId(),
+                metadata == null ? null : metadata.getSegmentSequence(),
+                asset.getObjectKey(),
+                objectStorageService.presignedPlaybackUrl(asset.getObjectKey(), PLAYBACK_URL_EXPIRY_SECONDS),
+                asset.getDurationSeconds(),
+                asset.getCreatedAt(),
+                metadata == null ? null : metadata.getCapturedAt(),
+                metadata == null ? null : metadata.getSegmentStartedAt(),
+                metadata == null ? null : metadata.getSegmentEndedAt(),
+                metadata == null ? null : metadata.getSessionElapsedStartMs(),
+                metadata == null ? null : metadata.getSessionElapsedEndMs(),
+                asset.getTranscript() == null ? null : asset.getTranscript().getStatus());
     }
 
     private RecordingMetadataResponse mapMetadata(RecordingMetadata metadata) {
@@ -224,6 +355,11 @@ public class RecordingService {
         }
         return new RecordingMetadataResponse(
                 metadata.getCapturedAt(),
+                metadata.getSegmentSequence(),
+                metadata.getSegmentStartedAt(),
+                metadata.getSegmentEndedAt(),
+                metadata.getSessionElapsedStartMs(),
+                metadata.getSessionElapsedEndMs(),
                 metadata.getLatitude(),
                 metadata.getLongitude(),
                 metadata.getAltitudeMeters(),
@@ -233,7 +369,144 @@ public class RecordingService {
                 metadata.getThermalMinC(),
                 metadata.getThermalMaxC(),
                 metadata.getThermalAvgC(),
-                metadata.getSensorPayload()
-        );
+                metadata.getSensorPayload());
+    }
+
+    private Long estimateTotalDurationMs(List<SessionRecordingTimelineSegmentResponse> segments) {
+        long total = 0L;
+        for (SessionRecordingTimelineSegmentResponse segment : segments) {
+            if (segment.durationSeconds() != null && segment.durationSeconds() > 0) {
+                total += segment.durationSeconds() * 1000L;
+            }
+        }
+        return total;
+    }
+
+    private TimelineIntegrityEvaluation evaluateTimelineIntegrity(
+            LiveSession session,
+            List<SessionRecordingTimelineSegmentResponse> segments) {
+        Integer expectedNextSequence = null;
+        Long previousEndMs = null;
+        int duplicateSegmentCount = 0;
+        int missingSequenceCount = 0;
+        int segmentsMissingTimingCount = 0;
+        boolean hasTimelineGaps = false;
+        List<SessionRecordingTimelineGapResponse> gaps = new ArrayList<>();
+
+        for (SessionRecordingTimelineSegmentResponse segment : segments) {
+            boolean missingTimingForSegment = false;
+            Integer sequence = segment.segmentSequence();
+            if (sequence != null) {
+                if (expectedNextSequence != null) {
+                    if (sequence.equals(expectedNextSequence)) {
+                        expectedNextSequence = sequence + 1;
+                    } else if (sequence > expectedNextSequence) {
+                        int missingCount = sequence - expectedNextSequence;
+                        missingSequenceCount += missingCount;
+                        expectedNextSequence = sequence + 1;
+                        hasTimelineGaps = true;
+                        gaps.add(new SessionRecordingTimelineGapResponse(
+                                "MISSING_SEQUENCE",
+                                "Missing " + missingCount + " expected upload segment(s) before segment "
+                                        + (sequence + 1),
+                                previousEndMs,
+                                segment.sessionElapsedStartMs(),
+                                missingCount));
+                    } else {
+                        duplicateSegmentCount++;
+                        hasTimelineGaps = true;
+                        gaps.add(new SessionRecordingTimelineGapResponse(
+                                "DUPLICATE_SEQUENCE",
+                                "Duplicate or out-of-order segment sequence detected at segment " + (sequence + 1),
+                                segment.sessionElapsedStartMs(),
+                                segment.sessionElapsedEndMs(),
+                                1));
+                    }
+                } else {
+                    expectedNextSequence = sequence + 1;
+                }
+            }
+
+            if (previousEndMs != null
+                    && segment.sessionElapsedStartMs() != null
+                    && segment.sessionElapsedStartMs() > previousEndMs + TIMELINE_GAP_THRESHOLD_MS) {
+                hasTimelineGaps = true;
+                gaps.add(new SessionRecordingTimelineGapResponse(
+                        "TIMING_GAP",
+                        "Playback gap detected between uploaded segments.",
+                        previousEndMs,
+                        segment.sessionElapsedStartMs(),
+                        null));
+            }
+
+            if (previousEndMs != null
+                    && segment.sessionElapsedStartMs() != null
+                    && segment.sessionElapsedStartMs() < previousEndMs - TIMELINE_GAP_THRESHOLD_MS) {
+                hasTimelineGaps = true;
+                gaps.add(new SessionRecordingTimelineGapResponse(
+                        "TIMING_OVERLAP",
+                        "Segment timing overlaps with a previous clip and should be reviewed.",
+                        segment.sessionElapsedStartMs(),
+                        previousEndMs,
+                        null));
+            }
+
+            if (segment.sessionElapsedEndMs() != null) {
+                previousEndMs = segment.sessionElapsedEndMs();
+            } else if (segment.sessionElapsedStartMs() != null && segment.durationSeconds() != null) {
+                previousEndMs = segment.sessionElapsedStartMs() + (segment.durationSeconds() * 1000L);
+            } else {
+                missingTimingForSegment = true;
+            }
+
+            if (segment.sessionElapsedStartMs() == null || segment.sessionElapsedEndMs() == null) {
+                missingTimingForSegment = true;
+            }
+
+            if (missingTimingForSegment) {
+                segmentsMissingTimingCount++;
+                gaps.add(new SessionRecordingTimelineGapResponse(
+                        "MISSING_TIMING",
+                        "Segment timing metadata is missing for one or more clips.",
+                        segment.sessionElapsedStartMs(),
+                        segment.sessionElapsedEndMs(),
+                        1));
+            }
+        }
+
+        SessionRecordingIntegrityStatus integrityStatus;
+        if (hasTimelineGaps || duplicateSegmentCount > 0 || missingSequenceCount > 0) {
+            integrityStatus = SessionRecordingIntegrityStatus.HAS_GAPS;
+        } else if (session.getEndedAt() == null) {
+            integrityStatus = SessionRecordingIntegrityStatus.PROCESSING_UPLOADS;
+        } else if (segments.isEmpty() || segmentsMissingTimingCount > 0) {
+            integrityStatus = SessionRecordingIntegrityStatus.PARTIAL;
+        } else {
+            integrityStatus = SessionRecordingIntegrityStatus.COMPLETE;
+        }
+
+        return new TimelineIntegrityEvaluation(
+                integrityStatus,
+                hasTimelineGaps,
+                duplicateSegmentCount,
+                missingSequenceCount,
+                segmentsMissingTimingCount,
+                gaps);
+    }
+
+    private String buildIdempotencyKey(UUID sessionId, RecordingMetadataRequest metadata) {
+        if (sessionId == null || metadata == null || metadata.segmentSequence() == null) {
+            return null;
+        }
+        return sessionId + ":" + metadata.segmentSequence();
+    }
+
+    private record TimelineIntegrityEvaluation(
+            SessionRecordingIntegrityStatus integrityStatus,
+            boolean hasTimelineGaps,
+            int duplicateSegmentCount,
+            int missingSequenceCount,
+            int segmentsMissingTimingCount,
+            List<SessionRecordingTimelineGapResponse> gaps) {
     }
 }

@@ -12,6 +12,9 @@
     <!-- Session Screen -->
     <string name="label_live_stream">Live Stream</string>
     <string name="label_data_sync">Data Sync</string>
+    <string name="upload_queue_clear">Queue clear</string>
+    <string name="hint_reference_number">Reference Number</string>
+    <string name="helper_reference_number">Required before starting a live session</string>
     <string name="action_start_stream">Start Stream</string>
     <string name="action_stop">Stop</string>
     <string name="action_logout">Logout</string>

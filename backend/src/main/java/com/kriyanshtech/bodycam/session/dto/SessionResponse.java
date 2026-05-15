@@ -9,6 +9,7 @@ public record SessionResponse(
         UUID id,
         UUID workerId,
         String workerName,
+        String referenceNumber,
         String roomName,
         SessionStatus status,
         Instant startedAt,

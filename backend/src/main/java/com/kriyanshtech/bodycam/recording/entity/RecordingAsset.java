@@ -28,6 +28,9 @@ public class RecordingAsset {
     @Column(name = "object_key", nullable = false)
     private String objectKey;
 
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
     @Column(name = "playback_url")
     private String playbackUrl;
 
@@ -39,6 +42,9 @@ public class RecordingAsset {
 
     @OneToOne(mappedBy = "recording", fetch = FetchType.LAZY)
     private RecordingMetadata metadata;
+
+    @OneToOne(mappedBy = "recording", fetch = FetchType.LAZY)
+    private RecordingTranscript transcript;
 
     public UUID getId() {
         return id;
@@ -62,6 +68,14 @@ public class RecordingAsset {
 
     public void setObjectKey(String objectKey) {
         this.objectKey = objectKey;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public String getPlaybackUrl() {
@@ -94,5 +108,13 @@ public class RecordingAsset {
 
     public void setMetadata(RecordingMetadata metadata) {
         this.metadata = metadata;
+    }
+
+    public RecordingTranscript getTranscript() {
+        return transcript;
+    }
+
+    public void setTranscript(RecordingTranscript transcript) {
+        this.transcript = transcript;
     }
 }

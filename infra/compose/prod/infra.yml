@@ -1,0 +1,166 @@
+services:
+  livekit-config:
+    image: bash:5.2
+    command:
+      - /repo/scripts/deploy/render-livekit-config.sh
+      - /repo
+      - infra/.env.prod
+      - backend/.env.prod
+      - /work/livekit.yaml
+    networks:
+      - private
+    volumes:
+      - ../../../:/repo:ro
+      - livekit_config:/work
+    restart: "no"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_BIND_IP:-127.0.0.1}:${MINIO_PORT:-9000}:9000"
+      - "${MINIO_BIND_IP:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - private
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.bodycam-minio.rule=Host(`${MINIO_DOMAIN}`)
+      - traefik.http.routers.bodycam-minio.entrypoints=websecure
+      - traefik.http.routers.bodycam-minio.tls=true
+      - traefik.http.routers.bodycam-minio.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}
+      - traefik.http.services.bodycam-minio.loadbalancer.server.port=9000
+      - traefik.http.routers.bodycam-minio-console.rule=Host(`${MINIO_CONSOLE_DOMAIN}`)
+      - traefik.http.routers.bodycam-minio-console.entrypoints=websecure
+      - traefik.http.routers.bodycam-minio-console.tls=true
+      - traefik.http.routers.bodycam-minio-console.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}
+      - traefik.http.services.bodycam-minio-console.loadbalancer.server.port=9001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  faster-whisper:
+    image: ${TRANSCRIPT_IMAGE:-hwdsl2/whisper-server:latest}
+    depends_on:
+      faster-whisper-model-sync:
+        condition: service_completed_successfully
+    environment:
+      WHISPER_MODEL: ${TRANSCRIPT_MODEL:-large-v3-turbo}
+      WHISPER_LANGUAGE: ${TRANSCRIPT_LANGUAGE:-auto}
+      WHISPER_DEVICE: ${TRANSCRIPT_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${TRANSCRIPT_COMPUTE_TYPE:-int8}
+      WHISPER_THREADS: ${TRANSCRIPT_THREADS:-2}
+      WHISPER_LOCAL_ONLY: ${TRANSCRIPT_LOCAL_ONLY:-true}
+    ports:
+      - "${TRANSCRIPT_BIND_IP:-127.0.0.1}:${TRANSCRIPT_PORT:-9005}:9000"
+    networks:
+      - private
+    volumes:
+      - transcript_data:/var/lib/whisper
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s = socket.create_connection(('127.0.0.1', 9000), 5); s.close()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  faster-whisper-model-sync:
+    image: ${TRANSCRIPT_IMAGE:-hwdsl2/whisper-server:latest}
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        MODEL="${TRANSCRIPT_MODEL:-large-v3-turbo}";
+        CACHE_MATCH=$$(find /var/lib/whisper -maxdepth 1 -type d -name "models--Systran--faster-whisper-$${MODEL}*" | head -n 1);
+        if [ -n "$${CACHE_MATCH}" ]; then
+          echo "Whisper model cache already present for $${MODEL} at $${CACHE_MATCH}";
+          exit 0;
+        fi;
+        whisper_manage --downloadmodel "$${MODEL}"
+    environment:
+      WHISPER_LOCAL_ONLY: "false"
+    networks:
+      - private
+    volumes:
+      - transcript_data:/var/lib/whisper
+    restart: "no"
+
+  vosk:
+    image: ${VOSK_IMAGE:-alphacep/kaldi-en:latest}
+    ports:
+      - "${VOSK_BIND_IP:-127.0.0.1}:${VOSK_PORT:-2700}:2700"
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s = socket.create_connection(('127.0.0.1', 2700), 5); s.close()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --config /etc/livekit/livekit.yaml
+    ports:
+      - "${LIVEKIT_SIGNAL_BIND_IP:-127.0.0.1}:${LIVEKIT_PORT:-7880}:7880"
+      - "${LIVEKIT_BIND_IP:-0.0.0.0}:${LIVEKIT_RTC_TCP_PORT:-7881}:7881"
+      - "${LIVEKIT_UDP_PORT_RANGE:-50000-50100}:${LIVEKIT_UDP_PORT_RANGE:-50000-50100}/udp"
+    depends_on:
+      livekit-config:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks:
+      - private
+      - proxy
+    volumes:
+      - livekit_config:/etc/livekit:ro
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.bodycam-livekit.rule=Host(`${LIVEKIT_DOMAIN}`)
+      - traefik.http.routers.bodycam-livekit.entrypoints=websecure
+      - traefik.http.routers.bodycam-livekit.tls=true
+      - traefik.http.routers.bodycam-livekit.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}
+      - traefik.http.services.bodycam-livekit.loadbalancer.server.port=7880
+    healthcheck:
+      test: ["CMD-SHELL", "ps -ef | grep [l]ivekit >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  coturn:
+    image: coturn/coturn:latest
+    command:
+      - -n
+      - --log-file=stdout
+      - --external-ip=${TURN_EXTERNAL_IP}
+      - --realm=${TURN_REALM}
+      - --lt-cred-mech
+      - --user=${TURN_USERNAME}:${TURN_PASSWORD}
+    ports:
+      - "${TURN_BIND_IP:-0.0.0.0}:${TURN_PORT:-3478}:3478"
+      - "${TURN_BIND_IP:-0.0.0.0}:${TURN_PORT:-3478}:3478/udp"
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD-SHELL", "ps -ef | grep [t]urnserver >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped

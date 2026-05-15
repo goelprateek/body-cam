@@ -3,13 +3,26 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '@env/environment';
 import {
+  CreateSessionRequest,
   CurrentUserResponse,
+  CursorPageResponse,
   LiveKitTokenResponse,
   LoginResponse,
   PageResponse,
+  PublicSessionInviteResponse,
+  RecordingInvestigationSearchResponse,
   RecordingPlaybackResponse,
   RecordingResponse,
-  SessionResponse
+  RecordingTranscriptResponse,
+  SessionRecordingExportResponse,
+  SessionInviteResponse,
+  SessionInviteRole,
+  SessionRecordingTimelineResponse,
+  SessionTranscriptSearchResponse,
+  SessionTranscriptResponse,
+  SessionResponse,
+  TranscriptEngineOptionResponse,
+  TranscriptSmokeCheckResponse
 } from './operator.models';
 
 const ACCESS_TOKEN_KEY = 'bodycam.operator.access-token';
@@ -79,6 +92,14 @@ export class OperatorApiService {
     );
   }
 
+  async createSession(request: CreateSessionRequest): Promise<SessionResponse> {
+    return firstValueFrom(
+      this.http.post<SessionResponse>(this.url('/sessions'), request, {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
   async listActiveSessions(page: number, size: number): Promise<PageResponse<SessionResponse>> {
     return firstValueFrom(
       this.http.get<PageResponse<SessionResponse>>(this.url('/sessions/active'), {
@@ -91,10 +112,28 @@ export class OperatorApiService {
     );
   }
 
-  async listRecordings(): Promise<RecordingResponse[]> {
+  async listActiveSessionsCursor(cursor: string | null, size: number): Promise<CursorPageResponse<SessionResponse>> {
+    const params: Record<string, any> = { size };
+    if (cursor) {
+      params['cursor'] = cursor;
+    }
     return firstValueFrom(
-      this.http.get<RecordingResponse[]>(this.url('/recordings'), {
-        headers: this.authHeaders()
+      this.http.get<CursorPageResponse<SessionResponse>>(this.url('/sessions/active-cursor'), {
+        headers: this.authHeaders(),
+        params
+      })
+    );
+  }
+
+  async listRecordings(cursor: string | null, size: number): Promise<CursorPageResponse<RecordingResponse>> {
+    const params: Record<string, any> = { size };
+    if (cursor) {
+      params['cursor'] = cursor;
+    }
+    return firstValueFrom(
+      this.http.get<CursorPageResponse<RecordingResponse>>(this.url('/recordings'), {
+        headers: this.authHeaders(),
+        params
       })
     );
   }
@@ -103,6 +142,141 @@ export class OperatorApiService {
     return firstValueFrom(
       this.http.get<RecordingPlaybackResponse>(this.url(`/recordings/${recordingId}/playback-url`), {
         headers: this.authHeaders()
+      })
+    );
+  }
+
+  async getSessionRecordingTimeline(sessionId: string): Promise<SessionRecordingTimelineResponse> {
+    return firstValueFrom(
+      this.http.get<SessionRecordingTimelineResponse>(this.url(`/sessions/${sessionId}/recordings/timeline`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async getSessionRecordingExport(sessionId: string): Promise<SessionRecordingExportResponse> {
+    return firstValueFrom(
+      this.http.get<SessionRecordingExportResponse>(this.url(`/sessions/${sessionId}/recordings/export-package`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async requestSessionRecordingExport(sessionId: string): Promise<SessionRecordingExportResponse> {
+    return firstValueFrom(
+      this.http.post<SessionRecordingExportResponse>(
+        this.url(`/sessions/${sessionId}/recordings/export-package`),
+        {},
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async getSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
+    return firstValueFrom(
+      this.http.get<SessionTranscriptResponse>(this.url(`/sessions/${sessionId}/transcript`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async getTranscriptSmokeCheck(): Promise<TranscriptSmokeCheckResponse> {
+    return firstValueFrom(
+      this.http.get<TranscriptSmokeCheckResponse>(this.url('/transcripts/smoke-check'), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async getTranscriptEngines(): Promise<TranscriptEngineOptionResponse[]> {
+    return firstValueFrom(
+      this.http.get<TranscriptEngineOptionResponse[]>(this.url('/transcripts/engines'), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async generateSessionTranscript(sessionId: string, engine: string | null): Promise<SessionTranscriptResponse> {
+    return firstValueFrom(
+      this.http.post<SessionTranscriptResponse>(
+        this.url(`/sessions/${sessionId}/transcript/generate`),
+        { engine },
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async retryFailedSessionTranscript(sessionId: string, engine: string | null): Promise<SessionTranscriptResponse> {
+    return firstValueFrom(
+      this.http.post<SessionTranscriptResponse>(
+        this.url(`/sessions/${sessionId}/transcript/retry-failed`),
+        { engine },
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async summarizeSessionTranscript(sessionId: string): Promise<SessionTranscriptResponse> {
+    return firstValueFrom(
+      this.http.post<SessionTranscriptResponse>(
+        this.url(`/sessions/${sessionId}/transcript/summary`),
+        {},
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async searchSessionTranscript(sessionId: string, query: string): Promise<SessionTranscriptSearchResponse> {
+    return firstValueFrom(
+      this.http.get<SessionTranscriptSearchResponse>(this.url(`/sessions/${sessionId}/transcript/search`), {
+        headers: this.authHeaders(),
+        params: { q: query }
+      })
+    );
+  }
+
+  async searchRecordingsForInvestigation(query: string): Promise<RecordingInvestigationSearchResponse> {
+    return firstValueFrom(
+      this.http.get<RecordingInvestigationSearchResponse>(this.url('/recordings/investigation-search'), {
+        headers: this.authHeaders(),
+        params: { q: query }
+      })
+    );
+  }
+
+  async getRecordingTranscript(recordingId: string): Promise<RecordingTranscriptResponse> {
+    return firstValueFrom(
+      this.http.get<RecordingTranscriptResponse>(this.url(`/recordings/${recordingId}/transcript`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async generateRecordingTranscript(recordingId: string, engine: string | null): Promise<RecordingTranscriptResponse> {
+    return firstValueFrom(
+      this.http.post<RecordingTranscriptResponse>(
+        this.url(`/recordings/${recordingId}/transcript/generate`),
+        { engine },
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async getRecordingTranscriptSubtitles(recordingId: string): Promise<string> {
+    return firstValueFrom(
+      this.http.get(this.url(`/recordings/${recordingId}/transcript/subtitles.vtt`), {
+        headers: this.authHeaders(),
+        responseType: 'text'
       })
     );
   }
@@ -121,6 +295,41 @@ export class OperatorApiService {
         {
           headers: this.authHeaders()
         }
+      )
+    );
+  }
+
+  async createSessionInvite(sessionId: string, participantRole: SessionInviteRole = 'BROWSER'): Promise<SessionInviteResponse> {
+    return firstValueFrom(
+      this.http.post<SessionInviteResponse>(
+        this.url(`/sessions/${sessionId}/invites`),
+        { participantRole },
+        {
+          headers: this.authHeaders()
+        }
+      )
+    );
+  }
+
+  async revokeSessionInvite(sessionId: string, inviteId: string): Promise<void> {
+    await firstValueFrom(
+      this.http.delete<void>(this.url(`/sessions/${sessionId}/invites/${inviteId}`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
+  async getPublicSessionInvite(inviteToken: string): Promise<PublicSessionInviteResponse> {
+    return firstValueFrom(
+      this.http.get<PublicSessionInviteResponse>(this.url(`/session-invites/${inviteToken}`))
+    );
+  }
+
+  async createPublicInviteJoinToken(inviteToken: string, participantName: string): Promise<LiveKitTokenResponse> {
+    return firstValueFrom(
+      this.http.post<LiveKitTokenResponse>(
+        this.url(`/session-invites/${inviteToken}/join-token`),
+        { participantName }
       )
     );
   }
