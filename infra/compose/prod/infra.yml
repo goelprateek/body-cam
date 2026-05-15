@@ -38,11 +38,13 @@ services:
       - traefik.http.routers.bodycam-minio.entrypoints=websecure
       - traefik.http.routers.bodycam-minio.tls=true
       - traefik.http.routers.bodycam-minio.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}
+      - traefik.http.routers.bodycam-minio.service=bodycam-minio
       - traefik.http.services.bodycam-minio.loadbalancer.server.port=9000
       - traefik.http.routers.bodycam-minio-console.rule=Host(`${MINIO_CONSOLE_DOMAIN}`)
       - traefik.http.routers.bodycam-minio-console.entrypoints=websecure
       - traefik.http.routers.bodycam-minio-console.tls=true
       - traefik.http.routers.bodycam-minio-console.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}
+      - traefik.http.routers.bodycam-minio-console.service=bodycam-minio-console
       - traefik.http.services.bodycam-minio-console.loadbalancer.server.port=9001
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
