@@ -31,6 +31,12 @@ public class ApiExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, exception.getMessage());
     }
 
+    @ExceptionHandler(ConflictException.class)
+    ResponseEntity<Map<String, Object>> handleConflict(ConflictException exception) {
+        log.warn("API conflict error: {}", exception.getMessage());
+        return build(HttpStatus.CONFLICT, exception.getMessage());
+    }
+
     @ExceptionHandler({ MethodArgumentNotValidException.class, ConstraintViolationException.class,
             IllegalArgumentException.class })
     ResponseEntity<Map<String, Object>> handleBadRequest(Exception exception) {

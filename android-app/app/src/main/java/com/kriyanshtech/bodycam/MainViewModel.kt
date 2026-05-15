@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import retrofit2.HttpException
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -197,7 +198,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 _uiState.value = _uiState.value.copy(syncStatus = "Connecting capture pipeline")
-                service.captureManager?.start(config, _uiState.value.highQualityMode)
+                val captureManager = service.captureManager
+                    ?: throw IllegalStateException("Capture manager unavailable")
+                captureManager.start(config, _uiState.value.highQualityMode)
                 _uiState.value = _uiState.value.copy(
                     actionInFlight = false,
                     activeSessionId = sessionResp.id,
@@ -205,6 +208,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Failed to start worker session", e)
+                if (handleExpiredAuth(e)) {
+                    return@launch
+                }
                 _uiState.value = _uiState.value.copy(
                     actionInFlight = false,
                     message = "Start session error: ${e.message}"
@@ -266,7 +272,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             if (clearAuthAfter) {
-                authStore.clear()
+                authStore.clearAuthenticatedSession()
                 authToken = null
             }
 
@@ -297,5 +303,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
+    }
+
+    private fun handleExpiredAuth(error: Throwable): Boolean {
+        if (!isExpiredAuthError(error)) {
+            return false
+        }
+
+        authStore.clearAuthenticatedSession()
+        authToken = null
+        _uiState.value = _uiState.value.copy(
+            loginInFlight = false,
+            actionInFlight = false,
+            user = null,
+            activeSessionId = null,
+            sessionSummary = "",
+            isStreaming = false,
+            streamStatus = "Idle",
+            syncStatus = "Waiting for login",
+            message = "Session expired. Please sign in again."
+        )
+        return true
+    }
+
+    private fun isExpiredAuthError(error: Throwable): Boolean {
+        val httpError = error as? HttpException ?: return false
+        if (httpError.code() !in setOf(401, 403)) {
+            return false
+        }
+
+        val backendMessage = runCatching { httpError.response()?.errorBody()?.string() }
+            .getOrNull()
+            .orEmpty()
+            .lowercase()
+        val exceptionMessage = httpError.message().orEmpty().lowercase()
+        val combinedMessage = "$exceptionMessage $backendMessage"
+
+        return httpError.code() == 401 ||
+            combinedMessage.contains("expired") ||
+            combinedMessage.contains("jwt") ||
+            combinedMessage.contains("token") ||
+            combinedMessage.contains("unauthorized")
     }
 }

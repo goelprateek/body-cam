@@ -40,6 +40,15 @@ class AuthStore(context: Context) {
         prefs.edit().clear().apply()
     }
 
+    fun clearAuthenticatedSession() {
+        prefs.edit()
+            .remove(KEY_TOKEN)
+            .remove(KEY_USER_ID)
+            .remove(KEY_DISPLAY_NAME)
+            .remove(KEY_ROLE)
+            .apply()
+    }
+
     companion object {
         private const val KEY_BACKEND_URL = "backend_url"
         private const val KEY_TOKEN = "token"

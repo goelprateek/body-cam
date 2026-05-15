@@ -15,7 +15,18 @@ fun ImageProxy.toBitmapCompatible(): Bitmap {
     val out = ByteArrayOutputStream()
     yuvImage.compressToJpeg(Rect(0, 0, width, height), 100, out)
     val imageBytes = out.toByteArray()
-    return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+    val decodedBitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+        ?: throw IllegalStateException("Failed to decode camera frame into bitmap")
+    return decodedBitmap.ensureArgb8888()
+}
+
+fun Bitmap.ensureArgb8888(): Bitmap {
+    return if (config == Bitmap.Config.ARGB_8888 && !isRecycled) {
+        copy(Bitmap.Config.ARGB_8888, false) ?: this
+    } else {
+        copy(Bitmap.Config.ARGB_8888, false)
+            ?: throw IllegalStateException("Failed to normalize bitmap to ARGB_8888")
+    }
 }
 
 private fun yuv420888ToNv21(image: ImageProxy): ByteArray {

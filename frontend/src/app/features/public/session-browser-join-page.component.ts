@@ -6,7 +6,16 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { LocalTrack, Room, RoomEvent, Track } from 'livekit-client';
+import {
+  LocalTrack,
+  RemoteAudioTrack,
+  RemoteParticipant,
+  RemoteTrack,
+  RemoteVideoTrack,
+  Room,
+  RoomEvent,
+  Track
+} from 'livekit-client';
 import { OperatorApiService } from '@features/operations/operator-api.service';
 import { PublicSessionInviteResponse } from '@features/operations/operator.models';
 
@@ -49,6 +58,8 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
 
   private room: Room | null = null;
   private localVideoElement: HTMLVideoElement | null = null;
+  private remoteVideoElement: HTMLVideoElement | null = null;
+  private remoteAudioElement: HTMLAudioElement | null = null;
 
   constructor() {
     void this.loadInvite();
@@ -91,6 +102,7 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
       this.room = room;
       this.isJoined.set(true);
       this.connectionLabel.set('Live');
+      this.syncRemoteTracks(room);
       this.attachLocalTrack(cameraPublication?.track ?? null);
       this.snackBar.open('Joined live session.', 'Close', { duration: 3000 });
     } catch (error) {
@@ -137,6 +149,7 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
     room.on(RoomEvent.Disconnected, () => {
       this.connectionLabel.set('Disconnected');
       this.isJoined.set(false);
+      this.detachRemoteTracks();
       this.detachLocalVideo();
     });
     room.on(RoomEvent.LocalTrackPublished, (publication) => {
@@ -145,6 +158,29 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
       }
       if (publication.source === Track.Source.Camera) {
         this.attachLocalTrack(publication.track ?? null);
+      }
+    });
+    room.on(RoomEvent.ParticipantConnected, () => {
+      this.syncRemoteTracks(room);
+    });
+    room.on(RoomEvent.ParticipantDisconnected, () => {
+      this.syncRemoteTracks(room);
+    });
+    room.on(RoomEvent.TrackPublished, (publication) => {
+      if (!publication.isSubscribed) {
+        publication.setSubscribed(true);
+      }
+      this.syncRemoteTracks(room);
+    });
+    room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
+      this.applyRemoteTrack(track, participant);
+    });
+    room.on(RoomEvent.TrackUnsubscribed, (track) => {
+      if (track.kind === Track.Kind.Video) {
+        this.detachRemoteVideo();
+      }
+      if (track.kind === Track.Kind.Audio) {
+        this.detachRemoteAudio();
       }
     });
   }
@@ -176,7 +212,110 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
     }
   }
 
+  private syncRemoteTracks(room: Room): void {
+    let remoteVideoTrack: RemoteVideoTrack | null = null;
+    let remoteAudioTrack: RemoteAudioTrack | null = null;
+
+    for (const participant of room.remoteParticipants.values()) {
+      for (const publication of participant.trackPublications.values()) {
+        if (!publication.isSubscribed) {
+          publication.setSubscribed(true);
+        }
+
+        const track = publication.track;
+        if (!track) {
+          continue;
+        }
+
+        if (!remoteVideoTrack && track.kind === Track.Kind.Video) {
+          remoteVideoTrack = track as RemoteVideoTrack;
+        }
+
+        if (!remoteAudioTrack && track.kind === Track.Kind.Audio) {
+          remoteAudioTrack = track as RemoteAudioTrack;
+        }
+      }
+    }
+
+    this.attachRemoteVideo(remoteVideoTrack);
+    this.attachRemoteAudio(remoteAudioTrack);
+  }
+
+  private applyRemoteTrack(track: RemoteTrack, _participant: RemoteParticipant): void {
+    if (track.kind === Track.Kind.Video) {
+      this.attachRemoteVideo(track as RemoteVideoTrack);
+    }
+
+    if (track.kind === Track.Kind.Audio) {
+      this.attachRemoteAudio(track as RemoteAudioTrack);
+    }
+  }
+
+  private attachRemoteVideo(track: RemoteVideoTrack | null): void {
+    const host = this.videoHost?.nativeElement;
+    if (!host) {
+      return;
+    }
+
+    this.detachRemoteVideo();
+    if (!track) {
+      this.restoreLocalPreviewIfAvailable();
+      return;
+    }
+
+    this.detachLocalVideo();
+    const element = track.attach() as HTMLVideoElement;
+    element.autoplay = true;
+    element.muted = false;
+    element.playsInline = true;
+    element.className = 'join-preview-video';
+    host.appendChild(element);
+    this.remoteVideoElement = element;
+  }
+
+  private attachRemoteAudio(track: RemoteAudioTrack | null): void {
+    this.detachRemoteAudio();
+    if (!track) {
+      return;
+    }
+
+    const element = track.attach() as HTMLAudioElement;
+    element.autoplay = true;
+    this.remoteAudioElement = element;
+  }
+
+  private detachRemoteVideo(): void {
+    if (this.remoteVideoElement) {
+      this.remoteVideoElement.remove();
+      this.remoteVideoElement = null;
+    }
+  }
+
+  private detachRemoteAudio(): void {
+    if (this.remoteAudioElement) {
+      this.remoteAudioElement.remove();
+      this.remoteAudioElement = null;
+    }
+  }
+
+  private detachRemoteTracks(): void {
+    this.detachRemoteVideo();
+    this.detachRemoteAudio();
+  }
+
+  private restoreLocalPreviewIfAvailable(): void {
+    if (!this.canPublishMedia() || !this.room) {
+      return;
+    }
+
+    const cameraPublication = [...this.room.localParticipant.trackPublications.values()].find(
+      (publication) => publication.source === Track.Source.Camera
+    );
+    this.attachLocalTrack((cameraPublication?.track as LocalTrack | null) ?? null);
+  }
+
   private disconnect(): void {
+    this.detachRemoteTracks();
     this.detachLocalVideo();
     if (this.room) {
       this.room.disconnect();

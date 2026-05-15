@@ -1,6 +1,7 @@
 package com.kriyanshtech.bodycam
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Environment
 import android.os.Handler
@@ -72,6 +73,7 @@ class LiveCaptureManager(
     private val _state = MutableStateFlow(CaptureRuntimeState())
     private val pendingUploadIds = linkedSetOf<UUID>()
     private val uploadWorkStates = linkedMapOf<UUID, WorkInfo.State>()
+    private val liveKitFrameBacklog = ArrayDeque<Bitmap>()
 
     private var previewView: PreviewView? = null
     private var room: Room? = null
@@ -194,6 +196,7 @@ class LiveCaptureManager(
         room?.disconnect()
         room = null
         videoCapturer = null
+        recycleQueuedLiveKitFrames()
         cameraProvider?.unbindAll()
         cameraProvider = null
         previewUseCase = null
@@ -432,18 +435,21 @@ class LiveCaptureManager(
                         val flipped = android.graphics.Bitmap.createBitmap(
                             bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
                         )
-                        if (flipped != bitmap) {
+                        if (flipped != bitmap && !bitmap.isRecycled) {
                             bitmap.recycle()
                         }
-                        flipped
+                        flipped.ensureArgb8888()
                     } else {
                         bitmap
                     }
                     
                     if (isTrackStarted) {
-                        // LiveKit may still consume the bitmap after pushBitmap returns.
-                        // Recycling it immediately can crash the native capture pipeline.
+                        // Keep a small backlog of recent frames alive while LiveKit's
+                        // native video thread finishes consuming them.
+                        retainLiveKitFrame(finalBitmap)
                         currentCapturer.pushBitmap(finalBitmap, rotationDegrees)
+                    } else if (!finalBitmap.isRecycled) {
+                        finalBitmap.recycle()
                     }
                 } catch (e: Exception) {
                     android.util.Log.v("LiveCaptureManager", "Frame push failed: ${e.message}")
@@ -941,10 +947,30 @@ class LiveCaptureManager(
         return (recordedDurationNanos / 1_000_000_000L).toInt()
     }
 
+    private fun retainLiveKitFrame(bitmap: Bitmap) {
+        liveKitFrameBacklog += bitmap
+        while (liveKitFrameBacklog.size > LIVEKIT_FRAME_BACKLOG_LIMIT) {
+            val staleBitmap = liveKitFrameBacklog.removeFirst()
+            if (!staleBitmap.isRecycled && staleBitmap != bitmap) {
+                staleBitmap.recycle()
+            }
+        }
+    }
+
+    private fun recycleQueuedLiveKitFrames() {
+        while (liveKitFrameBacklog.isNotEmpty()) {
+            val bitmap = liveKitFrameBacklog.removeFirst()
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
+    }
+
     companion object {
         private const val SEGMENT_DURATION_MS = 10_000L
         private const val MIN_UPLOAD_DURATION_SEC = 2
         private const val MIN_SEGMENT_STOP_DELAY_MS = 1200L
+        private const val LIVEKIT_FRAME_BACKLOG_LIMIT = 3
         private val LOOPBACK_HOSTS = setOf("localhost", "127.0.0.1", "10.0.2.2")
         private val LOOPBACK_PREFIX_REGEX = Regex("^(localhost|127\\.0\\.0\\.1|10\\.0\\.2\\.2)")
     }

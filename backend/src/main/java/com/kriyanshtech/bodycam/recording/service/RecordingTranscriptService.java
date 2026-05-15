@@ -1,5 +1,6 @@
 package com.kriyanshtech.bodycam.recording.service;
 
+import com.kriyanshtech.bodycam.common.ConflictException;
 import com.kriyanshtech.bodycam.common.NotFoundException;
 import com.kriyanshtech.bodycam.config.AppProperties;
 import com.kriyanshtech.bodycam.recording.dto.RecordingTranscriptResponse;
@@ -209,7 +210,7 @@ public class RecordingTranscriptService {
     public String buildSessionSubtitleVtt(UUID sessionId) {
         SessionTranscriptResponse transcript = getSessionTranscript(sessionId);
         if (transcript.segments().isEmpty()) {
-            throw new IllegalStateException("Session transcript subtitles are not available yet");
+            throw new ConflictException("Session transcript subtitles are not available yet");
         }
 
         StringBuilder builder = new StringBuilder("WEBVTT\n\n");
@@ -232,7 +233,7 @@ public class RecordingTranscriptService {
                 .orElseThrow(() -> new NotFoundException("Transcript not found for recording: " + recordingId));
 
         if (transcript.getStatus() != RecordingTranscriptStatus.READY || transcript.getSegments().isEmpty()) {
-            throw new IllegalStateException("Transcript subtitles are not available yet");
+            throw new ConflictException("Transcript subtitles are not available yet");
         }
 
         StringBuilder builder = new StringBuilder("WEBVTT\n\n");
