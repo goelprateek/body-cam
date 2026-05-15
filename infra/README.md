@@ -65,6 +65,7 @@ Production DNS and TLS contract:
 - `infra/.env.local` and `infra/.env.prod` should keep only infra and compose variables
 - `backend/.env.local` is host-run only
 - `backend/.env.prod` keeps production backend runtime values, including JWT, LiveKit, storage, and backend DB connection settings
+- `infra/.env.prod` should carry the production image selection contract through `BACKEND_IMAGE_REF` and `FRONTEND_IMAGE_REF`; the deploy workflow overrides those to immutable digests during rollout
 - production backend logs are written to `/app/logs` inside the container and persisted through the `backend_logs` volume mounted by `compose/prod/app.yml`
 - the shared LiveKit template file is `infra/livekit.yaml.template`; the rendered runtime file now lives inside the `livekit_config` Docker volume rather than as a required host file
 - production deployment now prevalidates the rendered LiveKit config against `LIVEKIT_UDP_PORT_RANGE` and the compose UDP mapping before any stack update proceeds

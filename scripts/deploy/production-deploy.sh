@@ -170,6 +170,11 @@ wait_for_service_health() {
   return 1
 }
 
+compose_has_service() {
+  local service_name="${1:?service name is required}"
+  docker compose --env-file "${production_env_file}" -f "${compose_file}" config --services | grep -Fxq "${service_name}"
+}
+
 apply_compose_stack() {
   local services=()
   local rendered_livekit_config="${repo_root}/infra/livekit.prod.generated.yaml"
@@ -187,7 +192,12 @@ apply_compose_stack() {
   wait_for_service_health redis 180
   wait_for_service_health minio 180
   wait_for_service_health livekit 180
-  wait_for_service_health vosk 180
+  if compose_has_service faster-whisper; then
+    wait_for_service_health faster-whisper 180
+  fi
+  if compose_has_service vosk; then
+    wait_for_service_health vosk 180
+  fi
   wait_for_service_health backend 240
   docker compose --env-file "${production_env_file}" -f "${compose_file}" ps
 }

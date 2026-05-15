@@ -6,7 +6,7 @@ repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 infra_env_file="${2:-infra/.env.prod}"
 backend_env_file="${3:-backend/.env.prod}"
 rendered_config_file="${4:?rendered LiveKit config path is required}"
-compose_fragment_file="${5:-${repo_root}/infra/compose/prod/db.yml}"
+compose_fragment_file="${5:-${repo_root}/infra/compose/prod/infra.yml}"
 
 infra_env_path="${repo_root}/${infra_env_file}"
 backend_env_path="${repo_root}/${backend_env_file}"
