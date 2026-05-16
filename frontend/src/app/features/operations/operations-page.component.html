@@ -170,12 +170,21 @@
       <div class="section-head premium-head viewer-head">
         <div class="viewer-head-copy">
           <h2>{{ selectedSession()?.workerName || 'Live Viewer' }}</h2>
-          @if (selectedSession(); as session) {
-            <p class="viewer-caption">Ref {{ session.referenceNumber }} | {{ session.createdAt | date: 'medium' }}</p>
-          }
-          <p class="viewer-caption">
-            {{ liveRoom.lastEvent() }}
-          </p>
+          <div class="viewer-head-meta">
+            @if (selectedSession(); as session) {
+              <span class="head-pill">Ref {{ session.referenceNumber }}</span>
+              <span class="head-pill">
+                <mat-icon>schedule</mat-icon>
+                {{ session.createdAt | date: 'medium' }}
+              </span>
+            }
+            @if (liveRoom.lastEvent()) {
+              <span class="head-pill head-pill-event">
+                <mat-icon>info</mat-icon>
+                {{ liveRoom.lastEvent() }}
+              </span>
+            }
+          </div>
         </div>
         <div class="viewer-status">
           <span class="viewer-participant-count">
@@ -326,8 +335,8 @@
         </div>
       }
 
-      <div class="viewer-frame premium-frame" [class.frame-live]="remoteParticipantCount()">
-        <div class="viewer-stage premium-stage" #viewerStageHost>
+      <div class="viewer-frame premium-frame" [class.frame-live]="remoteParticipantCount()" #viewerStageHost>
+        <div class="viewer-stage premium-stage">
           @if (!remoteParticipantCount()) {
             <div class="viewer-empty premium-empty-viewer">
               <div class="radar-scan"></div>
@@ -360,14 +369,13 @@
                 }
                 <div class="viewer-featured-meta">
                   <div class="viewer-tile-copy">
-                    <strong class="viewer-featured-name">{{ participant.name }}</strong>
                     <span>{{ participant.videoTrack ? 'Live camera' : 'Audio only' }}</span>
                   </div>
                   <span class="viewer-tile-chip" [class.viewer-tile-chip-muted]="!participant.audioTrack">
                     {{ participant.audioTrack ? 'Mic live' : 'Muted' }}
                   </span>
                 </div>
-                @if (overlayParticipants().length) {
+                @if (overlayParticipants().length && isOverlayOpen()) {
                   <div class="viewer-overlay-stack premium-scroll">
                     @for (overlayParticipant of overlayParticipants(); track overlayParticipant.id) {
                       <article class="viewer-overlay-tile">
@@ -397,63 +405,72 @@
               <div #participantAudioHost class="sr-only" aria-hidden="true" [attr.data-participant-id]="participant.id"></div>
           }
         </div>
-        <div class="viewer-live-seeker" [class.viewer-live-seeker-ready]="hasAnyVideoTrack()">
-          <span class="viewer-live-seeker-time">LIVE</span>
-          <div class="viewer-live-seeker-track" aria-hidden="true">
-            <span class="viewer-live-seeker-fill"></span>
-            <span class="viewer-live-seeker-thumb"></span>
+        <div class="viewer-controls-overlay">
+          <div class="viewer-live-seeker" [class.viewer-live-seeker-ready]="hasAnyVideoTrack()">
+            <span class="viewer-live-seeker-time">LIVE</span>
+            <div class="viewer-live-seeker-track" aria-hidden="true">
+              <span class="viewer-live-seeker-fill"></span>
+              <span class="viewer-live-seeker-thumb"></span>
+            </div>
+            <span class="viewer-live-seeker-time viewer-live-seeker-edge">
+              {{ hasAnyVideoTrack() ? 'Live Edge' : 'Standby' }}
+            </span>
           </div>
-          <span class="viewer-live-seeker-time viewer-live-seeker-edge">
-            {{ hasAnyVideoTrack() ? 'Live Edge' : 'Standby' }}
-          </span>
-        </div>
-        <div class="viewer-control-bar">
-          <div class="viewer-control-status">
-            <span class="viewer-control-live-dot"></span>
-            <span>{{ hasAnyVideoTrack() ? 'LIVE MEDIA READY' : 'WAITING FOR LIVE MEDIA' }}</span>
-          </div>
-          <div class="viewer-control-group">
-            <button
-              mat-stroked-button
-              type="button"
-              class="viewer-control-btn viewer-control-action"
-              (click)="toggleViewerAspectMode()"
-              [matTooltip]="viewerAspectTooltip()"
-            >
-              <mat-icon>{{ viewerAspectMode() === 'cover' ? 'crop_free' : 'fit_screen' }}</mat-icon>
-              <span>{{ viewerAspectLabel() }}</span>
-            </button>
-            <button
-              mat-stroked-button
-              type="button"
-              class="viewer-control-btn viewer-control-action"
-              (click)="toggleViewerFullscreen()"
-              matTooltip="Toggle fullscreen"
-            >
-              <mat-icon>fullscreen</mat-icon>
-              <span>Fullscreen</span>
-            </button>
-            <button
-              mat-stroked-button
-              type="button"
-              class="viewer-control-btn viewer-control-action"
-              (click)="togglePictureInPicture()"
-              [disabled]="!hasAnyVideoTrack()"
-              matTooltip="Picture in picture"
-            >
-              <mat-icon>picture_in_picture_alt</mat-icon>
-              <span>Picture in Picture</span>
-            </button>
-            <button
-              mat-stroked-button
-              type="button"
-              class="viewer-control-btn viewer-control-action"
-              [disabled]="!captionsAvailable()"
-              [matTooltip]="captionControlLabel()"
-            >
-              <mat-icon>closed_caption</mat-icon>
-              <span>Captions</span>
-            </button>
+          <div class="viewer-control-bar">
+            <div class="viewer-control-status">
+              <span class="viewer-control-live-dot"></span>
+              <span>{{ hasAnyVideoTrack() ? 'LIVE MEDIA READY' : 'WAITING FOR LIVE MEDIA' }}</span>
+            </div>
+            <div class="viewer-control-group">
+              @if (overlayParticipants().length) {
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="viewer-control-btn"
+                  (click)="toggleOverlaySidebar()"
+                  [matTooltip]="isOverlayOpen() ? 'Hide participants' : 'Show participants'"
+                >
+                  <mat-icon>{{ isOverlayOpen() ? 'group_off' : 'groups' }}</mat-icon>
+                </button>
+              }
+              <button
+                mat-icon-button
+                type="button"
+                class="viewer-control-btn"
+                (click)="toggleViewerAspectMode()"
+                [matTooltip]="viewerAspectTooltip()"
+              >
+                <mat-icon>{{ viewerAspectMode() === 'cover' ? 'crop_free' : 'fit_screen' }}</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                type="button"
+                class="viewer-control-btn"
+                (click)="toggleViewerFullscreen()"
+                matTooltip="Toggle fullscreen"
+              >
+                <mat-icon>{{ isFullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                type="button"
+                class="viewer-control-btn"
+                (click)="togglePictureInPicture()"
+                [disabled]="!hasAnyVideoTrack()"
+                matTooltip="Picture in picture"
+              >
+                <mat-icon>picture_in_picture_alt</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                type="button"
+                class="viewer-control-btn"
+                [disabled]="!captionsAvailable()"
+                [matTooltip]="captionControlLabel()"
+              >
+                <mat-icon>closed_caption</mat-icon>
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -6,6 +6,8 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import {
   LocalTrack,
   RemoteAudioTrack,
@@ -22,7 +24,7 @@ import { PublicSessionInviteResponse } from '@features/operations/operator.model
 @Component({
   selector: 'app-session-browser-join-page',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatSnackBarModule],
+  imports: [CommonModule, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatSnackBarModule, MatFormFieldModule, MatInputModule],
   templateUrl: './session-browser-join-page.component.html',
   styleUrl: './session-browser-join-page.component.scss'
 })
@@ -36,7 +38,9 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
   readonly inviteToken = this.route.snapshot.paramMap.get('inviteToken') ?? '';
   readonly invite = signal<PublicSessionInviteResponse | null>(null);
   readonly participantName = signal('');
+  readonly participantNameError = signal<string | null>(null);
   readonly pageError = signal<string | null>(null);
+  readonly deviceError = signal<'mic' | 'camera' | null>(null);
   readonly isLoading = signal(false);
   readonly isJoining = signal(false);
   readonly isJoined = signal(false);
@@ -71,17 +75,22 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
 
   updateParticipantName(value: string): void {
     this.participantName.set(value);
+    if (this.participantNameError()) {
+      this.participantNameError.set(null);
+    }
   }
 
   async joinSession(): Promise<void> {
     const invite = this.invite();
     const participantName = this.participantName().trim();
     if (!invite || !participantName) {
-      this.pageError.set('Participant name is required.');
+      this.participantNameError.set('Participant name is required.');
       return;
     }
 
+    this.participantNameError.set(null);
     this.pageError.set(null);
+    this.deviceError.set(null);
     this.isJoining.set(true);
     this.connectionLabel.set('Connecting');
 
@@ -95,8 +104,19 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
 
       let cameraPublication = null;
       if (this.canPublishMedia()) {
-        await room.localParticipant.setMicrophoneEnabled(true);
-        cameraPublication = await room.localParticipant.setCameraEnabled(true);
+        try {
+          await room.localParticipant.setMicrophoneEnabled(true);
+        } catch (error) {
+          this.deviceError.set('mic');
+          this.pageError.set(this.api.explainError(error));
+        }
+
+        try {
+          cameraPublication = await room.localParticipant.setCameraEnabled(true);
+        } catch (error) {
+          this.deviceError.set('camera');
+          this.pageError.set(this.api.explainError(error));
+        }
       }
 
       this.room = room;
@@ -108,6 +128,10 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
     } catch (error) {
       this.pageError.set(this.api.explainError(error));
       this.connectionLabel.set('Disconnected');
+      if (this.room) {
+        this.disconnect();
+      }
+      this.isJoined.set(false);
     } finally {
       this.isJoining.set(false);
     }
@@ -130,9 +154,6 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
     try {
       const invite = await this.api.getPublicSessionInvite(this.inviteToken);
       this.invite.set(invite);
-      if (!this.participantName().trim()) {
-        this.participantName.set(invite.workerName);
-      }
       if (invite.sessionStatus !== 'ACTIVE') {
         this.pageError.set('This session is no longer active.');
       }
@@ -324,6 +345,12 @@ export class SessionBrowserJoinPageComponent implements OnDestroy {
     this.detachRemoteTracks();
     this.detachLocalVideo();
     if (this.room) {
+      for (const publication of this.room.localParticipant.trackPublications.values()) {
+        const track = publication.track as LocalTrack;
+        if (track) {
+          track.stop();
+        }
+      }
       this.room.disconnect();
       this.room = null;
     }

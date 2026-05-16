@@ -3,6 +3,7 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  HostListener,
   Injector,
   OnDestroy,
   QueryList,
@@ -63,6 +64,7 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   readonly sessions = signal<SessionResponse[]>([]);
   readonly selectedSessionId = signal<string | null>(null);
   readonly isCreatePanelOpen = signal(false);
+  readonly isOverlayOpen = signal(true);
   readonly newSessionWorkerName = signal('');
   readonly newSessionReferenceNumber = signal('');
   readonly isRefreshing = signal(false);
@@ -79,6 +81,7 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   readonly hasMoreSessions = signal(false);
   readonly nextSessionCursor = signal<string | null>(null);
   readonly pageError = signal<string | null>(null);
+  readonly isFullscreen = signal(false);
 
   readonly selectedSession = computed(
     () => this.sessions().find((session) => session.id === this.selectedSessionId()) ?? null
@@ -173,6 +176,10 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     this.isCreatePanelOpen.update((open) => !open);
   }
 
+  toggleOverlaySidebar(): void {
+    this.isOverlayOpen.update((open) => !open);
+  }
+
   updateNewSessionWorkerName(value: string): void {
     this.newSessionWorkerName.set(value);
   }
@@ -212,6 +219,11 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   toggleViewerAspectMode(): void {
     this.viewerAspectMode.update((mode) => (mode === 'cover' ? 'contain' : 'cover'));
     this.videoElements.forEach((element) => this.applyVideoPresentation(element));
+  }
+
+  @HostListener('document:fullscreenchange')
+  onFullscreenChange(): void {
+    this.isFullscreen.set(document.fullscreenElement === this.viewerStageHost?.nativeElement);
   }
 
   viewerAspectLabel(): string {
