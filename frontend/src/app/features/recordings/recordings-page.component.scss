@@ -465,10 +465,17 @@
 
 .archive-header-group {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.35rem;
+}
+
+.archive-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
 }
 
 .archive-title-stack {
@@ -510,6 +517,42 @@
   display: block;
   line-height: 16px;
   text-align: center;
+}
+
+.archive-delete-btn {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: rgba(203, 82, 57, 0.12);
+  color: var(--danger);
+  flex-shrink: 0;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
+
+.archive-delete-btn .mat-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+}
+
+.archive-delete-btn:hover {
+  background: rgba(203, 82, 57, 0.2);
+}
+
+.archive-delete-btn[disabled] {
+  opacity: 0.6;
+}
+
+:host-context(.dark-theme) .archive-delete-btn {
+  background: rgba(203, 82, 57, 0.22);
+  color: #ffb4a8;
 }
 
 .archive-reference-line {
@@ -926,6 +969,14 @@
   background: rgba(97, 183, 72, 0.15);
 }
 
+.micro-icon-btn-danger .mat-icon {
+  color: var(--danger);
+}
+
+.micro-icon-btn-danger:hover {
+  background: rgba(203, 82, 57, 0.12);
+}
+
 :host-context(.dark-theme) .head-ref-badge {
   color: #c8ecb8;
   background: rgba(97, 183, 72, 0.15);
@@ -934,6 +985,10 @@
 
 :host-context(.dark-theme) .micro-icon-btn:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+:host-context(.dark-theme) .micro-icon-btn-danger:hover {
+  background: rgba(203, 82, 57, 0.18);
 }
 
 .evidence-actions {

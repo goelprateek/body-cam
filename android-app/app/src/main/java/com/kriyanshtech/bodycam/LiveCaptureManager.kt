@@ -157,6 +157,7 @@ class LiveCaptureManager(
                     stopActiveRecordingSafely()
                 } else {
                     teardownCapturePipeline()
+                    completeGracefulStop()
                     notifyStopSafeToReleaseIfIdle()
                 }
             }
@@ -640,14 +641,7 @@ class LiveCaptureManager(
                     startSegmentRecording()
                 } else if (stopRequested) {
                     teardownCapturePipeline()
-                    _state.value = _state.value.copy(
-                        streamStatus = "Stopped",
-                        syncStatus = if (pendingUploadIds.isEmpty()) {
-                            "Capture stopped"
-                        } else {
-                            "Waiting for ${pendingUploadIds.size} queued upload(s)"
-                        }
-                    )
+                    completeGracefulStop()
                     notifyStopSafeToReleaseIfIdle()
                 }
             }
@@ -748,6 +742,25 @@ class LiveCaptureManager(
         activeSegmentSessionElapsedStartMs = 0L
     }
 
+    private fun completeGracefulStop() {
+        stopRequested = false
+        _state.value = _state.value.copy(
+            isStreaming = false,
+            streamStatus = "Stopped",
+            syncStatus = if (pendingUploadIds.isEmpty()) {
+                "Capture stopped"
+            } else {
+                "Capture stopped; uploads continuing in background"
+            },
+            sessionId = null,
+            lastError = null,
+            usingFrontCamera = false,
+            canFlipCamera = false,
+            cameraSwitchInFlight = false,
+            thermalThrottling = false
+        )
+    }
+
     private fun publishUploadQueueState(syncStatusOverride: String? = null) {
         val queuedUploads = uploadWorkStates.values.count {
             it == WorkInfo.State.ENQUEUED || it == WorkInfo.State.BLOCKED
@@ -776,7 +789,8 @@ class LiveCaptureManager(
     }
 
     private fun notifyStopSafeToReleaseIfIdle() {
-        if (stopRequested && activeRecording == null && pendingUploadIds.isEmpty()) {
+        if (activeRecording == null && pendingUploadIds.isEmpty() && activeConfig == null) {
+            _state.value = _state.value.copy(syncStatus = "Capture idle")
             onStopSafeToRelease?.invoke()
         }
     }

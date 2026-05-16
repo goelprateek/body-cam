@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Body Cam</string>
-    <string name="brand_name_short">BodyCam</string>
+    <string name="app_name">Karebo body cam</string>
+    <string name="brand_name_short">Karebo body cam</string>
     <string name="brand_slogan">Secure Field Operations</string>
 
     <!-- Login Screen -->

@@ -88,13 +88,25 @@
                   <strong class="archive-worker">{{ session.workerName }}</strong>
                   <span class="archive-room">{{ session.roomName }}</span>
                 </div>
-                <span
-                  class="transcript-badge"
-                  [class]="transcriptPillClass(session.transcriptStatus)"
-                  [matTooltip]="transcriptLabel(session.transcriptStatus)"
-                >
-                  <mat-icon class="transcript-icon">{{ transcriptIcon(session.transcriptStatus) }}</mat-icon>
-                </span>
+                <div class="archive-header-actions">
+                  <span
+                    class="transcript-badge"
+                    [class]="transcriptPillClass(session.transcriptStatus)"
+                    [matTooltip]="transcriptLabel(session.transcriptStatus)"
+                  >
+                    <mat-icon class="transcript-icon">{{ transcriptIcon(session.transcriptStatus) }}</mat-icon>
+                  </span>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    class="archive-delete-btn"
+                    [disabled]="isDeletingSessionRecordings()"
+                    (click)="deleteSessionRecordings(session, $event)"
+                    matTooltip="Delete this recording archive"
+                  >
+                    <mat-icon>{{ isDeletingSessionRecordings() ? 'hourglass_top' : 'delete_outline' }}</mat-icon>
+                  </button>
+                </div>
               </div>
 
               @if (session.referenceNumber) {

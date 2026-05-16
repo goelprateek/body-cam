@@ -154,6 +154,14 @@ export class OperatorApiService {
     );
   }
 
+  async deleteSessionRecordings(sessionId: string): Promise<void> {
+    await firstValueFrom(
+      this.http.delete<void>(this.url(`/sessions/${sessionId}/recordings`), {
+        headers: this.authHeaders()
+      })
+    );
+  }
+
   async getSessionRecordingExport(sessionId: string): Promise<SessionRecordingExportResponse> {
     return firstValueFrom(
       this.http.get<SessionRecordingExportResponse>(this.url(`/sessions/${sessionId}/recordings/export-package`), {
