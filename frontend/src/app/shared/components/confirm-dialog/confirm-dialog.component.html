@@ -1,0 +1,64 @@
+<div class="premium-dialog-wrapper" [class.is-destructive]="data.destructive">
+  <button type="button" class="premium-close-btn" aria-label="Close" (click)="close(false)">
+    <mat-icon>close</mat-icon>
+  </button>
+  
+  <div class="premium-dialog-header">
+    <div class="icon-ring">
+      <mat-icon class="pulse-icon">{{ data.destructive ? 'warning_amber' : 'info_outline' }}</mat-icon>
+    </div>
+    <h2 class="premium-title">{{ data.title }}</h2>
+    <p class="premium-subtitle">{{ data.message }}</p>
+  </div>
+
+  <div class="premium-content">
+    @if (data.referenceNumber) {
+      <div class="reference-auth-block">
+        <div class="ref-header">
+          <span class="ref-label">Target Entity Reference</span>
+          <span class="ref-status">Awaiting Confirmation</span>
+        </div>
+        <div class="ref-code-box">
+          <span class="ref-value">{{ data.referenceNumber }}</span>
+          <button type="button" class="ref-copy-btn" [cdkCopyToClipboard]="data.referenceNumber || ''" (click)="markCopied()">
+            <mat-icon>{{ copied() ? 'check' : 'content_copy' }}</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label" for="delete-confirmation-input">
+          Enter reference to authorize {{ data.destructive ? 'deletion' : 'action' }}
+        </label>
+        <div class="input-wrapper">
+          <mat-icon class="input-icon">lock_outline</mat-icon>
+          <input
+            id="delete-confirmation-input"
+            type="text"
+            class="premium-input"
+            [(ngModel)]="confirmationText"
+            [placeholder]="data.referenceNumber"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="premium-footer">
+    <button mat-button type="button" class="premium-btn-cancel" (click)="close(false)">
+      {{ data.cancelLabel || 'Cancel' }}
+    </button>
+    <button
+      mat-flat-button
+      type="button"
+      class="premium-btn-confirm"
+      [disabled]="!canConfirm()"
+      (click)="close(true)"
+    >
+      <mat-icon>{{ data.destructive ? 'delete_forever' : 'check_circle' }}</mat-icon>
+      <span>{{ data.confirmLabel || 'Confirm' }}</span>
+    </button>
+  </div>
+</div>
