@@ -83,7 +83,7 @@ public class RecordingTranscriptService {
 
     @Transactional(readOnly = true)
     public RecordingTranscriptResponse getTranscript(UUID recordingId) {
-        RecordingAsset recording = recordingAssetRepository.findById(recordingId)
+        RecordingAsset recording = recordingAssetRepository.findActiveById(recordingId)
                 .orElseThrow(() -> new NotFoundException("Recording not found: " + recordingId));
 
         return recordingTranscriptRepository.findByRecording_Id(recordingId)
@@ -94,7 +94,7 @@ public class RecordingTranscriptService {
     @Transactional
     public RecordingTranscriptResponse generateTranscript(UUID recordingId, String requestedEngine) {
         assertTranscriptEnabled();
-        RecordingAsset recording = recordingAssetRepository.findById(recordingId)
+        RecordingAsset recording = recordingAssetRepository.findActiveById(recordingId)
                 .orElseThrow(() -> new NotFoundException("Recording not found: " + recordingId));
         RecordingTranscript transcript = enqueueTranscript(recording, true, requestedEngine);
         log.info(
@@ -629,7 +629,7 @@ public class RecordingTranscriptService {
         liveSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
 
-        return recordingAssetRepository.findBySession_IdOrderByCreatedAtAsc(sessionId).stream()
+        return recordingAssetRepository.findActiveBySessionIdOrderByCreatedAtAsc(sessionId).stream()
                 .sorted(RecordingTimelineSupport.segmentTimelineComparator())
                 .toList();
     }

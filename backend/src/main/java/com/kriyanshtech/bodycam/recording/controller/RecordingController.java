@@ -136,8 +136,11 @@ public class RecordingController {
             log.info("Parsed structured recording metadata payload");
             return objectMapper.treeToValue(node, RecordingMetadataRequest.class);
         } catch (Exception exception) {
-            log.warn("Failed to parse recording metadata JSON payload. Proceeding without metadata.", exception);
-            return null;
+            String payloadSnippet = metadataJson.length() > 512
+                    ? metadataJson.substring(0, 512) + "..."
+                    : metadataJson;
+            log.warn("Failed to parse recording metadata JSON payload payloadSnippet={}", payloadSnippet, exception);
+            throw new IllegalArgumentException("Invalid recording upload metadata JSON payload", exception);
         }
     }
 }

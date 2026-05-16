@@ -85,7 +85,7 @@ public class RecordingService {
 
     @Transactional(readOnly = true)
     public List<RecordingResponse> listRecordings() {
-        List<RecordingResponse> recordings = recordingAssetRepository.findAllByOrderByCreatedAtDesc().stream()
+        List<RecordingResponse> recordings = recordingAssetRepository.findAllActiveByOrderByCreatedAtDesc().stream()
                 .map(this::map).toList();
         log.info("Listed {} recordings", recordings.size());
         return recordings;
@@ -93,7 +93,7 @@ public class RecordingService {
 
     @Transactional(readOnly = true)
     public RecordingPlaybackResponse playbackUrl(UUID recordingId) {
-        RecordingAsset asset = recordingAssetRepository.findById(recordingId)
+        RecordingAsset asset = recordingAssetRepository.findActiveById(recordingId)
                 .orElseThrow(() -> new NotFoundException("Recording not found: " + recordingId));
         log.info("Generating playback URL for recordingId={} objectKey={}", recordingId, asset.getObjectKey());
 
@@ -107,7 +107,7 @@ public class RecordingService {
     public SessionRecordingTimelineResponse sessionTimeline(UUID sessionId) {
         LiveSession session = liveSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
-        List<RecordingAsset> recordings = recordingAssetRepository.findBySession_IdOrderByCreatedAtAsc(sessionId)
+        List<RecordingAsset> recordings = recordingAssetRepository.findActiveBySessionIdOrderByCreatedAtAsc(sessionId)
                 .stream()
                 .sorted(RecordingTimelineSupport.segmentTimelineComparator())
                 .toList();
@@ -185,10 +185,11 @@ public class RecordingService {
         if (file.isEmpty()) {
             throw new IllegalArgumentException("Recording segment file is required");
         }
+        validateUploadMetadata(metadata);
 
         String idempotencyKey = buildIdempotencyKey(sessionId, metadata);
         if (idempotencyKey != null) {
-            RecordingAsset existingRecording = recordingAssetRepository.findByIdempotencyKey(idempotencyKey)
+            RecordingAsset existingRecording = recordingAssetRepository.findActiveByIdempotencyKey(idempotencyKey)
                     .orElse(null);
             if (existingRecording != null) {
                 log.info(
@@ -237,6 +238,22 @@ public class RecordingService {
                 metadata);
     }
 
+    private void validateUploadMetadata(RecordingMetadataRequest metadata) {
+        if (metadata == null) {
+            throw new IllegalArgumentException(
+                    "Recording upload metadata is required and must include segmentSequence, sessionElapsedStartMs, and sessionElapsedEndMs");
+        }
+        if (metadata.segmentSequence() == null) {
+            throw new IllegalArgumentException("Recording upload metadata segmentSequence is required");
+        }
+        if (metadata.sessionElapsedStartMs() == null) {
+            throw new IllegalArgumentException("Recording upload metadata sessionElapsedStartMs is required");
+        }
+        if (metadata.sessionElapsedEndMs() == null) {
+            throw new IllegalArgumentException("Recording upload metadata sessionElapsedEndMs is required");
+        }
+    }
+
     private RecordingResponse saveRecording(
             LiveSession session,
             String objectKey,
@@ -251,6 +268,8 @@ public class RecordingService {
         recordingAsset.setIdempotencyKey(idempotencyKey);
         recordingAsset.setPlaybackUrl(playbackUrl);
         recordingAsset.setDurationSeconds(durationSeconds);
+        recordingAsset.setActive(true);
+        recordingAsset.setDeactivatedAt(null);
         recordingAsset.setCreatedAt(Instant.now());
         RecordingAsset savedRecording = recordingAssetRepository.save(recordingAsset);
         log.info(
@@ -301,6 +320,28 @@ public class RecordingService {
         }
 
         return map(savedRecording);
+    }
+
+    @Transactional
+    public void deactivateSessionRecordings(UUID sessionId) {
+        LiveSession session = liveSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
+        List<RecordingAsset> recordings = recordingAssetRepository.findActiveBySessionIdOrderByCreatedAtAsc(sessionId);
+        if (recordings.isEmpty()) {
+            log.info("Session recordings already inactive sessionId={}", sessionId);
+            return;
+        }
+
+        Instant deactivatedAt = Instant.now();
+        for (RecordingAsset recording : recordings) {
+            recording.setActive(false);
+            recording.setDeactivatedAt(deactivatedAt);
+        }
+        recordingAssetRepository.saveAll(recordings);
+        log.info("Soft deleted {} recording segment(s) for sessionId={} roomName={}",
+                recordings.size(),
+                session.getId(),
+                session.getRoomName());
     }
 
     private String extensionFor(String filename, String contentType) {

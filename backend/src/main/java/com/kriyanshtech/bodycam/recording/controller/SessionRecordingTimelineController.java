@@ -5,6 +5,7 @@ import com.kriyanshtech.bodycam.recording.service.RecordingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,5 +28,12 @@ public class SessionRecordingTimelineController {
     public ResponseEntity<SessionRecordingTimelineResponse> timeline(@PathVariable("sessionId") UUID sessionId) {
         log.info("Received session recording timeline request sessionId={}", sessionId);
         return ResponseEntity.ok(recordingService.sessionTimeline(sessionId));
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> deactivateSessionRecordings(@PathVariable("sessionId") UUID sessionId) {
+        log.info("Received request to soft delete session recordings sessionId={}", sessionId);
+        recordingService.deactivateSessionRecordings(sessionId);
+        return ResponseEntity.noContent().build();
     }
 }

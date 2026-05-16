@@ -34,7 +34,7 @@ public class RecordingInvestigationService {
 
         String loweredQuery = normalizedQuery.toLowerCase(Locale.ROOT);
         List<RecordingInvestigationSearchHitResponse> hits = new ArrayList<>();
-        for (RecordingAsset recording : recordingAssetRepository.findAllByOrderByCreatedAtDesc()) {
+        for (RecordingAsset recording : recordingAssetRepository.findAllActiveByOrderByCreatedAtDesc()) {
             if (hits.size() >= MAX_HITS) {
                 break;
             }
