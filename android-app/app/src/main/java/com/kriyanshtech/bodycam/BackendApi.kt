@@ -84,3 +84,4 @@ object BackendApiFactory {
 }
 
 val textPlainMediaType = "text/plain".toMediaType()
+val applicationJsonMediaType = "application/json".toMediaType()

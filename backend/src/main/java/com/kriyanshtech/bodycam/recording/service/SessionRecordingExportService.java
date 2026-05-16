@@ -143,7 +143,7 @@ public class SessionRecordingExportService {
             log.info("Session recording export started sessionId={} exportId={}", sessionId, exportId);
             SessionRecordingTimelineResponse timeline = recordingService.sessionTimeline(sessionId);
             SessionTranscriptResponse transcript = recordingTranscriptService.getSessionTranscript(sessionId);
-            List<RecordingAsset> recordings = recordingAssetRepository.findBySession_IdOrderByCreatedAtAsc(sessionId).stream()
+            List<RecordingAsset> recordings = recordingAssetRepository.findActiveBySessionIdOrderByCreatedAtAsc(sessionId).stream()
                     .sorted(RecordingTimelineSupport.segmentTimelineComparator())
                     .toList();
 

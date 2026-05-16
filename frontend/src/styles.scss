@@ -1171,3 +1171,11 @@ html, body, .mat-typography,
   color: #c8ecb8;
   box-shadow: 0 0 16px rgba(97, 183, 72, 0.2);
 }
+
+.recording-delete-dialog .mdc-dialog__surface,
+.recording-delete-dialog .mat-mdc-dialog-surface {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 20px !important;
+}

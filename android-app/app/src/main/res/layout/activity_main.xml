@@ -24,21 +24,46 @@
             android:gravity="center_horizontal"
             android:orientation="vertical">
 
-            <ImageView
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:layout_marginTop="48dp"
-                android:layout_marginBottom="16dp"
-                android:src="@drawable/logo"
-                android:scaleType="fitCenter" />
+            <FrameLayout
+                android:layout_width="156dp"
+                android:layout_height="156dp"
+                android:layout_marginTop="40dp"
+                android:layout_marginBottom="18dp"
+                android:background="@drawable/auth_hero_background"
+                android:padding="18dp">
+
+                <View
+                    android:layout_width="96dp"
+                    android:layout_height="96dp"
+                    android:layout_gravity="top|end"
+                    android:background="@drawable/circle_background_translucent"
+                    android:alpha="0.18" />
+
+                <View
+                    android:layout_width="72dp"
+                    android:layout_height="72dp"
+                    android:layout_gravity="bottom|start"
+                    android:background="@drawable/circle_background_translucent"
+                    android:alpha="0.12" />
+
+                <ImageView
+                    android:layout_width="110dp"
+                    android:layout_height="110dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@string/brand_name_short"
+                    android:src="@drawable/logo"
+                    android:scaleType="fitCenter" />
+            </FrameLayout>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/brand_name_short"
                 android:textColor="@color/text_primary"
-                android:textSize="28sp"
-                android:textStyle="bold" />
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:letterSpacing="0.01" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -121,15 +146,6 @@
                     </FrameLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
-
-            <TextView
-                android:id="@+id/environmentValue"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="32dp"
-                android:textColor="@color/text_muted"
-                android:textSize="12sp"
-                android:textStyle="normal" />
 
         </LinearLayout>
 

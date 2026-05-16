@@ -36,6 +36,16 @@ Production runs:
 
 - `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`
 
+Production cleanup:
+
+- use `scripts/ops/cleanup-old-sessions.sh` on the production host to remove old ended sessions together with their recording metadata and MinIO objects
+- the script defaults to a dry run: `scripts/ops/cleanup-old-sessions.sh --days 30`
+- apply the deletion only after reviewing the summary: `scripts/ops/cleanup-old-sessions.sh --days 30 --apply`
+- cleanup removes:
+- `live_session` rows whose status is `ENDED` and whose `ended_at` or fallback `created_at` is older than the requested retention window
+- dependent `recording_asset`, `recording_metadata`, `recording_transcript`, `recording_transcript_segment`, `session_recording_export`, and `session_invite` rows
+- MinIO objects under the standard per-session prefixes `sessions/<sessionId>/` and `exports/sessions/<sessionId>/`
+
 Production-specific behavior:
 
 - backend and frontend are attached to the external `proxy` network
@@ -82,12 +92,12 @@ Production firewall ports:
 - do not expose `7880/tcp` publicly when Traefik is serving the LiveKit `wss://` endpoint
 - keep PostgreSQL and MinIO loopback-only unless there is an explicit operational reason to publish them
 
-The deploy workflow should sync only deployment assets:
+The deploy workflow currently syncs these repo paths to the production host:
 
 - `infra/docker-compose.prod.yml`
 - `infra/compose/prod/`
 - `infra/livekit.yaml.template`
-- `scripts/deploy/`
+- `scripts/`
 
 GitHub Actions production deployment expects these repository variables:
 

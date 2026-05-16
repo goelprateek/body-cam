@@ -33,6 +33,8 @@ Package structure is feature-oriented to keep the MVP simple and easy to evolve.
 - Each uploaded clip still creates one `recording_asset` row tied to a session.
 - Optional structured metadata can now be attached per clip and is stored in `recording_metadata`.
 - The multipart upload endpoint accepts an optional JSON `metadata` part alongside `sessionId`, `durationSeconds`, and `file`.
+- Android uploads should send the `metadata` part as `application/json`.
+- The multipart upload path now rejects uploads that omit `segmentSequence`, `sessionElapsedStartMs`, or `sessionElapsedEndMs`, because timeline playback and review depend on them.
 - Current Android uploads can include `capturedAt`, `cameraFacing`, and best-effort location fields.
 - The metadata model is designed to grow cleanly into thermal or other sensor capture through typed thermal columns plus flexible `sensorPayload` JSON.
 

@@ -160,9 +160,6 @@ class MainActivity : ComponentActivity() {
             binding.referenceNumberInput.setSelection(binding.referenceNumberInput.text?.length ?: 0)
         }
 
-        binding.environmentValue.text = state.backendUrl.ifBlank {
-            getString(R.string.env_missing)
-        }
         binding.userSummary.text = state.user?.let {
             "${it.displayName} (${it.role})"
         } ?: "Not logged in"

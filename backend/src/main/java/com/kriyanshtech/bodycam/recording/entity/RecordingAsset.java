@@ -40,6 +40,12 @@ public class RecordingAsset {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "is_active", nullable = false)
+    private boolean active = true;
+
+    @Column(name = "deactivated_at")
+    private Instant deactivatedAt;
+
     @OneToOne(mappedBy = "recording", fetch = FetchType.LAZY)
     private RecordingMetadata metadata;
 
@@ -100,6 +106,22 @@ public class RecordingAsset {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
+    public Instant getDeactivatedAt() {
+        return deactivatedAt;
+    }
+
+    public void setDeactivatedAt(Instant deactivatedAt) {
+        this.deactivatedAt = deactivatedAt;
     }
 
     public RecordingMetadata getMetadata() {

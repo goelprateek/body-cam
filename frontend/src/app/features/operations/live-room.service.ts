@@ -3,13 +3,19 @@ import {
   ConnectionState,
   RemoteAudioTrack,
   RemoteParticipant,
-  RemoteTrack,
   RemoteVideoTrack,
   Room,
   RoomEvent,
   Track
 } from 'livekit-client';
 import { LiveKitTokenResponse } from './operator.models';
+
+export interface LiveRoomRemoteParticipant {
+  id: string;
+  name: string;
+  videoTrack: RemoteVideoTrack | null;
+  audioTrack: RemoteAudioTrack | null;
+}
 
 @Injectable({ providedIn: 'root' })
 export class LiveRoomService {
@@ -18,6 +24,7 @@ export class LiveRoomService {
   readonly connectionLabel = signal('Idle');
   readonly lastEvent = signal('Waiting for operator to join a live room');
   readonly participantNames = signal<string[]>([]);
+  readonly remoteParticipants = signal<LiveRoomRemoteParticipant[]>([]);
   readonly remoteVideoTrack = signal<RemoteVideoTrack | null>(null);
   readonly remoteAudioTrack = signal<RemoteAudioTrack | null>(null);
   readonly focusParticipant = signal<string | null>(null);
@@ -88,7 +95,6 @@ export class LiveRoomService {
     });
 
     room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
-      this.applyTrack(track, participant);
       this.lastEvent.set(`${this.participantLabel(participant)} published ${track.kind}`);
       this.syncRemoteState();
     });
@@ -102,14 +108,6 @@ export class LiveRoomService {
     });
 
     room.on(RoomEvent.TrackUnsubscribed, (track) => {
-      if (track.kind === Track.Kind.Video) {
-        this.remoteVideoTrack.set(null);
-      }
-
-      if (track.kind === Track.Kind.Audio) {
-        this.remoteAudioTrack.set(null);
-      }
-
       this.lastEvent.set(`Remote ${track.kind} track stopped`);
       this.syncRemoteState();
     });
@@ -142,6 +140,7 @@ export class LiveRoomService {
     this.connectionLabel.set('Idle');
     this.lastEvent.set('Waiting for operator to join a live room');
     this.participantNames.set([]);
+    this.remoteParticipants.set([]);
     this.remoteVideoTrack.set(null);
     this.remoteAudioTrack.set(null);
     this.focusParticipant.set(null);
@@ -160,66 +159,48 @@ export class LiveRoomService {
       participants.map((participant) => this.participantLabel(participant))
     );
 
-    let videoTrack: RemoteVideoTrack | null = this.remoteVideoTrack();
-    let audioTrack: RemoteAudioTrack | null = this.remoteAudioTrack();
-    let focusParticipant: string | null = this.focusParticipant();
-    let sawVideoPublication = false;
-    let sawAudioPublication = false;
+    const remoteParticipants: LiveRoomRemoteParticipant[] = [];
 
     for (const participant of participants) {
+      let videoTrack: RemoteVideoTrack | null = null;
+      let audioTrack: RemoteAudioTrack | null = null;
+
       for (const publication of participant.trackPublications.values()) {
         if (!publication.isSubscribed) {
           publication.setSubscribed(true);
         }
 
         const track = publication.track;
-        if (publication.kind === Track.Kind.Video) {
-          sawVideoPublication = true;
-        }
-
-        if (publication.kind === Track.Kind.Audio) {
-          sawAudioPublication = true;
-        }
-
         if (!track) {
           continue;
         }
 
         if (track.kind === Track.Kind.Video) {
           videoTrack = track as RemoteVideoTrack;
-          focusParticipant = this.participantLabel(participant);
         }
 
         if (track.kind === Track.Kind.Audio) {
           audioTrack = track as RemoteAudioTrack;
-          focusParticipant ??= this.participantLabel(participant);
         }
       }
+
+      remoteParticipants.push({
+        id: participant.identity,
+        name: this.participantLabel(participant),
+        videoTrack,
+        audioTrack
+      });
     }
 
-    if (!sawVideoPublication) {
-      videoTrack = null;
-    }
+    const featuredParticipant =
+      remoteParticipants.find((candidate) => candidate.videoTrack) ??
+      remoteParticipants.find((candidate) => candidate.audioTrack) ??
+      null;
 
-    if (!sawAudioPublication) {
-      audioTrack = null;
-    }
-
-    this.remoteVideoTrack.set(videoTrack);
-    this.remoteAudioTrack.set(audioTrack);
-    this.focusParticipant.set(focusParticipant);
-  }
-
-  private applyTrack(track: RemoteTrack, participant: RemoteParticipant): void {
-    if (track.kind === Track.Kind.Video) {
-      this.remoteVideoTrack.set(track as RemoteVideoTrack);
-      this.focusParticipant.set(this.participantLabel(participant));
-    }
-
-    if (track.kind === Track.Kind.Audio) {
-      this.remoteAudioTrack.set(track as RemoteAudioTrack);
-      this.focusParticipant.set(this.participantLabel(participant));
-    }
+    this.remoteParticipants.set(remoteParticipants);
+    this.remoteVideoTrack.set(featuredParticipant?.videoTrack ?? null);
+    this.remoteAudioTrack.set(featuredParticipant?.audioTrack ?? null);
+    this.focusParticipant.set(featuredParticipant?.name ?? null);
   }
 
   private participantLabel(participant: RemoteParticipant): string {

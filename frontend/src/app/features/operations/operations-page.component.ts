@@ -2,17 +2,16 @@ import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
   Component,
-  DestroyRef,
   ElementRef,
   Injector,
   OnDestroy,
-  ViewChild,
+  QueryList,
+  ViewChildren,
   computed,
   effect,
   inject,
   signal
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -20,8 +19,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { RemoteAudioTrack, RemoteVideoTrack } from 'livekit-client';
-import { LiveRoomService } from './live-room.service';
+import { LiveRoomRemoteParticipant, LiveRoomService } from './live-room.service';
 import { OperatorApiService } from './operator-api.service';
 import { SessionInviteResponse, SessionInviteRole, SessionResponse } from './operator.models';
 
@@ -46,14 +44,13 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   private static readonly PUBLISHER_INVITE_ROLE = 'BROWSER' as const;
   private static readonly VIEWER_INVITE_ROLE = 'VIEWER' as const;
 
-  private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
 
-  private videoElement: HTMLMediaElement | null = null;
-  private audioElement: HTMLMediaElement | null = null;
+  private readonly videoElements = new Map<string, HTMLVideoElement>();
+  private readonly audioElements = new Map<string, HTMLAudioElement>();
 
-  @ViewChild('videoHost') private videoHost?: ElementRef<HTMLDivElement>;
-  @ViewChild('audioHost') private audioHost?: ElementRef<HTMLDivElement>;
+  @ViewChildren('participantVideoHost') private participantVideoHosts?: QueryList<ElementRef<HTMLDivElement>>;
+  @ViewChildren('participantAudioHost') private participantAudioHosts?: QueryList<ElementRef<HTMLDivElement>>;
 
   readonly api = inject(OperatorApiService);
   readonly liveRoom = inject(LiveRoomService);
@@ -100,6 +97,7 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
 
     return 'Select a session to start';
   });
+  readonly remoteParticipantCount = computed(() => this.liveRoom.remoteParticipants().length);
 
   constructor() {
     void this.refreshAll();
@@ -108,14 +106,8 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     effect(
       () => {
-        this.renderVideoTrack(this.liveRoom.remoteVideoTrack());
-      },
-      { injector: this.injector }
-    );
-
-    effect(
-      () => {
-        this.renderAudioTrack(this.liveRoom.remoteAudioTrack());
+        const participants = this.liveRoom.remoteParticipants();
+        queueMicrotask(() => this.renderRemoteParticipants(participants));
       },
       { injector: this.injector }
     );
@@ -415,59 +407,93 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private renderVideoTrack(track: RemoteVideoTrack | null): void {
-    const host = this.videoHost?.nativeElement;
+  private detachMedia(): void {
+    for (const element of this.videoElements.values()) {
+      element.remove();
+    }
+    this.videoElements.clear();
+
+    for (const element of this.audioElements.values()) {
+      element.remove();
+    }
+    this.audioElements.clear();
+  }
+
+  private renderRemoteParticipants(participants: LiveRoomRemoteParticipant[]): void {
+    const activeIds = new Set(participants.map((participant) => participant.id));
+
+    for (const [participantId, element] of this.videoElements.entries()) {
+      if (!activeIds.has(participantId)) {
+        element.remove();
+        this.videoElements.delete(participantId);
+      }
+    }
+
+    for (const [participantId, element] of this.audioElements.entries()) {
+      if (!activeIds.has(participantId)) {
+        element.remove();
+        this.audioElements.delete(participantId);
+      }
+    }
+
+    for (const participant of participants) {
+      this.renderParticipantVideo(participant);
+      this.renderParticipantAudio(participant);
+    }
+  }
+
+  private renderParticipantVideo(participant: LiveRoomRemoteParticipant): void {
+    const host = this.findParticipantHost(this.participantVideoHosts, participant.id);
     if (!host) {
       return;
     }
 
-    if (this.videoElement) {
-      this.videoElement.remove();
-      this.videoElement = null;
+    const existingElement = this.videoElements.get(participant.id);
+    if (existingElement) {
+      existingElement.remove();
+      this.videoElements.delete(participant.id);
     }
 
-    if (!track) {
+    if (!participant.videoTrack) {
       return;
     }
 
-    const element = track.attach() as HTMLVideoElement;
+    const element = participant.videoTrack.attach() as HTMLVideoElement;
     element.autoplay = true;
     element.playsInline = true;
     element.className = 'live-video';
     host.appendChild(element);
-    this.videoElement = element;
+    this.videoElements.set(participant.id, element);
   }
 
-  private renderAudioTrack(track: RemoteAudioTrack | null): void {
-    const host = this.audioHost?.nativeElement;
+  private renderParticipantAudio(participant: LiveRoomRemoteParticipant): void {
+    const host = this.findParticipantHost(this.participantAudioHosts, participant.id);
     if (!host) {
       return;
     }
 
-    if (this.audioElement) {
-      this.audioElement.remove();
-      this.audioElement = null;
+    const existingElement = this.audioElements.get(participant.id);
+    if (existingElement) {
+      existingElement.remove();
+      this.audioElements.delete(participant.id);
     }
 
-    if (!track) {
+    if (!participant.audioTrack) {
       return;
     }
 
-    const element = track.attach();
+    const element = participant.audioTrack.attach() as HTMLAudioElement;
     element.autoplay = true;
     host.appendChild(element);
-    this.audioElement = element;
+    this.audioElements.set(participant.id, element);
   }
 
-  private detachMedia(): void {
-    if (this.videoElement) {
-      this.videoElement.remove();
-      this.videoElement = null;
-    }
-
-    if (this.audioElement) {
-      this.audioElement.remove();
-      this.audioElement = null;
-    }
+  private findParticipantHost(
+    hosts: QueryList<ElementRef<HTMLDivElement>> | undefined,
+    participantId: string
+  ): HTMLDivElement | null {
+    return (
+      hosts?.find((host) => host.nativeElement.dataset['participantId'] === participantId)?.nativeElement ?? null
+    );
   }
 }

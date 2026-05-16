@@ -322,29 +322,53 @@
         </div>
       }
 
-      <div class="viewer-frame premium-frame" [class.frame-live]="liveRoom.remoteVideoTrack()">
-        <div class="viewer-stage premium-stage" #videoHost>
-          @if (!liveRoom.remoteVideoTrack()) {
+      <div class="viewer-frame premium-frame" [class.frame-live]="remoteParticipantCount()">
+        <div class="viewer-stage premium-stage">
+          @if (!remoteParticipantCount()) {
             <div class="viewer-empty premium-empty-viewer">
               <div class="radar-scan"></div>
               <mat-icon class="huge-icon premium-huge-icon">videocam_off</mat-icon>
               <strong>{{ viewerMessage() }}</strong>
             </div>
           } @else {
-            <div class="hud-overlay premium-hud">
-              <div class="hud-top-right">
-                <span class="hud-rec"><mat-icon>fiber_manual_record</mat-icon> REC</span>
-              </div>
-              <div class="hud-corners">
-                <div class="corner tl"></div>
-                <div class="corner tr"></div>
-                <div class="corner bl"></div>
-                <div class="corner br"></div>
-              </div>
+            <div class="viewer-grid" [class.viewer-grid-single]="remoteParticipantCount() === 1">
+              @for (participant of liveRoom.remoteParticipants(); track participant.id) {
+                <article class="viewer-tile">
+                  <div class="viewer-tile-stage" #participantVideoHost [attr.data-participant-id]="participant.id">
+                    @if (!participant.videoTrack) {
+                      <div class="viewer-tile-empty">
+                        <mat-icon>videocam_off</mat-icon>
+                        <span>Camera unavailable</span>
+                      </div>
+                    } @else {
+                      <div class="hud-overlay premium-hud">
+                        <div class="hud-top-right">
+                          <span class="hud-rec"><mat-icon>fiber_manual_record</mat-icon> REC</span>
+                        </div>
+                        <div class="hud-corners">
+                          <div class="corner tl"></div>
+                          <div class="corner tr"></div>
+                          <div class="corner bl"></div>
+                          <div class="corner br"></div>
+                        </div>
+                      </div>
+                    }
+                    <div class="viewer-tile-meta">
+                      <div class="viewer-tile-copy">
+                        <strong>{{ participant.name }}</strong>
+                        <span>{{ participant.videoTrack ? 'Live camera' : 'Audio only' }}</span>
+                      </div>
+                      <span class="viewer-tile-chip" [class.viewer-tile-chip-muted]="!participant.audioTrack">
+                        {{ participant.audioTrack ? 'Mic live' : 'Muted' }}
+                      </span>
+                    </div>
+                  </div>
+                  <div #participantAudioHost class="sr-only" aria-hidden="true" [attr.data-participant-id]="participant.id"></div>
+                </article>
+              }
             </div>
-          }
+            }
         </div>
-        <div #audioHost class="sr-only" aria-hidden="true"></div>
       </div>
     </mat-card>
   </section>

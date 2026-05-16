@@ -5,10 +5,12 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { ClipboardModule } from '@angular/cdk/clipboard';
 import { Router } from '@angular/router';
 import { OperatorApiService } from '@features/operations/operator-api.service';
+import { ConfirmDialogComponent } from '@shared/components/confirm-dialog/confirm-dialog.component';
 import {
   RecordingInvestigationSearchHitResponse,
   RecordingInvestigationSearchResponse,
@@ -45,13 +47,14 @@ interface RecordingSessionCard {
 @Component({
   selector: 'app-recordings-page',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatTooltipModule, MatSnackBarModule, ClipboardModule],
+  imports: [CommonModule, MatButtonModule, MatCardModule, MatIconModule, MatProgressBarModule, MatTooltipModule, MatDialogModule, MatSnackBarModule, ClipboardModule],
   templateUrl: './recordings-page.component.html',
   styleUrl: './recordings-page.component.scss'
 })
 export class RecordingsPageComponent implements OnDestroy {
   readonly api = inject(OperatorApiService);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
   private readonly router = inject(Router);
 
   @ViewChild('timelinePlayer')
@@ -93,6 +96,7 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly showTranscriptSummary = signal(false);
   readonly isRetryingFailedTranscript = signal(false);
   readonly isRetryingTranscriptRecordingId = signal<string | null>(null);
+  readonly isDeletingSessionRecordings = signal(false);
 
   readonly nextCursor = signal<string | null>(null);
   readonly pageSize = signal(50);
@@ -989,6 +993,46 @@ export class RecordingsPageComponent implements OnDestroy {
     const ref = this.selectedSession()?.referenceNumber;
     if (ref) {
       this.snackBar.open(`Reference copied: ${ref}`, 'Dismiss', { duration: 3000 });
+    }
+  }
+
+  async deleteSessionRecordings(session: RecordingSessionCard, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (!session || this.isDeletingSessionRecordings()) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '560px',
+      maxWidth: '95vw',
+      panelClass: 'recording-delete-dialog',
+      data: {
+        title: 'Delete Session Recording?',
+        message: `This will hide the entire recording archive for ${session.referenceNumber || session.roomName}, including ${session.recordingCount} segment${session.recordingCount === 1 ? '' : 's'}, from playback, transcript review, archive search, and future exports.`,
+        confirmLabel: 'Delete Recording',
+        cancelLabel: 'Keep Recording',
+        destructive: true,
+        referenceNumber: session.referenceNumber || session.roomName,
+        confirmationValue: session.referenceNumber || session.roomName
+      }
+    });
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      dialogRef.afterClosed().subscribe((result) => resolve(!!result));
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.isDeletingSessionRecordings.set(true);
+    try {
+      await this.api.deleteSessionRecordings(session.sessionId);
+      this.snackBar.open('Recording archive deleted.', 'Close', { duration: 4000 });
+      await this.loadRecordings();
+    } catch (error) {
+      this.showError(this.api.explainError(error));
+    } finally {
+      this.isDeletingSessionRecordings.set(false);
     }
   }
 

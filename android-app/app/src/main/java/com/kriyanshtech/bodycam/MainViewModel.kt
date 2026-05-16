@@ -246,17 +246,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val sessionId = _uiState.value.activeSessionId
         val token = authToken
         val backendUrl = _uiState.value.backendUrl
+        val service = captureService
 
         _uiState.value = _uiState.value.copy(
             actionInFlight = true,
             streamStatus = "Stopping",
             syncStatus = "Finalizing recording"
         )
-        captureService?.stopCaptureGracefully()
+        service?.stopCaptureGracefully()
 
         viewModelScope.launch {
             var stopMessage: String? = null
             var sessionEnded = false
+
+            runCatching {
+                awaitCaptureStopped(service)
+            }.onFailure { exception ->
+                Log.w("MainViewModel", "Capture did not fully settle before ending backend session", exception)
+            }
 
             if (!sessionId.isNullOrBlank() && !token.isNullOrBlank()) {
                 try {
@@ -279,11 +286,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(
                 actionInFlight = false,
                 user = if (clearAuthAfter) null else _uiState.value.user,
-                activeSessionId = if (sessionEnded) null else sessionId,
-                sessionSummary = if (sessionEnded) "" else _uiState.value.sessionSummary,
-                syncStatus = if (clearAuthAfter) "Waiting for login" else stopMessage,
+                isStreaming = false,
+                activeSessionId = null,
+                sessionSummary = "",
+                streamStatus = "Idle",
+                syncStatus = if (clearAuthAfter) {
+                    "Waiting for login"
+                } else if (sessionEnded) {
+                    "Ready to start session"
+                } else {
+                    "Ready to start session"
+                },
+                referenceError = null,
                 message = if (clearAuthAfter) null else stopMessage
             )
+        }
+    }
+
+    private suspend fun awaitCaptureStopped(service: CaptureService?) {
+        val manager = service?.captureManager ?: return
+        withTimeout(20_000) {
+            while (true) {
+                val runtime = manager.state.value
+                if (!runtime.isStreaming && runtime.sessionId == null) {
+                    return@withTimeout
+                }
+                delay(100)
+            }
         }
     }
 
