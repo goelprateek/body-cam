@@ -295,6 +295,17 @@
                 />
               }
             </video>
+            @if (preloadedPlaybackUrl()) {
+              <video
+                #timelinePreloadPlayer
+                class="replay-video-preload"
+                [src]="preloadedPlaybackUrl() || ''"
+                preload="auto"
+                muted
+                aria-hidden="true"
+                tabindex="-1"
+              ></video>
+            }
           } @else {
             <div class="viewer-empty premium-empty-viewer">
               <div class="radar-scan" style="opacity: 0.2; background: conic-gradient(from 0deg at 50% 50%, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 80%, rgba(255, 255, 255, 0.2) 100%);"></div>

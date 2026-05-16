@@ -338,6 +338,15 @@
   box-shadow: 0 0 0 3px rgba(53, 123, 166, 0.14);
 }
 
+.replay-video-preload {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  inset: auto;
+}
+
 .archive-card {
   padding: 0.75rem !important;
   cursor: pointer;

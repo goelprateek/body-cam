@@ -60,6 +60,9 @@ export class RecordingsPageComponent implements OnDestroy {
   @ViewChild('timelinePlayer')
   private timelinePlayer?: ElementRef<HTMLVideoElement>;
 
+  @ViewChild('timelinePreloadPlayer')
+  private timelinePreloadPlayer?: ElementRef<HTMLVideoElement>;
+
   @ViewChild('viewerPanel')
   private viewerPanel?: ElementRef<HTMLElement>;
 
@@ -74,6 +77,7 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly selectedRecordingId = signal<string | null>(null);
   readonly selectedPlaybackUrl = signal<string | null>(null);
   readonly selectedSubtitleUrl = signal<string | null>(null);
+  readonly preloadedPlaybackUrl = signal<string | null>(null);
   readonly selectedSessionTranscript = signal<SessionTranscriptResponse | null>(null);
   readonly transcriptSmokeCheck = signal<TranscriptSmokeCheckResponse | null>(null);
   readonly transcriptEngineOptions = signal<TranscriptEngineOptionResponse[]>([]);
@@ -106,12 +110,16 @@ export class RecordingsPageComponent implements OnDestroy {
 
   private pendingAutoplay = false;
   private pendingSeekSecondsWithinSegment: number | null = null;
+  private preloadedSegmentIndex: number | null = null;
+  private preloadedRecordingId: string | null = null;
+  private preloadedSubtitleUrl: string | null = null;
   private transcriptSeekHighlightHandle: ReturnType<typeof setTimeout> | null = null;
   private transcriptSearchRequestId = 0;
   private investigationSearchRequestId = 0;
   private exportPollHandle: ReturnType<typeof setTimeout> | null = null;
   private transcriptPollHandle: ReturnType<typeof setTimeout> | null = null;
   private transcriptPollToken = 0;
+  private segmentPreloadToken = 0;
   private pendingInvestigationHit: RecordingInvestigationSearchHitResponse | null = null;
 
   constructor() {
@@ -130,6 +138,7 @@ export class RecordingsPageComponent implements OnDestroy {
     this.clearExportPolling();
     this.clearTranscriptPolling();
     this.clearTranscriptSeekHighlight();
+    this.clearSegmentPreload();
     this.revokeSubtitleUrl();
   }
 
@@ -832,6 +841,7 @@ export class RecordingsPageComponent implements OnDestroy {
       this.scheduleExportPollingIfNeeded(exportResponse);
 
       if (!timeline.segments.length) {
+        this.clearSegmentPreload();
         this.showError('');
         this.applyPendingInvestigationHitIfReady();
         return;
@@ -867,7 +877,10 @@ export class RecordingsPageComponent implements OnDestroy {
     const nextIndex = this.selectedTimelineSegmentIndex() + 1;
     if (nextIndex < timeline.segments.length) {
       void this.activateTimelineSegment(nextIndex, true);
+      return;
     }
+
+    this.clearSegmentPreload();
   }
 
   handleVideoMetadataLoaded(): void {
@@ -1320,12 +1333,25 @@ export class RecordingsPageComponent implements OnDestroy {
     this.selectedTimelineSegmentIndex.set(index);
     this.selectedRecordingId.set(segment.recordingId);
     this.selectedPlaybackUrl.set(segment.playbackUrl);
-            this.revokeSubtitleUrl();
+    const usedPreloadedSubtitle = this.preloadedSegmentIndex === index
+      && this.preloadedRecordingId === segment.recordingId
+      && this.preloadedSubtitleUrl;
+    this.revokeSubtitleUrl();
+    if (usedPreloadedSubtitle) {
+      this.selectedSubtitleUrl.set(this.preloadedSubtitleUrl);
+      this.preloadedSubtitleUrl = null;
+    }
     this.pendingAutoplay = autoplay;
+    this.preloadedSegmentIndex = null;
+    this.preloadedRecordingId = null;
+    this.preloadedPlaybackUrl.set(null);
 
     try {
-      await this.loadSubtitleTrackIfAvailable(segment.recordingId, segment.transcriptStatus);
+      if (!usedPreloadedSubtitle) {
+        await this.loadSubtitleTrackIfAvailable(segment.recordingId, segment.transcriptStatus);
+      }
       this.handleVideoTimeUpdate();
+      void this.preloadNextTimelineSegment(index);
     } catch (error) {
       if (this.selectedRecordingId() === segment.recordingId) {
       }
@@ -1368,22 +1394,15 @@ export class RecordingsPageComponent implements OnDestroy {
   }
 
   private async loadSubtitleTrackIfAvailable(recordingId: string, status?: RecordingTranscriptStatus | null): Promise<void> {
-    if (status !== 'READY') {
-      this.selectedSubtitleUrl.set(null);
+    const subtitleUrl = await this.createSubtitleUrlIfAvailable(recordingId, status);
+    if (this.selectedRecordingId() !== recordingId) {
+      if (subtitleUrl) {
+        URL.revokeObjectURL(subtitleUrl);
+      }
       return;
     }
 
-    try {
-      const subtitleVtt = await this.api.getRecordingTranscriptSubtitles(recordingId);
-      if (this.selectedRecordingId() !== recordingId) {
-        return;
-      }
-      const subtitleUrl = URL.createObjectURL(new Blob([subtitleVtt], { type: 'text/vtt' }));
-      this.selectedSubtitleUrl.set(subtitleUrl);
-    } catch (error) {
-      if (this.selectedRecordingId() === recordingId) {
-      }
-    }
+    this.selectedSubtitleUrl.set(subtitleUrl);
   }
 
   private revokeSubtitleUrl(): void {
@@ -1392,6 +1411,79 @@ export class RecordingsPageComponent implements OnDestroy {
       URL.revokeObjectURL(subtitleUrl);
     }
     this.selectedSubtitleUrl.set(null);
+  }
+
+  private revokePreloadedSubtitleUrl(): void {
+    if (this.preloadedSubtitleUrl) {
+      URL.revokeObjectURL(this.preloadedSubtitleUrl);
+      this.preloadedSubtitleUrl = null;
+    }
+  }
+
+  private clearSegmentPreload(): void {
+    this.segmentPreloadToken++;
+    this.preloadedSegmentIndex = null;
+    this.preloadedRecordingId = null;
+    this.preloadedPlaybackUrl.set(null);
+    this.revokePreloadedSubtitleUrl();
+    const preloadPlayer = this.timelinePreloadPlayer?.nativeElement;
+    if (preloadPlayer) {
+      preloadPlayer.removeAttribute('src');
+      preloadPlayer.load();
+    }
+  }
+
+  private async preloadNextTimelineSegment(currentIndex: number): Promise<void> {
+    const timeline = this.selectedTimeline();
+    if (!timeline) {
+      this.clearSegmentPreload();
+      return;
+    }
+
+    const nextIndex = currentIndex + 1;
+    const nextSegment = timeline.segments[nextIndex];
+    if (!nextSegment) {
+      this.clearSegmentPreload();
+      return;
+    }
+
+    const preloadToken = ++this.segmentPreloadToken;
+    this.preloadedSegmentIndex = nextIndex;
+    this.preloadedRecordingId = nextSegment.recordingId;
+    this.preloadedPlaybackUrl.set(nextSegment.playbackUrl);
+    this.revokePreloadedSubtitleUrl();
+    const subtitleUrl = await this.createSubtitleUrlIfAvailable(
+      nextSegment.recordingId,
+      nextSegment.transcriptStatus
+    );
+    if (preloadToken !== this.segmentPreloadToken || this.preloadedRecordingId !== nextSegment.recordingId) {
+      if (subtitleUrl) {
+        URL.revokeObjectURL(subtitleUrl);
+      }
+      return;
+    }
+    this.preloadedSubtitleUrl = subtitleUrl;
+
+    const preloadPlayer = this.timelinePreloadPlayer?.nativeElement;
+    if (preloadPlayer) {
+      preloadPlayer.load();
+    }
+  }
+
+  private async createSubtitleUrlIfAvailable(
+    recordingId: string,
+    status?: RecordingTranscriptStatus | null
+  ): Promise<string | null> {
+    if (status !== 'READY') {
+      return null;
+    }
+
+    try {
+      const subtitleVtt = await this.api.getRecordingTranscriptSubtitles(recordingId);
+      return URL.createObjectURL(new Blob([subtitleVtt], { type: 'text/vtt' }));
+    } catch (error) {
+      return null;
+    }
   }
 
   private triggerTranscriptSeekHighlight(): void {
