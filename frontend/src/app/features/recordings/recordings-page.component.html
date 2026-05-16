@@ -287,6 +287,7 @@
 
         <div class="viewer-stage premium-stage">
           @if (selectedPlaybackUrl()) {
+            <canvas #posterCanvas class="video-poster-canvas" [style.display]="showPoster() ? 'block' : 'none'"></canvas>
             <video
               #timelinePlayer
               class="replay-video"
@@ -295,6 +296,7 @@
               preload="metadata"
               (ended)="handlePlaybackEnded()"
               (loadedmetadata)="handleVideoMetadataLoaded()"
+              (canplay)="handleVideoCanPlay()"
               (timeupdate)="handleVideoTimeUpdate()"
               style="width: 100%; display: block;"
             >
@@ -329,7 +331,7 @@
         </div>
 
         @if (selectedTimeline()?.segments?.length) {
-          <div class="timeline-segment-strip premium-scroll">
+          <div class="timeline-segment-strip premium-scroll" #segmentStrip>
             @for (segment of selectedTimeline()?.segments || []; track segment.recordingId; let i = $index) {
               <button
                 type="button"

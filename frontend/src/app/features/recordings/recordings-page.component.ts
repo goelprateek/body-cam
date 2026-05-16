@@ -56,6 +56,12 @@ export class RecordingsPageComponent implements OnDestroy {
   @ViewChild('viewerPanel')
   private viewerPanel?: ElementRef<HTMLElement>;
 
+  @ViewChild('segmentStrip')
+  private segmentStrip?: ElementRef<HTMLDivElement>;
+
+  @ViewChild('posterCanvas')
+  private posterCanvas?: ElementRef<HTMLCanvasElement>;
+
   readonly recordings = signal<RecordingResponse[]>([]);
   readonly recordingSessions = signal<RecordingSessionCard[]>([]);
   readonly investigationSearchQuery = signal('');
@@ -67,6 +73,7 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly selectedRecordingId = signal<string | null>(null);
   readonly selectedPlaybackUrl = signal<string | null>(null);
   readonly selectedSubtitleUrl = signal<string | null>(null);
+  readonly showPoster = signal(false);
   readonly preloadedPlaybackUrl = signal<string | null>(null);
   readonly selectedSessionTranscript = signal<SessionTranscriptResponse | null>(null);
   readonly transcriptSmokeCheck = signal<TranscriptSmokeCheckResponse | null>(null);
@@ -764,12 +771,15 @@ export class RecordingsPageComponent implements OnDestroy {
   }
 
   async selectSession(sessionId: string): Promise<void> {
+    if (this.selectedSessionId() === sessionId) {
+      return;
+    }
+
     this.selectedSessionId.set(sessionId);
-    this.selectedTimeline.set(null);
+    // Do not clear selectedTimeline to keep the metadata strip and segment strip mounted, preventing layout shifts
     this.selectedSessionExport.set(null);
     this.selectedTimelineSegmentIndex.set(0);
-    this.selectedRecordingId.set(null);
-    this.selectedPlaybackUrl.set(null);
+    // Do not clear selectedPlaybackUrl or selectedRecordingId here to keep the player mounted and prevent flickering.
     this.selectedSessionTranscript.set(null);
     this.activeTranscriptSegmentId.set(null);
     this.reviewClipNotice.set(null);
@@ -780,7 +790,7 @@ export class RecordingsPageComponent implements OnDestroy {
     this.transcriptSearchResults.set(null);
     this.transcriptSearchRequestId++;
     this.clearExportPolling();
-            this.revokeSubtitleUrl();
+    // Do not revoke subtitle url yet; let activateTimelineSegment handle it when the new video is ready.
     this.isPlaybackLoading.set(true);
     this.isTranscriptLoading.set(true);
     this.isExportLoading.set(true);
@@ -807,6 +817,9 @@ export class RecordingsPageComponent implements OnDestroy {
 
       if (!timeline.segments.length) {
         this.clearSegmentPreload();
+        this.selectedPlaybackUrl.set(null);
+        this.selectedRecordingId.set(null);
+        this.revokeSubtitleUrl();
         this.showError('');
         this.applyPendingInvestigationHitIfReady();
         return;
@@ -816,8 +829,11 @@ export class RecordingsPageComponent implements OnDestroy {
       await this.applyPendingInvestigationHitIfReady();
     } catch (error) {
       if (this.selectedSessionId() === sessionId) {
+        this.selectedTimeline.set(null);
+        this.selectedPlaybackUrl.set(null);
+        this.selectedRecordingId.set(null);
+        this.revokeSubtitleUrl();
         const message = this.api.explainError(error);
-        this.showError(message);
         this.showError(message);
       }
     } finally {
@@ -846,6 +862,10 @@ export class RecordingsPageComponent implements OnDestroy {
     }
 
     this.clearSegmentPreload();
+  }
+
+  handleVideoCanPlay(): void {
+    this.showPoster.set(false);
   }
 
   handleVideoMetadataLoaded(): void {
@@ -1295,6 +1315,8 @@ export class RecordingsPageComponent implements OnDestroy {
       return;
     }
 
+    this.capturePosterFrame();
+
     this.selectedTimelineSegmentIndex.set(index);
     this.selectedRecordingId.set(segment.recordingId);
     this.selectedPlaybackUrl.set(segment.playbackUrl);
@@ -1317,8 +1339,36 @@ export class RecordingsPageComponent implements OnDestroy {
       }
       this.handleVideoTimeUpdate();
       void this.preloadNextTimelineSegment(index);
+      this.scrollToActiveSegment();
     } catch (error) {
       if (this.selectedRecordingId() === segment.recordingId) {
+      }
+    }
+  }
+
+  private scrollToActiveSegment(): void {
+    setTimeout(() => {
+      const strip = this.segmentStrip?.nativeElement;
+      if (!strip) return;
+
+      const activeBtn = strip.querySelector('.timeline-segment-btn-active') as HTMLElement;
+      if (activeBtn) {
+        const scrollLeft = activeBtn.offsetLeft - strip.offsetWidth / 2 + activeBtn.offsetWidth / 2;
+        strip.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
+      }
+    }, 50); // slight delay to ensure Angular has rendered the active class
+  }
+
+  private capturePosterFrame(): void {
+    const video = this.timelinePlayer?.nativeElement;
+    const canvas = this.posterCanvas?.nativeElement;
+    if (video && canvas && video.videoWidth > 0 && video.videoHeight > 0) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        this.showPoster.set(true);
       }
     }
   }
