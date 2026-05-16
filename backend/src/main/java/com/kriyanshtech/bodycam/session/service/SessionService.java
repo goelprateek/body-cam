@@ -247,7 +247,7 @@ public class SessionService {
 
     @Transactional(readOnly = true)
     public PublicSessionInviteResponse getInvite(String inviteToken) {
-        SessionInvite invite = requireActiveInvite(inviteToken);
+        SessionInvite invite = requireReadableInvite(inviteToken);
         LiveSession session = invite.getSession();
         return new PublicSessionInviteResponse(
                 session.getId(),
@@ -287,7 +287,7 @@ public class SessionService {
                 .orElseThrow(() -> new NotFoundException("Session not found: " + sessionId));
     }
 
-    private SessionInvite requireActiveInvite(String inviteToken) {
+    private SessionInvite requireReadableInvite(String inviteToken) {
         SessionInvite invite = sessionInviteRepository.findByInviteToken(inviteToken)
                 .orElseThrow(() -> new NotFoundException("Session invite not found."));
         if (invite.getRevokedAt() != null) {
@@ -296,6 +296,11 @@ public class SessionService {
         if (invite.getExpiresAt().isBefore(Instant.now())) {
             throw new IllegalArgumentException("Session invite has expired.");
         }
+        return invite;
+    }
+
+    private SessionInvite requireActiveInvite(String inviteToken) {
+        SessionInvite invite = requireReadableInvite(inviteToken);
         if (invite.getSession().getStatus() != SessionStatus.ACTIVE) {
             throw new IllegalArgumentException("Session is no longer active.");
         }

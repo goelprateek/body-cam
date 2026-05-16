@@ -12,6 +12,7 @@ import com.kriyanshtech.bodycam.common.CreatedAtUuidCursorCodec;
 import com.kriyanshtech.bodycam.common.CursorPaginationSupport;
 import com.kriyanshtech.bodycam.common.NotFoundException;
 import com.kriyanshtech.bodycam.recording.dto.CreateRecordingRequest;
+import com.kriyanshtech.bodycam.recording.dto.RecordingArchiveSessionResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingMetadataRequest;
 import com.kriyanshtech.bodycam.recording.dto.RecordingMetadataResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingPlaybackResponse;
@@ -22,6 +23,7 @@ import com.kriyanshtech.bodycam.recording.dto.SessionRecordingTimelineResponse;
 import com.kriyanshtech.bodycam.recording.dto.SessionRecordingTimelineSegmentResponse;
 import com.kriyanshtech.bodycam.recording.entity.RecordingAsset;
 import com.kriyanshtech.bodycam.recording.entity.RecordingMetadata;
+import com.kriyanshtech.bodycam.recording.entity.RecordingTranscriptStatus;
 import com.kriyanshtech.bodycam.recording.repository.RecordingAssetRepository;
 import com.kriyanshtech.bodycam.recording.repository.RecordingMetadataRepository;
 import com.kriyanshtech.bodycam.session.entity.LiveSession;
@@ -30,7 +32,9 @@ import com.kriyanshtech.bodycam.session.repository.LiveSessionRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.data.domain.PageRequest;
@@ -89,6 +93,22 @@ public class RecordingService {
                 .map(this::map).toList();
         log.info("Listed {} recordings", recordings.size());
         return recordings;
+    }
+
+    @Transactional(readOnly = true)
+    public List<RecordingArchiveSessionResponse> listArchiveSessions() {
+        List<RecordingAsset> recordings = recordingAssetRepository.findAllActiveByOrderByCreatedAtDesc();
+        Map<UUID, List<RecordingAsset>> recordingsBySessionId = new HashMap<>();
+        for (RecordingAsset recording : recordings) {
+            recordingsBySessionId.computeIfAbsent(recording.getSession().getId(), _unused -> new ArrayList<>()).add(recording);
+        }
+
+        List<RecordingArchiveSessionResponse> summaries = recordingsBySessionId.entrySet().stream()
+                .map(entry -> mapArchiveSession(entry.getKey(), entry.getValue()))
+                .sorted((left, right) -> right.latestCreatedAt().compareTo(left.latestCreatedAt()))
+                .toList();
+        log.info("Listed {} recording archive session summaries from {} active recordings", summaries.size(), recordings.size());
+        return summaries;
     }
 
     @Transactional(readOnly = true)
@@ -366,11 +386,37 @@ public class RecordingService {
                 asset.getSession().getReferenceNumber(),
                 asset.getSession().getRoomName(),
                 asset.getObjectKey(),
-                null,
+                presignedPlaybackUrl(asset),
                 asset.getDurationSeconds(),
                 asset.getCreatedAt(),
                 mapMetadata(asset.getMetadata()),
                 asset.getTranscript() == null ? null : asset.getTranscript().getStatus());
+    }
+
+    private RecordingArchiveSessionResponse mapArchiveSession(UUID sessionId, List<RecordingAsset> sessionRecordings) {
+        List<RecordingAsset> latestFirstRecordings = sessionRecordings.stream()
+                .sorted((left, right) -> right.getCreatedAt().compareTo(left.getCreatedAt()))
+                .toList();
+        List<RecordingAsset> timelineOrderedRecordings = sessionRecordings.stream()
+                .sorted(RecordingTimelineSupport.segmentTimelineComparator())
+                .toList();
+
+        RecordingAsset latestRecording = latestFirstRecordings.getFirst();
+        RecordingMetadata latestMetadata = latestRecording.getMetadata();
+        Integer approxDurationSeconds = resolveApproxDurationSeconds(latestFirstRecordings);
+
+        return new RecordingArchiveSessionResponse(
+                sessionId,
+                latestRecording.getSession().getWorkerName(),
+                latestRecording.getSession().getRoomName(),
+                latestRecording.getSession().getReferenceNumber(),
+                latestRecording.getCreatedAt(),
+                latestFirstRecordings.size(),
+                approxDurationSeconds,
+                latestMetadata == null || latestMetadata.getLatitude() == null ? null : latestMetadata.getLatitude().toPlainString(),
+                latestMetadata == null || latestMetadata.getLongitude() == null ? null : latestMetadata.getLongitude().toPlainString(),
+                resolvePreviewPlaybackUrl(timelineOrderedRecordings),
+                resolveSessionTranscriptStatus(latestFirstRecordings));
     }
 
     private SessionRecordingTimelineSegmentResponse mapTimelineSegment(RecordingAsset asset) {
@@ -421,6 +467,63 @@ public class RecordingService {
             }
         }
         return total;
+    }
+
+    private int resolveApproxDurationSeconds(List<RecordingAsset> recordings) {
+        long maxEndMs = 0L;
+        int totalDurationSeconds = 0;
+        boolean hasEndMs = false;
+
+        for (RecordingAsset recording : recordings) {
+            RecordingMetadata metadata = recording.getMetadata();
+            if (metadata != null && metadata.getSessionElapsedEndMs() != null) {
+                hasEndMs = true;
+                maxEndMs = Math.max(maxEndMs, metadata.getSessionElapsedEndMs());
+            }
+            if (recording.getDurationSeconds() != null) {
+                totalDurationSeconds += recording.getDurationSeconds();
+            }
+        }
+
+        if (hasEndMs && maxEndMs > 0) {
+            return Math.toIntExact(Math.round(maxEndMs / 1000.0d));
+        }
+        return totalDurationSeconds;
+    }
+
+    private String resolvePreviewPlaybackUrl(List<RecordingAsset> timelineOrderedRecordings) {
+        for (RecordingAsset recording : timelineOrderedRecordings) {
+            String playbackUrl = presignedPlaybackUrl(recording);
+            if (playbackUrl != null && !playbackUrl.isBlank()) {
+                return playbackUrl;
+            }
+        }
+        return null;
+    }
+
+    private RecordingTranscriptStatus resolveSessionTranscriptStatus(List<RecordingAsset> recordings) {
+        List<RecordingTranscriptStatus> statuses = recordings.stream()
+                .map(RecordingAsset::getTranscript)
+                .filter(transcript -> transcript != null)
+                .map(transcript -> transcript.getStatus())
+                .toList();
+
+        if (statuses.isEmpty()) {
+            return null;
+        }
+        if (statuses.contains(RecordingTranscriptStatus.PROCESSING)) {
+            return RecordingTranscriptStatus.PROCESSING;
+        }
+        if (statuses.contains(RecordingTranscriptStatus.PENDING)) {
+            return RecordingTranscriptStatus.PENDING;
+        }
+        if (statuses.contains(RecordingTranscriptStatus.FAILED)) {
+            return RecordingTranscriptStatus.FAILED;
+        }
+        if (statuses.contains(RecordingTranscriptStatus.READY)) {
+            return RecordingTranscriptStatus.READY;
+        }
+        return RecordingTranscriptStatus.NOT_REQUESTED;
     }
 
     private TimelineIntegrityEvaluation evaluateTimelineIntegrity(
@@ -533,6 +636,13 @@ public class RecordingService {
                 missingSequenceCount,
                 segmentsMissingTimingCount,
                 gaps);
+    }
+
+    private String presignedPlaybackUrl(RecordingAsset asset) {
+        if (asset.getObjectKey() == null || asset.getObjectKey().isBlank()) {
+            return null;
+        }
+        return objectStorageService.presignedPlaybackUrl(asset.getObjectKey(), PLAYBACK_URL_EXPIRY_SECONDS);
     }
 
     private String buildIdempotencyKey(UUID sessionId, RecordingMetadataRequest metadata) {

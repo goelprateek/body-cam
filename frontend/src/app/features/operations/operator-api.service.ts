@@ -10,6 +10,7 @@ import {
   LoginResponse,
   PageResponse,
   PublicSessionInviteResponse,
+  RecordingArchiveSessionResponse,
   RecordingInvestigationSearchResponse,
   RecordingPlaybackResponse,
   RecordingResponse,
@@ -134,6 +135,14 @@ export class OperatorApiService {
       this.http.get<CursorPageResponse<RecordingResponse>>(this.url('/recordings'), {
         headers: this.authHeaders(),
         params
+      })
+    );
+  }
+
+  async listRecordingArchiveSessions(): Promise<RecordingArchiveSessionResponse[]> {
+    return firstValueFrom(
+      this.http.get<RecordingArchiveSessionResponse[]>(this.url('/recordings/archive-sessions'), {
+        headers: this.authHeaders()
       })
     );
   }

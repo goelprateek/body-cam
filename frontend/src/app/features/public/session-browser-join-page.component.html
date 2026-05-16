@@ -6,12 +6,28 @@
         <span class="join-kicker">Shared Browser Session</span>
         <h1>Join Session</h1>
         @if (invite(); as inviteData) {
-          <p class="join-caption">
-            {{ inviteData.workerName }} | Ref {{ inviteData.referenceNumber }}
-          </p>
-          <p class="join-caption subtle-text">
-            Room {{ inviteData.roomName }} | Role {{ inviteData.participantRole }}
-          </p>
+          <div class="join-meta-stack">
+            <div class="join-meta-row">
+              <span class="join-meta-pill">
+                <mat-icon>person</mat-icon>
+                {{ inviteData.workerName }}
+              </span>
+              <span class="join-meta-pill">
+                <mat-icon>tag</mat-icon>
+                Ref: {{ inviteData.referenceNumber }}
+              </span>
+            </div>
+            <div class="join-meta-row">
+              <span class="join-meta-pill">
+                <mat-icon>meeting_room</mat-icon>
+                Room: {{ inviteData.roomName }}
+              </span>
+              <span class="join-meta-pill">
+                <mat-icon>admin_panel_settings</mat-icon>
+                Role: {{ inviteData.participantRole }}
+              </span>
+            </div>
+          </div>
         } @else {
           <p class="join-caption">Open a shared session invite to join the active LiveKit room from your browser.</p>
         }
@@ -21,8 +37,10 @@
         <mat-progress-bar mode="indeterminate"></mat-progress-bar>
       }
 
-      @if (pageError()) {
-        <div class="notice notice-error">{{ pageError() }}</div>
+      @if (pageError() && !deviceError()) {
+        <div class="notice notice-error" style="display: flex; align-items: center; gap: 0.5rem;">
+          <mat-icon>error_outline</mat-icon> {{ pageError() }}
+        </div>
       }
 
       <label class="join-field">
@@ -32,7 +50,11 @@
           [value]="participantName()"
           (input)="updateParticipantName(($any($event.target)).value)"
           placeholder="Enter your display name"
+          [class.has-error]="!!participantNameError()"
         />
+        @if (participantNameError()) {
+          <mat-error style="font-size: 0.85rem; margin-top: 0.25rem; color: #f44336;">{{ participantNameError() }}</mat-error>
+        }
       </label>
 
       <div class="join-actions">
@@ -74,14 +96,25 @@
       </div>
 
       <div class="join-preview-frame" #videoHost>
+        @if (deviceError()) {
+          <div class="device-error-banner" style="position: absolute; top: 2rem; z-index: 20; background: rgba(244, 67, 54, 0.9); border-radius: 12px; padding: 0.75rem 1.25rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.4); max-width: calc(100% - 8rem); backdrop-filter: blur(8px);">
+            <mat-icon style="color: #fff; font-size: 1.5rem; width: 1.5rem; height: 1.5rem;">
+              {{ deviceError() === 'camera' ? 'videocam_off' : 'mic_off' }}
+            </mat-icon>
+            <div style="display: flex; flex-direction: column;">
+              <strong style="color: #fff; font-size: 0.9rem; line-height: 1.2;">{{ deviceError() === 'camera' ? 'Camera' : 'Microphone' }} access denied</strong>
+              <span style="color: rgba(255, 255, 255, 0.9); font-size: 0.8rem; margin-top: 0.1rem;">Check browser permissions to allow device access.</span>
+            </div>
+          </div>
+        }
         @if (!isJoined()) {
           <div class="join-preview-empty">
             <mat-icon>{{ canPublishMedia() ? 'videocam' : 'visibility' }}</mat-icon>
             <strong>{{ canPublishMedia() ? 'Ready to publish' : 'Ready to view' }}</strong>
             <span>
               {{ canPublishMedia()
-                ? 'Join the session to preview your outgoing camera feed.'
-                : 'Join the session to listen and watch without sending your own media.' }}
+                ? 'Join to start broadcasting your camera.'
+                : 'Join to begin viewing the active stream.' }}
             </span>
           </div>
         }

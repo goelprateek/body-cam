@@ -3,9 +3,11 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  HostListener,
   Injector,
   OnDestroy,
   QueryList,
+  ViewChild,
   ViewChildren,
   computed,
   effect,
@@ -22,6 +24,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { LiveRoomRemoteParticipant, LiveRoomService } from './live-room.service';
 import { OperatorApiService } from './operator-api.service';
 import { SessionInviteResponse, SessionInviteRole, SessionResponse } from './operator.models';
+
+type ViewerAspectMode = 'cover' | 'contain';
 
 @Component({
   selector: 'app-operations-page',
@@ -49,6 +53,7 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   private readonly videoElements = new Map<string, HTMLVideoElement>();
   private readonly audioElements = new Map<string, HTMLAudioElement>();
 
+  @ViewChild('viewerStageHost') private viewerStageHost?: ElementRef<HTMLDivElement>;
   @ViewChildren('participantVideoHost') private participantVideoHosts?: QueryList<ElementRef<HTMLDivElement>>;
   @ViewChildren('participantAudioHost') private participantAudioHosts?: QueryList<ElementRef<HTMLDivElement>>;
 
@@ -59,6 +64,7 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   readonly sessions = signal<SessionResponse[]>([]);
   readonly selectedSessionId = signal<string | null>(null);
   readonly isCreatePanelOpen = signal(false);
+  readonly isOverlayOpen = signal(true);
   readonly newSessionWorkerName = signal('');
   readonly newSessionReferenceNumber = signal('');
   readonly isRefreshing = signal(false);
@@ -75,6 +81,7 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   readonly hasMoreSessions = signal(false);
   readonly nextSessionCursor = signal<string | null>(null);
   readonly pageError = signal<string | null>(null);
+  readonly isFullscreen = signal(false);
 
   readonly selectedSession = computed(
     () => this.sessions().find((session) => session.id === this.selectedSessionId()) ?? null
@@ -82,6 +89,29 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   readonly sharePanelSession = computed(
     () => this.sessions().find((session) => session.id === this.sharePanelSessionId()) ?? null
   );
+  readonly primaryParticipant = computed(() => {
+    const participants = this.liveRoom.remoteParticipants();
+    const workerName = this.selectedSession()?.workerName?.trim().toLowerCase();
+
+    if (workerName) {
+      const workerParticipant = participants.find((participant) =>
+        participant.name.trim().toLowerCase() === workerName && (participant.videoTrack || participant.audioTrack)
+      );
+      if (workerParticipant) {
+        return workerParticipant;
+      }
+    }
+
+    return (
+      participants.find((participant) => participant.videoTrack) ??
+      participants.find((participant) => participant.audioTrack) ??
+      null
+    );
+  });
+  readonly overlayParticipants = computed(() => {
+    const primaryParticipant = this.primaryParticipant();
+    return this.liveRoom.remoteParticipants().filter((participant) => participant.id !== primaryParticipant?.id);
+  });
   readonly viewerMessage = computed(() => {
     if (this.liveRoom.connectionLabel() === 'Connecting') {
       return 'Joining live stream';
@@ -98,6 +128,13 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     return 'Select a session to start';
   });
   readonly remoteParticipantCount = computed(() => this.liveRoom.remoteParticipants().length);
+  readonly remoteParticipantLabel = computed(() => {
+    const count = this.remoteParticipantCount();
+    return `${count} participant${count === 1 ? '' : 's'} joined`;
+  });
+  readonly hasAnyVideoTrack = computed(() => this.liveRoom.remoteParticipants().some((participant) => !!participant.videoTrack));
+  readonly captionsAvailable = signal(false);
+  readonly viewerAspectMode = signal<ViewerAspectMode>('cover');
 
   constructor() {
     void this.refreshAll();
@@ -139,12 +176,68 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     this.isCreatePanelOpen.update((open) => !open);
   }
 
+  toggleOverlaySidebar(): void {
+    this.isOverlayOpen.update((open) => !open);
+  }
+
   updateNewSessionWorkerName(value: string): void {
     this.newSessionWorkerName.set(value);
   }
 
   updateNewSessionReferenceNumber(value: string): void {
     this.newSessionReferenceNumber.set(value);
+  }
+
+  async toggleViewerFullscreen(): Promise<void> {
+    const stage = this.viewerStageHost?.nativeElement;
+    if (!stage) {
+      return;
+    }
+
+    if (document.fullscreenElement === stage) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    await stage.requestFullscreen();
+  }
+
+  async togglePictureInPicture(): Promise<void> {
+    const video = this.primaryVideoElement();
+    if (!video || !document.pictureInPictureEnabled) {
+      return;
+    }
+
+    if (document.pictureInPictureElement === video) {
+      await document.exitPictureInPicture();
+      return;
+    }
+
+    await video.requestPictureInPicture();
+  }
+
+  toggleViewerAspectMode(): void {
+    this.viewerAspectMode.update((mode) => (mode === 'cover' ? 'contain' : 'cover'));
+    this.videoElements.forEach((element) => this.applyVideoPresentation(element));
+  }
+
+  @HostListener('document:fullscreenchange')
+  onFullscreenChange(): void {
+    this.isFullscreen.set(document.fullscreenElement === this.viewerStageHost?.nativeElement);
+  }
+
+  viewerAspectLabel(): string {
+    return this.viewerAspectMode() === 'cover' ? 'Aspect Fill' : 'Aspect Fit';
+  }
+
+  viewerAspectTooltip(): string {
+    return this.viewerAspectMode() === 'cover'
+      ? 'Switch to fit entire video inside player'
+      : 'Switch to fill player with centered crop';
+  }
+
+  captionControlLabel(): string {
+    return this.captionsAvailable() ? 'Captions available' : 'Live captions not available yet';
   }
 
   async refreshAll(silent = false): Promise<void> {
@@ -462,6 +555,7 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     element.autoplay = true;
     element.playsInline = true;
     element.className = 'live-video';
+    this.applyVideoPresentation(element);
     host.appendChild(element);
     this.videoElements.set(participant.id, element);
   }
@@ -495,5 +589,22 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     return (
       hosts?.find((host) => host.nativeElement.dataset['participantId'] === participantId)?.nativeElement ?? null
     );
+  }
+
+  private primaryVideoElement(): HTMLVideoElement | null {
+    const primaryParticipant = this.liveRoom.remoteParticipants()[0];
+    if (primaryParticipant) {
+      return this.videoElements.get(primaryParticipant.id) ?? null;
+    }
+    return this.videoElements.values().next().value ?? null;
+  }
+
+  private applyVideoPresentation(element: HTMLVideoElement): void {
+    element.style.width = '100%';
+    element.style.height = '100%';
+    element.style.display = 'block';
+    element.style.objectFit = this.viewerAspectMode();
+    element.style.objectPosition = 'center';
+    element.style.background = '#000';
   }
 }

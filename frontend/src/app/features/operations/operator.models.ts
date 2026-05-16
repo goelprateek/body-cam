@@ -162,6 +162,20 @@ export interface RecordingResponse {
   transcriptStatus?: RecordingTranscriptStatus | null;
 }
 
+export interface RecordingArchiveSessionResponse {
+  sessionId: string;
+  workerName: string;
+  roomName: string;
+  referenceNumber: string;
+  latestCreatedAt: string;
+  recordingCount: number;
+  approxDurationSeconds: number;
+  latitude: string | null;
+  longitude: string | null;
+  previewPlaybackUrl: string | null;
+  transcriptStatus?: RecordingTranscriptStatus | null;
+}
+
 export interface RecordingPlaybackResponse {
   recordingId: string;
   playbackUrl: string;

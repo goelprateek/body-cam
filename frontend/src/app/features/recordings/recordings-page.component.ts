@@ -12,6 +12,7 @@ import { Router } from '@angular/router';
 import { OperatorApiService } from '@features/operations/operator-api.service';
 import { ConfirmDialogComponent } from '@shared/components/confirm-dialog/confirm-dialog.component';
 import {
+  RecordingArchiveSessionResponse,
   RecordingInvestigationSearchHitResponse,
   RecordingInvestigationSearchResponse,
   RecordingResponse,
@@ -31,18 +32,7 @@ import {
   SessionTranscriptResponse
 } from '@features/operations/operator.models';
 
-interface RecordingSessionCard {
-  sessionId: string;
-  workerName: string;
-  roomName: string;
-  referenceNumber: string;
-  latestCreatedAt: string;
-  recordingCount: number;
-  approxDurationSeconds: number;
-  latitude: string | null;
-  longitude: string | null;
-  transcriptStatus: RecordingTranscriptStatus | null;
-}
+type RecordingSessionCard = RecordingArchiveSessionResponse;
 
 @Component({
   selector: 'app-recordings-page',
@@ -66,6 +56,12 @@ export class RecordingsPageComponent implements OnDestroy {
   @ViewChild('viewerPanel')
   private viewerPanel?: ElementRef<HTMLElement>;
 
+  @ViewChild('segmentStrip')
+  private segmentStrip?: ElementRef<HTMLDivElement>;
+
+  @ViewChild('posterCanvas')
+  private posterCanvas?: ElementRef<HTMLCanvasElement>;
+
   readonly recordings = signal<RecordingResponse[]>([]);
   readonly recordingSessions = signal<RecordingSessionCard[]>([]);
   readonly investigationSearchQuery = signal('');
@@ -77,6 +73,7 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly selectedRecordingId = signal<string | null>(null);
   readonly selectedPlaybackUrl = signal<string | null>(null);
   readonly selectedSubtitleUrl = signal<string | null>(null);
+  readonly showPoster = signal(false);
   readonly preloadedPlaybackUrl = signal<string | null>(null);
   readonly selectedSessionTranscript = signal<SessionTranscriptResponse | null>(null);
   readonly transcriptSmokeCheck = signal<TranscriptSmokeCheckResponse | null>(null);
@@ -101,6 +98,7 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly isRetryingFailedTranscript = signal(false);
   readonly isRetryingTranscriptRecordingId = signal<string | null>(null);
   readonly isDeletingSessionRecordings = signal(false);
+  readonly archivePreviewErrors = signal<Record<string, boolean>>({});
 
   readonly nextCursor = signal<string | null>(null);
   readonly pageSize = signal(50);
@@ -186,6 +184,21 @@ export class RecordingsPageComponent implements OnDestroy {
       return 'Location unavailable';
     }
     return `${session.latitude}, ${session.longitude}`;
+  }
+
+  sessionHasPreview(session: RecordingSessionCard): boolean {
+    return !!session.previewPlaybackUrl && !this.archivePreviewErrors()[session.sessionId];
+  }
+
+  sessionPreviewUrl(session: RecordingSessionCard): string | null {
+    if (!this.sessionHasPreview(session)) {
+      return null;
+    }
+    return `${session.previewPlaybackUrl}#t=0.1`;
+  }
+
+  markSessionPreviewError(sessionId: string): void {
+    this.archivePreviewErrors.update((current) => ({ ...current, [sessionId]: true }));
   }
 
   formatDurationMs(durationMs: number | null | undefined): string {
@@ -686,24 +699,20 @@ export class RecordingsPageComponent implements OnDestroy {
   async loadRecordings(): Promise<void> {
     this.isLoading.set(true);
     this.nextCursor.set(null);
-    this.hasMoreRecordings.set(true);
+    this.hasMoreRecordings.set(false);
     try {
-      const pageResponse = await this.api.listRecordings(this.nextCursor(), this.pageSize());
-      const sortedRecordings = [...pageResponse.items].sort((left, right) =>
-        right.createdAt.localeCompare(left.createdAt)
-      );
-      this.recordings.set(sortedRecordings);
-      this.totalRecordings.set(sortedRecordings.length);
-      this.nextCursor.set(pageResponse.nextCursor);
-      this.hasMoreRecordings.set(pageResponse.hasNext);
-      
-      const recordingSessions = this.buildRecordingSessions(this.recordings());
-      this.recordingSessions.set(recordingSessions);
+      const archiveSessions = await this.api.listRecordingArchiveSessions();
+      this.recordings.set([]);
+      this.archivePreviewErrors.set({});
+      this.totalRecordings.set(archiveSessions.reduce((total, session) => total + session.recordingCount, 0));
+      this.nextCursor.set(null);
+      this.hasMoreRecordings.set(false);
+      this.refreshRecordingSessions(archiveSessions);
 
       const currentSessionId = this.selectedSessionId();
       const nextSessionId =
-        recordingSessions.find((session) => session.sessionId === currentSessionId)?.sessionId ??
-        recordingSessions[0]?.sessionId ??
+        archiveSessions.find((session) => session.sessionId === currentSessionId)?.sessionId ??
+        archiveSessions[0]?.sessionId ??
         null;
 
       if (nextSessionId) {
@@ -757,54 +766,20 @@ export class RecordingsPageComponent implements OnDestroy {
     }
   }
 
-  async loadMoreRecordings(): Promise<void> {
-    if (this.isLoading() || this.isLoadingMore() || !this.hasMoreRecordings()) {
-      return;
-    }
-
-    this.isLoadingMore.set(true);
-    try {
-      const cursor = this.nextCursor();
-      const pageResponse = await this.api.listRecordings(cursor, this.pageSize());
-      
-      const currentRecordings = this.recordings();
-      const combinedRecordings = [...currentRecordings, ...pageResponse.items].sort((left, right) =>
-        right.createdAt.localeCompare(left.createdAt)
-      );
-      
-      this.recordings.set(combinedRecordings);
-      this.totalRecordings.set(combinedRecordings.length);
-      this.nextCursor.set(pageResponse.nextCursor);
-      this.hasMoreRecordings.set(pageResponse.hasNext);
-      
-      const recordingSessions = this.buildRecordingSessions(combinedRecordings);
-      this.recordingSessions.set(recordingSessions);
-    } catch (error) {
-      this.showError(this.api.explainError(error));
-    } finally {
-      this.isLoadingMore.set(false);
-    }
-  }
-
   onScroll(event: Event): void {
-    const target = event.target as HTMLElement;
-    const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
-    
-    // threshold of 100px from bottom to load more
-    if (scrollBottom <= 100) {
-      if (!this.isLoading() && !this.isLoadingMore() && this.hasMoreRecordings()) {
-        void this.loadMoreRecordings();
-      }
-    }
+    void event;
   }
 
   async selectSession(sessionId: string): Promise<void> {
+    if (this.selectedSessionId() === sessionId) {
+      return;
+    }
+
     this.selectedSessionId.set(sessionId);
-    this.selectedTimeline.set(null);
+    // Do not clear selectedTimeline to keep the metadata strip and segment strip mounted, preventing layout shifts
     this.selectedSessionExport.set(null);
     this.selectedTimelineSegmentIndex.set(0);
-    this.selectedRecordingId.set(null);
-    this.selectedPlaybackUrl.set(null);
+    // Do not clear selectedPlaybackUrl or selectedRecordingId here to keep the player mounted and prevent flickering.
     this.selectedSessionTranscript.set(null);
     this.activeTranscriptSegmentId.set(null);
     this.reviewClipNotice.set(null);
@@ -815,7 +790,7 @@ export class RecordingsPageComponent implements OnDestroy {
     this.transcriptSearchResults.set(null);
     this.transcriptSearchRequestId++;
     this.clearExportPolling();
-            this.revokeSubtitleUrl();
+    // Do not revoke subtitle url yet; let activateTimelineSegment handle it when the new video is ready.
     this.isPlaybackLoading.set(true);
     this.isTranscriptLoading.set(true);
     this.isExportLoading.set(true);
@@ -842,6 +817,9 @@ export class RecordingsPageComponent implements OnDestroy {
 
       if (!timeline.segments.length) {
         this.clearSegmentPreload();
+        this.selectedPlaybackUrl.set(null);
+        this.selectedRecordingId.set(null);
+        this.revokeSubtitleUrl();
         this.showError('');
         this.applyPendingInvestigationHitIfReady();
         return;
@@ -851,8 +829,11 @@ export class RecordingsPageComponent implements OnDestroy {
       await this.applyPendingInvestigationHitIfReady();
     } catch (error) {
       if (this.selectedSessionId() === sessionId) {
+        this.selectedTimeline.set(null);
+        this.selectedPlaybackUrl.set(null);
+        this.selectedRecordingId.set(null);
+        this.revokeSubtitleUrl();
         const message = this.api.explainError(error);
-        this.showError(message);
         this.showError(message);
       }
     } finally {
@@ -881,6 +862,10 @@ export class RecordingsPageComponent implements OnDestroy {
     }
 
     this.clearSegmentPreload();
+  }
+
+  handleVideoCanPlay(): void {
+    this.showPoster.set(false);
   }
 
   handleVideoMetadataLoaded(): void {
@@ -1330,6 +1315,8 @@ export class RecordingsPageComponent implements OnDestroy {
       return;
     }
 
+    this.capturePosterFrame();
+
     this.selectedTimelineSegmentIndex.set(index);
     this.selectedRecordingId.set(segment.recordingId);
     this.selectedPlaybackUrl.set(segment.playbackUrl);
@@ -1352,8 +1339,36 @@ export class RecordingsPageComponent implements OnDestroy {
       }
       this.handleVideoTimeUpdate();
       void this.preloadNextTimelineSegment(index);
+      this.scrollToActiveSegment();
     } catch (error) {
       if (this.selectedRecordingId() === segment.recordingId) {
+      }
+    }
+  }
+
+  private scrollToActiveSegment(): void {
+    setTimeout(() => {
+      const strip = this.segmentStrip?.nativeElement;
+      if (!strip) return;
+
+      const activeBtn = strip.querySelector('.timeline-segment-btn-active') as HTMLElement;
+      if (activeBtn) {
+        const scrollLeft = activeBtn.offsetLeft - strip.offsetWidth / 2 + activeBtn.offsetWidth / 2;
+        strip.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
+      }
+    }, 50); // slight delay to ensure Angular has rendered the active class
+  }
+
+  private capturePosterFrame(): void {
+    const video = this.timelinePlayer?.nativeElement;
+    const canvas = this.posterCanvas?.nativeElement;
+    if (video && canvas && video.videoWidth > 0 && video.videoHeight > 0) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        this.showPoster.set(true);
       }
     }
   }
@@ -1565,67 +1580,33 @@ export class RecordingsPageComponent implements OnDestroy {
       transcriptStatus: statusesByRecordingId.get(recording.id) ?? recording.transcriptStatus ?? null
     }));
     this.recordings.set(updatedRecordings);
-    this.recordingSessions.set(this.buildRecordingSessions(updatedRecordings));
+    this.refreshRecordingSessions(this.recordingSessions());
   }
 
-  private buildRecordingSessions(recordings: RecordingResponse[]): RecordingSessionCard[] {
-    const sessionGroups = new Map<string, RecordingResponse[]>();
-    for (const recording of recordings) {
-      const sessionRecordings = sessionGroups.get(recording.sessionId) ?? [];
-      sessionRecordings.push(recording);
-      sessionGroups.set(recording.sessionId, sessionRecordings);
+  private refreshRecordingSessions(sessionCards: RecordingSessionCard[]): void {
+    const selectedTimeline = this.selectedTimeline();
+    if (!selectedTimeline) {
+      this.recordingSessions.set(sessionCards);
+      return;
     }
 
-    return [...sessionGroups.entries()]
-      .map(([sessionId, sessionRecordings]) => {
-        const sortedSessionRecordings = [...sessionRecordings].sort((left, right) =>
-          right.createdAt.localeCompare(left.createdAt)
-        );
-        const latestRecording = sortedSessionRecordings[0];
+    const previewPlaybackUrl = selectedTimeline.segments.find((segment) => !!segment.playbackUrl)?.playbackUrl ?? null;
+    this.recordingSessions.set(
+      sessionCards.map((session) => {
+        if (session.sessionId !== selectedTimeline.sessionId) {
+          return session;
+        }
+
         return {
-          sessionId,
-          workerName: latestRecording.workerName,
-          roomName: latestRecording.roomName,
-          referenceNumber: latestRecording.referenceNumber,
-          latestCreatedAt: latestRecording.createdAt,
-          recordingCount: sortedSessionRecordings.length,
-          approxDurationSeconds: (() => {
-            let maxEndMs = 0;
-            let sumDuration = 0;
-            let hasEndMs = false;
-            for (const recording of sortedSessionRecordings) {
-              const endMs = recording.metadata?.sessionElapsedEndMs;
-              if (endMs != null) {
-                hasEndMs = true;
-                maxEndMs = Math.max(maxEndMs, endMs);
-              }
-              sumDuration += recording.durationSeconds ?? 0;
-            }
-            return hasEndMs && maxEndMs > 0 ? Math.round(maxEndMs / 1000) : sumDuration;
-          })(),
-          latitude: latestRecording.metadata?.latitude ?? null,
-          longitude: latestRecording.metadata?.longitude ?? null,
-          transcriptStatus: this.sessionTranscriptStatus(sortedSessionRecordings)
-        } satisfies RecordingSessionCard;
+          ...session,
+          recordingCount: selectedTimeline.segments.length,
+          approxDurationSeconds: selectedTimeline.totalDurationMs != null
+            ? Math.round(selectedTimeline.totalDurationMs / 1000)
+            : session.approxDurationSeconds,
+          previewPlaybackUrl: previewPlaybackUrl ?? session.previewPlaybackUrl
+        };
       })
-      .sort((left, right) => right.latestCreatedAt.localeCompare(left.latestCreatedAt));
-  }
-
-  private sessionTranscriptStatus(recordings: RecordingResponse[]): RecordingTranscriptStatus | null {
-    const statuses = recordings.map((recording) => recording.transcriptStatus).filter(Boolean) as RecordingTranscriptStatus[];
-    if (!statuses.length) {
-      return null;
-    }
-    if (statuses.includes('PROCESSING') || statuses.includes('PENDING')) {
-      return statuses.includes('PROCESSING') ? 'PROCESSING' : 'PENDING';
-    }
-    if (statuses.includes('FAILED')) {
-      return 'FAILED';
-    }
-    if (statuses.includes('READY')) {
-      return 'READY';
-    }
-    return 'NOT_REQUESTED';
+    );
   }
 
   private parseConfidence(confidence: string | null | undefined): number | null {

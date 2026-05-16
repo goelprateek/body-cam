@@ -20,12 +20,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.kriyanshtech.bodycam.recording.dto.CreateRecordingRequest;
+import com.kriyanshtech.bodycam.recording.dto.RecordingArchiveSessionResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingMetadataRequest;
 import com.kriyanshtech.bodycam.recording.dto.RecordingPlaybackResponse;
 import com.kriyanshtech.bodycam.recording.dto.RecordingResponse;
 import com.kriyanshtech.bodycam.recording.service.RecordingService;
 
 import java.util.UUID;
+import java.util.List;
 
 @RestController
 @Validated
@@ -47,6 +49,12 @@ public class RecordingController {
             @RequestParam(name = "size", defaultValue = "50") @Min(1) @Max(200) int size) {
         log.info("Received request to list recordings cursor={} size={}", cursor != null ? "[HIDDEN]" : "null", size);
         return ResponseEntity.ok(recordingService.listRecordingsCursor(cursor, size));
+    }
+
+    @GetMapping("/archive-sessions")
+    public ResponseEntity<List<RecordingArchiveSessionResponse>> listArchiveSessions() {
+        log.info("Received request to list recording archive sessions");
+        return ResponseEntity.ok(recordingService.listArchiveSessions());
     }
 
     @GetMapping("/{recordingId}/playback-url")
