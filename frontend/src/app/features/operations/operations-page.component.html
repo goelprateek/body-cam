@@ -178,6 +178,10 @@
           </p>
         </div>
         <div class="viewer-status">
+          <span class="viewer-participant-count">
+            <mat-icon>groups</mat-icon>
+            {{ remoteParticipantLabel() }}
+          </span>
           <span class="status-pill premium-status-pill" [class.status-live]="liveRoom.connectionLabel() === 'Live'">
             @if (liveRoom.connectionLabel() === 'Live') { <span class="pulse-dot"></span> }
             {{ liveRoom.connectionLabel() }}
@@ -323,51 +327,134 @@
       }
 
       <div class="viewer-frame premium-frame" [class.frame-live]="remoteParticipantCount()">
-        <div class="viewer-stage premium-stage">
+        <div class="viewer-stage premium-stage" #viewerStageHost>
           @if (!remoteParticipantCount()) {
             <div class="viewer-empty premium-empty-viewer">
               <div class="radar-scan"></div>
               <mat-icon class="huge-icon premium-huge-icon">videocam_off</mat-icon>
               <strong>{{ viewerMessage() }}</strong>
             </div>
-          } @else {
-            <div class="viewer-grid" [class.viewer-grid-single]="remoteParticipantCount() === 1">
-              @for (participant of liveRoom.remoteParticipants(); track participant.id) {
-                <article class="viewer-tile">
-                  <div class="viewer-tile-stage" #participantVideoHost [attr.data-participant-id]="participant.id">
-                    @if (!participant.videoTrack) {
-                      <div class="viewer-tile-empty">
-                        <mat-icon>videocam_off</mat-icon>
-                        <span>Camera unavailable</span>
-                      </div>
-                    } @else {
-                      <div class="hud-overlay premium-hud">
-                        <div class="hud-top-right">
-                          <span class="hud-rec"><mat-icon>fiber_manual_record</mat-icon> REC</span>
-                        </div>
-                        <div class="hud-corners">
-                          <div class="corner tl"></div>
-                          <div class="corner tr"></div>
-                          <div class="corner bl"></div>
-                          <div class="corner br"></div>
-                        </div>
-                      </div>
-                    }
-                    <div class="viewer-tile-meta">
-                      <div class="viewer-tile-copy">
-                        <strong>{{ participant.name }}</strong>
-                        <span>{{ participant.videoTrack ? 'Live camera' : 'Audio only' }}</span>
-                      </div>
-                      <span class="viewer-tile-chip" [class.viewer-tile-chip-muted]="!participant.audioTrack">
-                        {{ participant.audioTrack ? 'Mic live' : 'Muted' }}
-                      </span>
+          } @else if (primaryParticipant(); as participant) {
+              <div class="viewer-featured-stage" #participantVideoHost [attr.data-participant-id]="participant.id">
+                <div class="viewer-room-count-badge">
+                  <mat-icon>groups</mat-icon>
+                  <span>{{ remoteParticipantLabel() }}</span>
+                </div>
+                @if (!participant.videoTrack) {
+                  <div class="viewer-tile-empty">
+                    <mat-icon>videocam_off</mat-icon>
+                    <span>Camera unavailable</span>
+                  </div>
+                } @else {
+                  <div class="hud-overlay premium-hud">
+                    <div class="hud-top-right">
+                      <span class="hud-rec"><mat-icon>fiber_manual_record</mat-icon> REC</span>
+                    </div>
+                    <div class="hud-corners">
+                      <div class="corner tl"></div>
+                      <div class="corner tr"></div>
+                      <div class="corner bl"></div>
+                      <div class="corner br"></div>
                     </div>
                   </div>
-                  <div #participantAudioHost class="sr-only" aria-hidden="true" [attr.data-participant-id]="participant.id"></div>
-                </article>
-              }
-            </div>
-            }
+                }
+                <div class="viewer-featured-meta">
+                  <div class="viewer-tile-copy">
+                    <strong class="viewer-featured-name">{{ participant.name }}</strong>
+                    <span>{{ participant.videoTrack ? 'Live camera' : 'Audio only' }}</span>
+                  </div>
+                  <span class="viewer-tile-chip" [class.viewer-tile-chip-muted]="!participant.audioTrack">
+                    {{ participant.audioTrack ? 'Mic live' : 'Muted' }}
+                  </span>
+                </div>
+                @if (overlayParticipants().length) {
+                  <div class="viewer-overlay-stack premium-scroll">
+                    @for (overlayParticipant of overlayParticipants(); track overlayParticipant.id) {
+                      <article class="viewer-overlay-tile">
+                        <div class="viewer-overlay-stage" #participantVideoHost [attr.data-participant-id]="overlayParticipant.id">
+                          @if (!overlayParticipant.videoTrack) {
+                            <div class="viewer-tile-empty viewer-overlay-empty">
+                              <mat-icon>videocam_off</mat-icon>
+                              <span>Camera unavailable</span>
+                            </div>
+                          }
+                          <div class="viewer-overlay-meta">
+                            <div class="viewer-tile-copy">
+                              <strong>{{ overlayParticipant.name }}</strong>
+                              <span>{{ overlayParticipant.videoTrack ? 'Participant camera' : 'Audio only' }}</span>
+                            </div>
+                            <span class="viewer-tile-chip" [class.viewer-tile-chip-muted]="!overlayParticipant.audioTrack">
+                              {{ overlayParticipant.audioTrack ? 'Mic live' : 'Muted' }}
+                            </span>
+                          </div>
+                        </div>
+                        <div #participantAudioHost class="sr-only" aria-hidden="true" [attr.data-participant-id]="overlayParticipant.id"></div>
+                      </article>
+                    }
+                  </div>
+                }
+              </div>
+              <div #participantAudioHost class="sr-only" aria-hidden="true" [attr.data-participant-id]="participant.id"></div>
+          }
+        </div>
+        <div class="viewer-live-seeker" [class.viewer-live-seeker-ready]="hasAnyVideoTrack()">
+          <span class="viewer-live-seeker-time">LIVE</span>
+          <div class="viewer-live-seeker-track" aria-hidden="true">
+            <span class="viewer-live-seeker-fill"></span>
+            <span class="viewer-live-seeker-thumb"></span>
+          </div>
+          <span class="viewer-live-seeker-time viewer-live-seeker-edge">
+            {{ hasAnyVideoTrack() ? 'Live Edge' : 'Standby' }}
+          </span>
+        </div>
+        <div class="viewer-control-bar">
+          <div class="viewer-control-status">
+            <span class="viewer-control-live-dot"></span>
+            <span>{{ hasAnyVideoTrack() ? 'LIVE MEDIA READY' : 'WAITING FOR LIVE MEDIA' }}</span>
+          </div>
+          <div class="viewer-control-group">
+            <button
+              mat-stroked-button
+              type="button"
+              class="viewer-control-btn viewer-control-action"
+              (click)="toggleViewerAspectMode()"
+              [matTooltip]="viewerAspectTooltip()"
+            >
+              <mat-icon>{{ viewerAspectMode() === 'cover' ? 'crop_free' : 'fit_screen' }}</mat-icon>
+              <span>{{ viewerAspectLabel() }}</span>
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              class="viewer-control-btn viewer-control-action"
+              (click)="toggleViewerFullscreen()"
+              matTooltip="Toggle fullscreen"
+            >
+              <mat-icon>fullscreen</mat-icon>
+              <span>Fullscreen</span>
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              class="viewer-control-btn viewer-control-action"
+              (click)="togglePictureInPicture()"
+              [disabled]="!hasAnyVideoTrack()"
+              matTooltip="Picture in picture"
+            >
+              <mat-icon>picture_in_picture_alt</mat-icon>
+              <span>Picture in Picture</span>
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              class="viewer-control-btn viewer-control-action"
+              [disabled]="!captionsAvailable()"
+              [matTooltip]="captionControlLabel()"
+            >
+              <mat-icon>closed_caption</mat-icon>
+              <span>Captions</span>
+            </button>
+          </div>
         </div>
       </div>
     </mat-card>

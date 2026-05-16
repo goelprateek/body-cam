@@ -366,7 +366,7 @@ public class RecordingService {
                 asset.getSession().getReferenceNumber(),
                 asset.getSession().getRoomName(),
                 asset.getObjectKey(),
-                null,
+                presignedPlaybackUrl(asset),
                 asset.getDurationSeconds(),
                 asset.getCreatedAt(),
                 mapMetadata(asset.getMetadata()),
@@ -533,6 +533,13 @@ public class RecordingService {
                 missingSequenceCount,
                 segmentsMissingTimingCount,
                 gaps);
+    }
+
+    private String presignedPlaybackUrl(RecordingAsset asset) {
+        if (asset.getObjectKey() == null || asset.getObjectKey().isBlank()) {
+            return null;
+        }
+        return objectStorageService.presignedPlaybackUrl(asset.getObjectKey(), PLAYBACK_URL_EXPIRY_SECONDS);
     }
 
     private String buildIdempotencyKey(UUID sessionId, RecordingMetadataRequest metadata) {

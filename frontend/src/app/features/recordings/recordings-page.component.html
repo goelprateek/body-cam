@@ -73,12 +73,25 @@
         >
           <div class="archive-card-inner">
             <div class="archive-thumb">
+              @if (sessionHasPreview(session)) {
+                <video
+                  class="archive-thumb-video"
+                  [src]="sessionPreviewUrl(session)"
+                  muted
+                  playsinline
+                  preload="metadata"
+                  disablePictureInPicture
+                  (error)="markSessionPreviewError(session.sessionId)"
+                ></video>
+              }
               <div class="thumb-overlay">
                 <mat-icon class="play-icon">play_arrow</mat-icon>
               </div>
-              <div class="thumb-placeholder">
-                <mat-icon>video_library</mat-icon>
-              </div>
+              @if (!sessionHasPreview(session)) {
+                <div class="thumb-placeholder">
+                  <mat-icon>video_library</mat-icon>
+                </div>
+              }
               <div class="duration-pill">{{ session.recordingCount }} SEG</div>
             </div>
 

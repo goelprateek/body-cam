@@ -41,6 +41,7 @@ interface RecordingSessionCard {
   approxDurationSeconds: number;
   latitude: string | null;
   longitude: string | null;
+  previewPlaybackUrl: string | null;
   transcriptStatus: RecordingTranscriptStatus | null;
 }
 
@@ -101,6 +102,7 @@ export class RecordingsPageComponent implements OnDestroy {
   readonly isRetryingFailedTranscript = signal(false);
   readonly isRetryingTranscriptRecordingId = signal<string | null>(null);
   readonly isDeletingSessionRecordings = signal(false);
+  readonly archivePreviewErrors = signal<Record<string, boolean>>({});
 
   readonly nextCursor = signal<string | null>(null);
   readonly pageSize = signal(50);
@@ -186,6 +188,21 @@ export class RecordingsPageComponent implements OnDestroy {
       return 'Location unavailable';
     }
     return `${session.latitude}, ${session.longitude}`;
+  }
+
+  sessionHasPreview(session: RecordingSessionCard): boolean {
+    return !!session.previewPlaybackUrl && !this.archivePreviewErrors()[session.sessionId];
+  }
+
+  sessionPreviewUrl(session: RecordingSessionCard): string | null {
+    if (!this.sessionHasPreview(session)) {
+      return null;
+    }
+    return `${session.previewPlaybackUrl}#t=0.1`;
+  }
+
+  markSessionPreviewError(sessionId: string): void {
+    this.archivePreviewErrors.update((current) => ({ ...current, [sessionId]: true }));
   }
 
   formatDurationMs(durationMs: number | null | undefined): string {
@@ -693,12 +710,13 @@ export class RecordingsPageComponent implements OnDestroy {
         right.createdAt.localeCompare(left.createdAt)
       );
       this.recordings.set(sortedRecordings);
+      this.archivePreviewErrors.set({});
       this.totalRecordings.set(sortedRecordings.length);
       this.nextCursor.set(pageResponse.nextCursor);
       this.hasMoreRecordings.set(pageResponse.hasNext);
       
       const recordingSessions = this.buildRecordingSessions(this.recordings());
-      this.recordingSessions.set(recordingSessions);
+      this.refreshRecordingSessions(this.recordings());
 
       const currentSessionId = this.selectedSessionId();
       const nextSessionId =
@@ -777,8 +795,7 @@ export class RecordingsPageComponent implements OnDestroy {
       this.nextCursor.set(pageResponse.nextCursor);
       this.hasMoreRecordings.set(pageResponse.hasNext);
       
-      const recordingSessions = this.buildRecordingSessions(combinedRecordings);
-      this.recordingSessions.set(recordingSessions);
+      this.refreshRecordingSessions(combinedRecordings);
     } catch (error) {
       this.showError(this.api.explainError(error));
     } finally {
@@ -1565,7 +1582,34 @@ export class RecordingsPageComponent implements OnDestroy {
       transcriptStatus: statusesByRecordingId.get(recording.id) ?? recording.transcriptStatus ?? null
     }));
     this.recordings.set(updatedRecordings);
-    this.recordingSessions.set(this.buildRecordingSessions(updatedRecordings));
+    this.refreshRecordingSessions(updatedRecordings);
+  }
+
+  private refreshRecordingSessions(recordings: RecordingResponse[]): void {
+    const sessionCards = this.buildRecordingSessions(recordings);
+    const selectedTimeline = this.selectedTimeline();
+    if (!selectedTimeline) {
+      this.recordingSessions.set(sessionCards);
+      return;
+    }
+
+    const previewPlaybackUrl = selectedTimeline.segments.find((segment) => !!segment.playbackUrl)?.playbackUrl ?? null;
+    this.recordingSessions.set(
+      sessionCards.map((session) => {
+        if (session.sessionId !== selectedTimeline.sessionId) {
+          return session;
+        }
+
+        return {
+          ...session,
+          recordingCount: selectedTimeline.segments.length,
+          approxDurationSeconds: selectedTimeline.totalDurationMs != null
+            ? Math.round(selectedTimeline.totalDurationMs / 1000)
+            : session.approxDurationSeconds,
+          previewPlaybackUrl: previewPlaybackUrl ?? session.previewPlaybackUrl
+        };
+      })
+    );
   }
 
   private buildRecordingSessions(recordings: RecordingResponse[]): RecordingSessionCard[] {
@@ -1580,6 +1624,9 @@ export class RecordingsPageComponent implements OnDestroy {
       .map(([sessionId, sessionRecordings]) => {
         const sortedSessionRecordings = [...sessionRecordings].sort((left, right) =>
           right.createdAt.localeCompare(left.createdAt)
+        );
+        const timelineOrderedRecordings = [...sessionRecordings].sort((left, right) =>
+          this.compareSessionTimelineRecordings(left, right)
         );
         const latestRecording = sortedSessionRecordings[0];
         return {
@@ -1605,10 +1652,73 @@ export class RecordingsPageComponent implements OnDestroy {
           })(),
           latitude: latestRecording.metadata?.latitude ?? null,
           longitude: latestRecording.metadata?.longitude ?? null,
+          previewPlaybackUrl: timelineOrderedRecordings.find((recording) => !!recording.playbackUrl)?.playbackUrl ?? null,
           transcriptStatus: this.sessionTranscriptStatus(sortedSessionRecordings)
         } satisfies RecordingSessionCard;
       })
       .sort((left, right) => right.latestCreatedAt.localeCompare(left.latestCreatedAt));
+  }
+
+  private compareSessionTimelineRecordings(left: RecordingResponse, right: RecordingResponse): number {
+    const leftSequence = left.metadata?.segmentSequence;
+    const rightSequence = right.metadata?.segmentSequence;
+    if (leftSequence != null || rightSequence != null) {
+      if (leftSequence == null) {
+        return 1;
+      }
+      if (rightSequence == null) {
+        return -1;
+      }
+      if (leftSequence !== rightSequence) {
+        return leftSequence - rightSequence;
+      }
+    }
+
+    const leftStartMs = left.metadata?.sessionElapsedStartMs;
+    const rightStartMs = right.metadata?.sessionElapsedStartMs;
+    if (leftStartMs != null || rightStartMs != null) {
+      if (leftStartMs == null) {
+        return 1;
+      }
+      if (rightStartMs == null) {
+        return -1;
+      }
+      if (leftStartMs !== rightStartMs) {
+        return leftStartMs - rightStartMs;
+      }
+    }
+
+    const leftStartedAt = left.metadata?.segmentStartedAt;
+    const rightStartedAt = right.metadata?.segmentStartedAt;
+    if (leftStartedAt != null || rightStartedAt != null) {
+      if (leftStartedAt == null) {
+        return 1;
+      }
+      if (rightStartedAt == null) {
+        return -1;
+      }
+      const startedAtComparison = leftStartedAt.localeCompare(rightStartedAt);
+      if (startedAtComparison !== 0) {
+        return startedAtComparison;
+      }
+    }
+
+    const leftCapturedAt = left.metadata?.capturedAt;
+    const rightCapturedAt = right.metadata?.capturedAt;
+    if (leftCapturedAt != null || rightCapturedAt != null) {
+      if (leftCapturedAt == null) {
+        return 1;
+      }
+      if (rightCapturedAt == null) {
+        return -1;
+      }
+      const capturedAtComparison = leftCapturedAt.localeCompare(rightCapturedAt);
+      if (capturedAtComparison !== 0) {
+        return capturedAtComparison;
+      }
+    }
+
+    return left.createdAt.localeCompare(right.createdAt);
   }
 
   private sessionTranscriptStatus(recordings: RecordingResponse[]): RecordingTranscriptStatus | null {
