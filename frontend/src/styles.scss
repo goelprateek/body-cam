@@ -943,6 +943,21 @@ html, body, .mat-typography,
   background: var(--surface) !important;
 }
 
+.premium-menu.mat-mdc-menu-panel {
+  border-radius: 12px !important;
+  background: var(--surface) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--surface-border) !important;
+  backdrop-filter: blur(24px) !important;
+  padding: 4px 0 !important;
+  overflow: hidden !important;
+}
+
+:root.dark-theme .premium-menu.mat-mdc-menu-panel {
+  background: rgba(17, 25, 40, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3) !important;
+}
+
 /* Premium Operator Dashboard Styles */
 .glass-panel {
   background: rgba(255, 255, 255, 0.65) !important;

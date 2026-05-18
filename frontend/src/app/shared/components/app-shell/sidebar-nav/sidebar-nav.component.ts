@@ -4,6 +4,7 @@ import { RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { ThemeService } from '@app/theme.service';
 import { LayoutService } from '@shared/services/layout.service';
 
 @Component({
@@ -20,7 +21,7 @@ import { LayoutService } from '@shared/services/layout.service';
     <div class="sidenav-wrapper">
       <header class="sidenav-header">
         <div class="brand-block" [class.compact]="!layout.sidebarExpanded()">
-          <img class="brand-icon" src="assets/logo.png" alt="Karebo Body Cam Logo" />
+          <img class="brand-icon" [src]="themeLogo()" alt="Karebo Body Cam Logo" />
           @if (layout.sidebarExpanded()) {
             <div class="brand-copy">
               <span class="brand-name">Karebo Body Cam</span>
@@ -61,4 +62,11 @@ import { LayoutService } from '@shared/services/layout.service';
 })
 export class SidebarNavComponent {
   readonly layout = inject(LayoutService);
+  readonly theme = inject(ThemeService);
+
+  themeLogo(): string {
+    return this.theme.theme() === 'dark'
+      ? 'assets/brand/logo-dark.png'
+      : 'assets/brand/logo-light.png';
+  }
 }

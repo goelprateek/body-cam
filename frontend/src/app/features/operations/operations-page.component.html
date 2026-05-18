@@ -405,6 +405,13 @@
               <div #participantAudioHost class="sr-only" aria-hidden="true" [attr.data-participant-id]="participant.id"></div>
           }
         </div>
+        
+        @if (viewerAspectIndicatorVisible()) {
+          <div class="aspect-mode-indicator">
+            <span>{{ viewerAspectLabel() }}</span>
+          </div>
+        }
+
         <div class="viewer-controls-overlay">
           <div class="viewer-live-seeker" [class.viewer-live-seeker-ready]="hasAnyVideoTrack()">
             <span class="viewer-live-seeker-time">LIVE</span>
@@ -440,7 +447,7 @@
                 (click)="toggleViewerAspectMode()"
                 [matTooltip]="viewerAspectTooltip()"
               >
-                <mat-icon>{{ viewerAspectMode() === 'cover' ? 'crop_free' : 'fit_screen' }}</mat-icon>
+                <mat-icon>{{ viewerAspectIcon() }}</mat-icon>
               </button>
               <button
                 mat-icon-button
@@ -449,27 +456,37 @@
                 (click)="toggleViewerFullscreen()"
                 matTooltip="Toggle fullscreen"
               >
-                <mat-icon>{{ isFullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+                <mat-icon>{{ isFullscreen() ? 'close_fullscreen' : 'open_in_full' }}</mat-icon>
               </button>
               <button
                 mat-icon-button
                 type="button"
                 class="viewer-control-btn"
-                (click)="togglePictureInPicture()"
-                [disabled]="!hasAnyVideoTrack()"
-                matTooltip="Picture in picture"
+                [matMenuTriggerFor]="settingsMenu"
+                matTooltip="Settings"
               >
-                <mat-icon>picture_in_picture_alt</mat-icon>
+                <mat-icon>settings</mat-icon>
               </button>
-              <button
-                mat-icon-button
-                type="button"
-                class="viewer-control-btn"
-                [disabled]="!captionsAvailable()"
-                [matTooltip]="captionControlLabel()"
-              >
-                <mat-icon>closed_caption</mat-icon>
-              </button>
+
+              <mat-menu #settingsMenu="matMenu" class="premium-menu">
+                <button
+                  mat-menu-item
+                  (click)="togglePictureInPicture()"
+                  [disabled]="!hasAnyVideoTrack()"
+                  class="custom-menu-item"
+                >
+                  <mat-icon>picture_in_picture_alt</mat-icon>
+                  <span>Picture in Picture</span>
+                </button>
+                <button
+                  mat-menu-item
+                  [disabled]="!captionsAvailable()"
+                  class="custom-menu-item"
+                >
+                  <mat-icon>closed_caption</mat-icon>
+                  <span>Closed Captions</span>
+                </button>
+              </mat-menu>
             </div>
           </div>
         </div>
