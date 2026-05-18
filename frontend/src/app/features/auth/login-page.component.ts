@@ -8,6 +8,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { OperatorApiService } from '@features/operations/operator-api.service';
+import { ThemeService } from '@app/theme.service';
 
 @Component({
   selector: 'app-login-page',
@@ -74,7 +75,7 @@ import { OperatorApiService } from '@features/operations/operator-api.service';
 
         <div class="form-wrapper">
           <div class="form-header">
-            <img class="form-logo" src="assets/logo.png" alt="Body Cam Logo" />
+            <img class="form-logo" [src]="themeLogo()" alt="Body Cam Logo" />
             <h2>Welcome back</h2>
             <p>Please enter your credentials to access the portal.</p>
           </div>
@@ -126,12 +127,19 @@ import { OperatorApiService } from '@features/operations/operator-api.service';
 export class LoginPageComponent {
   private readonly api = inject(OperatorApiService);
   private readonly router = inject(Router);
+  readonly theme = inject(ThemeService);
 
   readonly username = signal('');
   readonly password = signal('');
   readonly isBusy = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly currentYear = new Date().getFullYear();
+
+  themeLogo(): string {
+    return this.theme.theme() === 'dark'
+      ? 'assets/brand/logo-dark.png'
+      : 'assets/brand/logo-light.png';
+  }
 
   async login(): Promise<void> {
     if (!this.username().trim() || !this.password().trim()) {

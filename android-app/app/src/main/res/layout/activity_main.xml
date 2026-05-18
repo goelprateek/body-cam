@@ -29,29 +29,14 @@
                 android:layout_height="156dp"
                 android:layout_marginTop="40dp"
                 android:layout_marginBottom="18dp"
-                android:background="@drawable/auth_hero_background"
                 android:padding="18dp">
-
-                <View
-                    android:layout_width="96dp"
-                    android:layout_height="96dp"
-                    android:layout_gravity="top|end"
-                    android:background="@drawable/circle_background_translucent"
-                    android:alpha="0.18" />
-
-                <View
-                    android:layout_width="72dp"
-                    android:layout_height="72dp"
-                    android:layout_gravity="bottom|start"
-                    android:background="@drawable/circle_background_translucent"
-                    android:alpha="0.12" />
 
                 <ImageView
                     android:layout_width="110dp"
                     android:layout_height="110dp"
                     android:layout_gravity="center"
                     android:contentDescription="@string/brand_name_short"
-                    android:src="@drawable/logo"
+                    android:src="@drawable/logo_centered"
                     android:scaleType="fitCenter" />
             </FrameLayout>
 

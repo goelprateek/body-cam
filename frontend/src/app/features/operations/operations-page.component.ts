@@ -21,11 +21,14 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatMenuModule } from '@angular/material/menu';
 import { LiveRoomRemoteParticipant, LiveRoomService } from './live-room.service';
 import { OperatorApiService } from './operator-api.service';
 import { SessionInviteResponse, SessionInviteRole, SessionResponse } from './operator.models';
 
-type ViewerAspectMode = 'cover' | 'contain';
+type ViewerAspectMode = 'cover' | 'contain' | 'fill' | 'none' | 'scale-down';
+
+const ASPECT_MODES: ViewerAspectMode[] = ['cover', 'contain', 'fill', 'none', 'scale-down'];
 
 @Component({
   selector: 'app-operations-page',
@@ -38,7 +41,8 @@ type ViewerAspectMode = 'cover' | 'contain';
     MatProgressBarModule,
     MatIconModule,
     MatTooltipModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    MatMenuModule
   ],
   templateUrl: './operations-page.component.html',
   styleUrl: './operations-page.component.scss'
@@ -135,6 +139,8 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   readonly hasAnyVideoTrack = computed(() => this.liveRoom.remoteParticipants().some((participant) => !!participant.videoTrack));
   readonly captionsAvailable = signal(false);
   readonly viewerAspectMode = signal<ViewerAspectMode>('cover');
+  readonly viewerAspectIndicatorVisible = signal(false);
+  private aspectIndicatorTimeout?: any;
 
   constructor() {
     void this.refreshAll();
@@ -217,8 +223,17 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
   }
 
   toggleViewerAspectMode(): void {
-    this.viewerAspectMode.update((mode) => (mode === 'cover' ? 'contain' : 'cover'));
+    this.viewerAspectMode.update((mode) => {
+      const currentIndex = ASPECT_MODES.indexOf(mode);
+      return ASPECT_MODES[(currentIndex + 1) % ASPECT_MODES.length];
+    });
     this.videoElements.forEach((element) => this.applyVideoPresentation(element));
+
+    this.viewerAspectIndicatorVisible.set(true);
+    clearTimeout(this.aspectIndicatorTimeout);
+    this.aspectIndicatorTimeout = setTimeout(() => {
+      this.viewerAspectIndicatorVisible.set(false);
+    }, 1500);
   }
 
   @HostListener('document:fullscreenchange')
@@ -226,14 +241,34 @@ export class OperationsPageComponent implements AfterViewInit, OnDestroy {
     this.isFullscreen.set(document.fullscreenElement === this.viewerStageHost?.nativeElement);
   }
 
+  viewerAspectIcon(): string {
+    switch (this.viewerAspectMode()) {
+      case 'cover': return 'crop_free';
+      case 'contain': return 'fit_screen';
+      case 'fill': return 'aspect_ratio';
+      case 'none': return 'crop_original';
+      case 'scale-down': return 'compress';
+    }
+  }
+
   viewerAspectLabel(): string {
-    return this.viewerAspectMode() === 'cover' ? 'Aspect Fill' : 'Aspect Fit';
+    switch (this.viewerAspectMode()) {
+      case 'cover': return 'Centrally Filled';
+      case 'contain': return 'Fit Screen';
+      case 'fill': return 'Fill Stretch';
+      case 'none': return 'Original Size';
+      case 'scale-down': return 'Best Fit';
+    }
   }
 
   viewerAspectTooltip(): string {
-    return this.viewerAspectMode() === 'cover'
-      ? 'Switch to fit entire video inside player'
-      : 'Switch to fill player with centered crop';
+    switch (this.viewerAspectMode()) {
+      case 'cover': return 'Switch to Fit Screen';
+      case 'contain': return 'Switch to Fill Stretch';
+      case 'fill': return 'Switch to Original Size';
+      case 'none': return 'Switch to Best Fit';
+      case 'scale-down': return 'Switch to Centrally Filled';
+    }
   }
 
   captionControlLabel(): string {

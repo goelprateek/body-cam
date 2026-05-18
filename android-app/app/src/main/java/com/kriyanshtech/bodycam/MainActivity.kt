@@ -2,6 +2,7 @@ package com.kriyanshtech.bodycam
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
@@ -127,10 +128,12 @@ class MainActivity : ComponentActivity() {
 
         binding.referenceNumberInput.setOnFocusChangeListener { v, hasFocus ->
             if (hasFocus) {
-                v.postDelayed({
-                    binding.root.smoothScrollTo(0, binding.referenceNumberLayout.top)
-                }, 200)
+                ensureReferenceFieldVisible(v)
             }
+        }
+
+        binding.referenceNumberInput.setOnClickListener { v ->
+            ensureReferenceFieldVisible(v)
         }
 
         binding.flipCameraIcon.setOnClickListener {
@@ -265,6 +268,22 @@ class MainActivity : ComponentActivity() {
     private fun hideKeyboard() {
         val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
         imm?.hideSoftInputFromWindow(binding.referenceNumberInput.windowToken, 0)
+    }
+
+    private fun ensureReferenceFieldVisible(target: View) {
+        val extraBottomSpace = (96 * resources.displayMetrics.density).toInt()
+
+        fun requestVisible() {
+            val rect = Rect()
+            target.getDrawingRect(rect)
+            binding.root.offsetDescendantRectToMyCoords(target, rect)
+            rect.top -= target.paddingTop
+            rect.bottom += extraBottomSpace
+            binding.root.requestChildRectangleOnScreen(target, rect, true)
+        }
+
+        target.post { requestVisible() }
+        target.postDelayed({ requestVisible() }, 250)
     }
 
     private fun hasAllPermissions(): Boolean {
